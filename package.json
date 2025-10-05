@@ -31,6 +31,7 @@
   "author": "ELD Technologies SL",
   "license": "MIT",
   "dependencies": {
+    "@hono/node-server": "^1.19.5",
     "hono": "^4.6.3",
     "isomorphic-dompurify": "^2.16.0",
     "resend": "^4.0.0",

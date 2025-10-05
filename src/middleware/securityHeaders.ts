@@ -13,8 +13,15 @@ import { config } from '../config.js';
  *
  * Rejects HTTP requests and adds HSTS header to force HTTPS for 1 year.
  * In development, this check is skipped to allow local HTTP testing.
+ * Health endpoints are also exempt to allow container health checks.
  */
 export async function enforceHttps(c: Context, next: Next) {
+  // Skip HTTPS enforcement for health check endpoints (container health checks)
+  if (c.req.path.startsWith('/health')) {
+    await next();
+    return;
+  }
+
   // Only enforce HTTPS in production
   // Check process.env.NODE_ENV directly to allow dynamic testing
   if (process.env.NODE_ENV === 'production' || config.enforceHttps) {

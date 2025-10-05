@@ -9,6 +9,7 @@
  */
 
 import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
 import { config } from './config.js';
 
 // Middleware
@@ -86,33 +87,49 @@ app.route('/api', send);
 
 /**
  * Server startup
+ *
+ * Only start the server if this file is being run directly (not imported for testing).
+ * In test environments, the app is imported but the server should not start.
  */
 const port = config.port;
 
-console.info(`🚀 Conduit starting...`);
-console.info(`📝 Environment: ${config.nodeEnv}`);
-console.info(`🔑 API Keys loaded: ${config.apiKeys.length}`);
-console.info(`🌐 Allowed Origins: ${config.allowedOrigins.join(', ')}`);
-console.info(`⚡ Server listening on port ${port}`);
+// Check if this module is being run directly (not imported)
+// In tests, this module is imported so we skip server startup
+if (process.env.NODE_ENV !== 'test') {
+  console.info(`🚀 Conduit starting...`);
+  console.info(`📝 Environment: ${config.nodeEnv}`);
+  console.info(`🔑 API Keys loaded: ${config.apiKeys.length}`);
+  console.info(`🌐 Allowed Origins: ${config.allowedOrigins.join(', ')}`);
 
-/**
- * Graceful shutdown handling
- *
- * Ensures clean shutdown on SIGTERM/SIGINT.
- * Important for containerized environments (Docker, Kubernetes).
- */
-const shutdown = (signal: string) => {
-  console.info(`\n${signal} received. Shutting down gracefully...`);
+  /**
+   * Start the server
+   */
+  const server = serve({
+    fetch: app.fetch,
+    port,
+  });
 
-  // Future: Close database connections, flush logs, etc.
-  // For now, we just log and exit
+  console.info(`⚡ Server listening on port ${port}`);
 
-  console.info('✅ Shutdown complete');
-  process.exit(0);
-};
+  /**
+   * Graceful shutdown handling
+   *
+   * Ensures clean shutdown on SIGTERM/SIGINT.
+   * Important for containerized environments (Docker, Kubernetes).
+   */
+  const shutdown = (signal: string) => {
+    console.info(`\n${signal} received. Shutting down gracefully...`);
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+    // Close the server
+    server.close(() => {
+      console.info('✅ Shutdown complete');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
 
 /**
  * Export for testing and deployment
