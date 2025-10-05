@@ -3,7 +3,7 @@
 **A lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status: Specification](https://img.shields.io/badge/Status-Specification-yellow.svg)]()
+[![Status: In Development](https://img.shields.io/badge/Status-In%20Development-orange.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -171,13 +171,14 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current Phase**: 📝 Specification Complete
+**Current Phase**: 🚧 Phase 0 Complete - Core Infrastructure In Progress
 
 - ✅ Complete API specification
 - ✅ Architecture design
 - ✅ Security review and implementation guide
 - ✅ Documentation
-- ⏳ Implementation (next)
+- ✅ Project setup (Phase 0)
+- ⏳ Core infrastructure (Phase 1 - in progress)
 
 **Roadmap**:
 - **Phase 1 (Q4 2025)**: Email via Resend - **MVP**

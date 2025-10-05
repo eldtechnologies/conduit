@@ -1,0 +1,55 @@
+{
+  "name": "conduit",
+  "version": "0.1.0",
+  "description": "Lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src tests --ext .ts",
+    "lint:fix": "eslint src tests --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "generate-key": "tsx scripts/generate-api-key.ts"
+  },
+  "keywords": [
+    "email",
+    "sms",
+    "push-notifications",
+    "webhooks",
+    "api-proxy",
+    "communication",
+    "resend",
+    "twilio",
+    "firebase"
+  ],
+  "author": "ELD Technologies SL",
+  "license": "MIT",
+  "dependencies": {
+    "hono": "^4.6.3",
+    "isomorphic-dompurify": "^2.16.0",
+    "resend": "^4.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.37.0",
+    "@types/node": "^22.7.5",
+    "@typescript-eslint/eslint-plugin": "^8.8.1",
+    "@typescript-eslint/parser": "^8.8.1",
+    "@vitest/ui": "^2.1.2",
+    "eslint": "^9.12.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.45.0",
+    "vitest": "^2.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

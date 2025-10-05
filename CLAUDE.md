@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Conduit** is a lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.
 
-**Current Status**: Specification/Planning Phase - Implementation has not yet begun.
+**Current Status**: Phase 0 Complete - Project setup finished, ready for core implementation.
 
 **Tech Stack** (planned):
 - Runtime: Node.js 18+
@@ -313,3 +313,172 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 4. Reference [docs/api-reference.md](docs/api-reference.md) for detailed API specifications
 5. Use [docs/security/implementation.md](docs/security/implementation.md) for security code examples
 6. Reference [docs/user-guide.md](docs/user-guide.md) for integration examples
+
+## Coding Standards & Conventions
+
+### TypeScript Configuration
+- **Strict Mode**: ALL strict TypeScript flags enabled (noImplicitAny, strictNullChecks, etc.)
+- **Target**: ES2022
+- **Module**: ESNext with bundler resolution
+- **Path Aliases**: `@/*` → `src/*` for cleaner imports
+- **Files**: Include src/, tests/, scripts/ in tsconfig.json
+
+### Code Style
+- **Format**: Prettier with these rules:
+  - Semicolons: required
+  - Single quotes: yes
+  - Trailing commas: ES5
+  - Print width: 100 characters
+  - Tab width: 2 spaces
+  - Arrow parens: always
+  - Line endings: LF
+
+- **Linting**: ESLint 9 (flat config) with TypeScript integration
+  - No `any` types allowed (`@typescript-eslint/no-explicit-any: error`)
+  - No floating promises (`@typescript-eslint/no-floating-promises: error`)
+  - No unused vars (except prefixed with `_`)
+  - Console.log allowed only: `console.warn`, `console.error`, `console.info`
+  - Always use `const` over `let`, never use `var`
+
+### File Organization
+```
+src/
+├── index.ts          # Main app, exports { port, fetch }
+├── config.ts         # Environment config, loaded once at module level
+├── middleware/       # One file per middleware
+├── routes/           # One file per route group
+├── channels/         # One file per channel (email, sms, etc.)
+├── templates/        # Organized by channel: templates/{channel}/
+├── utils/            # Shared utilities
+└── types/            # TypeScript type definitions
+
+tests/
+├── setup.ts          # Test environment setup (vitest setupFiles)
+├── unit/             # Unit tests (*.test.ts)
+├── integration/      # Integration tests
+└── security/         # Security-specific tests
+```
+
+### Naming Conventions
+- **Files**: kebab-case (e.g., `api-key-generator.ts`, `rate-limit.ts`)
+- **Functions**: camelCase (e.g., `generateApiKey`, `sanitizeHtml`)
+- **Classes/Types**: PascalCase (e.g., `Config`, `CircuitBreaker`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `TIMEOUTS`, `MAX_RETRIES`)
+- **Environment Variables**: UPPER_SNAKE_CASE with prefixes:
+  - `API_KEY_*` for frontend API keys
+  - `RESEND_API_KEY`, `TWILIO_*` for provider credentials
+  - `ALLOWED_ORIGINS` for CORS
+  - `RATE_LIMIT_*` for rate limiting config
+
+### Testing Standards
+- **Framework**: Vitest with globals enabled
+- **Setup**: Environment variables in `tests/setup.ts` (loaded before all tests)
+- **Structure**: Describe blocks for grouping, descriptive `it()` statements
+- **Coverage Target**: 80%+ (enforced in vitest.config.ts)
+- **Test Files**: `*.test.ts` in appropriate directory
+- **Assertions**: Use Vitest's `expect()` API
+
+**Example Test**:
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('FeatureName', () => {
+  it('should do something specific', async () => {
+    const result = await someFunction();
+    expect(result).toBe(expected);
+  });
+});
+```
+
+### Security Patterns (MANDATORY)
+- **API Key Generation**: ALWAYS use `crypto.randomBytes(16)`, NEVER `Math.random()`
+- **API Key Comparison**: ALWAYS use `timingSafeEqual` from Node crypto (constant-time)
+- **HTML Sanitization**: ALWAYS use `DOMPurify.sanitize()` before rendering user input
+- **Input Validation**: ALWAYS use Zod schemas with explicit length limits
+- **Error Handling**: ALWAYS sanitize errors in production (hide stack traces)
+
+**Example Security Code**:
+```typescript
+import { randomBytes, timingSafeEqual } from 'crypto';
+import DOMPurify from 'isomorphic-dompurify';
+
+// API key generation (scripts/generate-api-key.ts)
+const key = `KEY_${appName}_${randomBytes(16).toString('hex')}`;
+
+// Constant-time comparison (middleware/auth.ts)
+if (a.length !== b.length) return false;
+return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+
+// XSS sanitization (templates/email/*)
+const safe = DOMPurify.sanitize(userInput, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+```
+
+### Module Imports
+- **ES Modules**: Use `.js` extension in imports (TypeScript requires this for ESM)
+  ```typescript
+  import { config } from './config.js';  // ✓ Correct
+  import { config } from './config';     // ✗ Wrong
+  ```
+- **Path Aliases**: Use `@/` for src imports in tests:
+  ```typescript
+  import app from '@/index.js';          // ✓ From tests
+  import { auth } from '../middleware/auth.js';  // ✓ Relative within src
+  ```
+
+### Environment Configuration
+- **Loading**: All config in `src/config.ts`, loaded once at module level
+- **Validation**: Throw errors for missing required variables
+- **Defaults**: Provide sensible defaults for optional variables
+- **Types**: Export strongly-typed `Config` interface
+- **Access**: Import `config` object, never access `process.env` directly in application code
+
+**Example Config**:
+```typescript
+export const config: Config = {
+  port: parseInt(getEnvVar('PORT', '3000'), 10),
+  nodeEnv: getEnvVar('NODE_ENV', 'development') as Config['nodeEnv'],
+  resendApiKey: getEnvVar('RESEND_API_KEY'), // Required, no default
+};
+```
+
+### Error Handling
+- **Custom Errors**: Create error classes extending `Error`
+- **Error Codes**: Use enum for standardized error codes (see docs/api-reference.md)
+- **Sanitization**: Hide internal errors in production (use `sanitizeError()` utility)
+- **Logging**: Always log full error with stack trace, return sanitized version to client
+
+### Middleware Order (CRITICAL)
+Apply middleware in this exact order:
+1. Security Headers (enforceHttps, securityHeaders)
+2. CORS (validate origin)
+3. Body Limit (for /api/* routes)
+4. Authentication (for /api/* routes)
+5. Rate Limiting (for /api/* routes)
+6. Request Logger (structured JSON logging)
+
+### Git Workflow
+- **Commits**: Small, atomic commits with clear messages
+- **Branches**: Feature branches off `main`
+- **Messages**: Descriptive commit messages (present tense, imperative mood)
+- **Pre-commit**: Run `npm run lint && npm run format:check` before committing
+
+### Scripts Available
+```bash
+npm run dev           # Development server with hot reload (tsx watch)
+npm run build         # Compile TypeScript to dist/
+npm start             # Run production build from dist/
+npm test              # Run all tests once
+npm run test:watch    # Run tests in watch mode
+npm run test:coverage # Generate coverage report (80% required)
+npm run lint          # Run ESLint on src/ and tests/
+npm run lint:fix      # Auto-fix ESLint issues
+npm run format        # Auto-format with Prettier
+npm run format:check  # Check formatting without fixing
+npm run generate-key  # Generate secure API key: npm run generate-key -- APPNAME
+```
+
+### Documentation
+- **JSDoc**: Add JSDoc comments for public functions and complex logic
+- **Inline Comments**: Explain "why" not "what" (code should be self-documenting)
+- **README Updates**: Update docs when adding features
+- **CLAUDE.md**: Update this file when establishing new conventions
