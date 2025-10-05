@@ -6,7 +6,7 @@
  */
 
 import type { Context } from 'hono';
-import { ConduitError, sanitizeError, createErrorResponse } from '../utils/errors.js';
+import { ConduitError, sanitizeError } from '../utils/errors.js';
 
 /**
  * Global error handler
@@ -19,7 +19,7 @@ export function errorHandler(err: Error, c: Context) {
   if (err instanceof ConduitError) {
     const env = process.env.NODE_ENV || 'development';
     const sanitized = sanitizeError(err, env);
-    return c.json(sanitized, err.statusCode);
+    return c.json(sanitized, err.statusCode as 400 | 401 | 429 | 500 | 502);
   }
 
   // Handle unknown errors

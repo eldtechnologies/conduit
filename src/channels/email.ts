@@ -8,6 +8,7 @@
 import { Resend } from 'resend';
 import type { SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
+import type { EmailTemplate } from '../types/templates.js';
 import { config, TIMEOUTS } from '../config.js';
 import { ProviderError, InternalError, ConduitError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
@@ -35,13 +36,17 @@ export const emailHandler: ChannelHandler = {
   async send(request: SendMessageRequest): Promise<ChannelSendResult> {
     try {
       // Get and validate the template
-      const template = getTemplate(request.channel, request.templateId);
+      const template = getTemplate(request.channel, request.templateId) as EmailTemplate<unknown>;
 
       // Validate template data
       const validatedData = template.validate(request.data);
 
       // Render the template
-      const rendered = template.render(validatedData);
+      const rendered = {
+        subject: template.subject(validatedData),
+        html: template.html(validatedData),
+        text: template.text(validatedData),
+      };
 
       // Prepare email parameters
       const from = request.from
@@ -86,9 +91,7 @@ export const emailHandler: ChannelHandler = {
 
       // Return success result
       return {
-        success: true,
         messageId: response.data?.id || 'unknown',
-        channel: 'email',
         timestamp: new Date().toISOString(),
       };
     } catch (error) {

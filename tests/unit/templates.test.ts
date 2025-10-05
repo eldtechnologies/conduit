@@ -70,8 +70,7 @@ describe('Contact Form Template', () => {
     it('should have correct metadata', () => {
       expect(contactFormTemplate.id).toBe('contact-form');
       expect(contactFormTemplate.channel).toBe('email');
-      expect(contactFormTemplate.name).toBe('Contact Form');
-      expect(contactFormTemplate.description).toBeDefined();
+      expect(contactFormTemplate.schema).toBeDefined();
     });
   });
 
@@ -281,15 +280,13 @@ describe('Contact Form Template', () => {
         subject: 'Custom Subject',
       };
 
-      const rendered = contactFormTemplate.render(data);
+      const subject = contactFormTemplate.subject(data);
+      const html = contactFormTemplate.html(data);
+      const text = contactFormTemplate.text(data);
 
-      expect(rendered).toHaveProperty('subject');
-      expect(rendered).toHaveProperty('html');
-      expect(rendered).toHaveProperty('text');
-
-      expect(rendered.subject).toBe('Custom Subject');
-      expect(rendered.html).toContain('John Doe');
-      expect(rendered.text).toContain('John Doe');
+      expect(subject).toBe('Custom Subject');
+      expect(html).toContain('John Doe');
+      expect(text).toContain('John Doe');
     });
   });
 });

@@ -62,4 +62,5 @@ export async function corsProtection(c: Context, next: Next) {
   }
 
   await next();
+  return;
 }

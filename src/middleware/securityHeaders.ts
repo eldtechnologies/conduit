@@ -30,6 +30,7 @@ export async function enforceHttps(c: Context, next: Next) {
   }
 
   await next();
+  return;
 }
 
 /**
@@ -70,4 +71,5 @@ export async function securityHeaders(c: Context, next: Next) {
   }
 
   await next();
+  return;
 }

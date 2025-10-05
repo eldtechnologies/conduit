@@ -88,7 +88,7 @@ send.post('/send', async (c) => {
   const response: SendMessageResponse = {
     success: true,
     messageId: result.messageId,
-    channel: result.channel,
+    channel: request.channel,
     timestamp: result.timestamp,
   };
 

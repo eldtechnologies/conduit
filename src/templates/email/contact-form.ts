@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import type { EmailTemplate, RenderedEmailTemplate } from '../../types/templates.js';
+import type { EmailTemplate } from '../../types/templates.js';
 import { sanitizeHtml, escapeHtml } from '../../utils/sanitize.js';
 
 /**
@@ -39,8 +39,7 @@ export type ContactFormData = z.infer<typeof contactFormSchema>;
 export const contactFormTemplate: EmailTemplate<ContactFormData> = {
   id: 'contact-form',
   channel: 'email',
-  name: 'Contact Form',
-  description: 'Send contact form submissions via email',
+  schema: contactFormSchema,
 
   /**
    * Validate contact form data
@@ -156,19 +155,5 @@ ${message}
 This email was sent from your contact form.
 Powered by Conduit
     `.trim();
-  },
-
-  /**
-   * Render the complete email template
-   *
-   * @param data - Validated contact form data
-   * @returns Rendered email with subject, HTML, and text
-   */
-  render(data: ContactFormData): RenderedEmailTemplate {
-    return {
-      subject: this.subject(data),
-      html: this.html(data),
-      text: this.text(data),
-    };
   },
 };

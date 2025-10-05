@@ -15,7 +15,6 @@
 import type { Context, Next } from 'hono';
 import { config } from '../config.js';
 import { RateLimitError } from '../utils/errors.js';
-import { ErrorCode } from '../types/api.js';
 
 /**
  * Token bucket for rate limiting

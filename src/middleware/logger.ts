@@ -38,8 +38,9 @@ function maskEmail(email: string): string {
   }
 
   const [user, domain] = parts;
-  const maskedUser = user.length > 0 ? user[0] + '***' : '***';
-  const maskedDomain = '***.' + domain.split('.').pop();
+  const maskedUser = user && user.length > 0 ? user[0] + '***' : '***';
+  const domainParts = domain?.split('.') || [];
+  const maskedDomain = '***.' + (domainParts.pop() || 'com');
 
   return `${maskedUser}@${maskedDomain}`;
 }
