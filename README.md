@@ -3,7 +3,8 @@
 **A lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status: In Development](https://img.shields.io/badge/Status-In%20Development-orange.svg)]()
+[![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
+[![Version: 1.0.1](https://img.shields.io/badge/Version-1.0.1-blue.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -14,6 +15,8 @@
 >
 > **Total development time**: 5 hours
 > **Built with**: Claude Code 2.0 + Claude Sonnet 4.5
+>
+> 📖 **[Read the full story](docs/conduit-ai-article.md)** - "When Claude Code Built Production Software in 5 Hours (And Why I Still Had to Save It)"
 
 ---
 
@@ -62,13 +65,21 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 
 ## Features
 
-### Phase 1: Email (Available Now) ✅
-- Email via [Resend.com](https://resend.com)
-- Contact form template
-- API key authentication
-- Rate limiting (10/min, 100/hr, 500/day per key)
-- CORS protection with origin whitelisting
-- Structured JSON logging
+### Phase 1: Email (Production Ready - v1.0.1) ✅
+- **Email delivery** via [Resend.com](https://resend.com) with comprehensive domain setup guide
+- **Contact form template** with XSS sanitization and header injection prevention
+- **API key authentication** with constant-time comparison (timing attack resistant)
+- **Rate limiting** (10/min, 100/hr, 500/day per key) - token bucket algorithm
+- **CORS protection** with strict origin whitelisting + X-Source-Origin for proxies/gateways
+- **Security hardening**:
+  - HTTPS enforcement with HSTS
+  - Request body size limits (50KB)
+  - Comprehensive security headers (CSP, X-Frame-Options, etc.)
+  - Input validation with Zod schemas
+  - XSS sanitization with DOMPurify
+- **Structured JSON logging** with request/response tracking
+- **Health monitoring** - Public `/health` endpoint + authenticated `/health/detailed`
+- **223 passing tests** with 87.51% code coverage
 
 ### Phase 2: SMS & Push (Q1 2026) 📱
 - SMS via Twilio
@@ -212,68 +223,45 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current Version**: 🚀 v1.0.0 - PRODUCTION READY!
+**Current Version**: 🚀 v1.0.1 - PRODUCTION READY!
 
-- ✅ Complete API specification
-- ✅ Architecture design
-- ✅ Security review and implementation guide
-- ✅ Documentation
-- ✅ Project setup (Phase 0)
-- ✅ Core infrastructure (Phase 1)
-- ✅ Security layer (Phase 2)
-  - ✅ HTTPS enforcement with HSTS
-  - ✅ Security headers (CSP, X-Frame-Options, etc.)
-  - ✅ API key authentication with timing attack resistance
-  - ✅ CORS protection with origin whitelisting
-  - ✅ Rate limiting (token bucket algorithm)
-  - ✅ Request logging with PII masking
-  - ✅ 144 tests passing (including security tests)
-- ✅ Health & basic routes (Phase 3)
-  - ✅ Public health endpoint (/health)
-  - ✅ Authenticated detailed health endpoint (/health/detailed)
-  - ✅ Full middleware stack wired up
-  - ✅ Graceful shutdown handling
-  - ✅ 154 tests passing (10 new integration tests)
-- ✅ Email channel (Phase 4)
-  - ✅ Channel infrastructure with registry
-  - ✅ Resend integration with timeout handling
-  - ✅ Error mapping and provider availability checks
-  - ✅ 10 channel tests
-- ✅ Email templates (Phase 5)
-  - ✅ Template infrastructure with Zod validation
-  - ✅ Contact form template (HTML + plain text)
-  - ✅ XSS sanitization in all templates
-  - ✅ 26 template tests
-  - ✅ 190 tests passing total
-- ✅ Send endpoint (Phase 6 - MVP COMPLETE!)
-  - ✅ POST /api/send endpoint with Zod validation
-  - ✅ Channel routing and template integration
-  - ✅ Full middleware stack (auth, rate limiting, CORS, logging)
-  - ✅ Comprehensive error handling
-  - ✅ 11 integration tests
-  - ✅ **201 tests passing total**
-- ✅ Docker & Deployment (Phase 7)
-  - ✅ Multi-stage Dockerfile with Node.js 18 Alpine
-  - ✅ Non-root user, health checks, security options
-  - ✅ docker-compose.yml for development
-  - ✅ .dockerignore for optimized builds
-- ✅ Testing & Quality (Phase 8)
-  - ✅ Code coverage: 87.51% (exceeds 80% target)
-  - ✅ ESLint and Prettier configured
-  - ✅ All src/ files pass strict linting
-- ✅ Documentation & Examples (Phase 9)
-  - ✅ React + TypeScript contact form example
-  - ✅ Vanilla JavaScript contact form example
-  - ✅ Comprehensive integration guides
-  - ✅ API key generator script
-- ✅ Production Readiness (Phase 10)
-  - ✅ Security audit completed (dev deps only)
-  - ✅ All tests passing
-  - ✅ Docker image builds successfully
-  - ✅ Production-ready documentation
+### Completed Features ✅
+- **Core Email Functionality**
+  - Complete POST /api/send API with Resend integration
+  - Contact form template with XSS sanitization
+  - Template engine with Zod validation
+  - Email header injection prevention
 
-**Roadmap**:
-- **Phase 1 (Q4 2025)**: Email via Resend - **MVP**
+- **Security Hardening**
+  - HTTPS enforcement with HSTS headers
+  - API key authentication (constant-time comparison)
+  - CORS protection with origin whitelisting + proxy support (X-Source-Origin)
+  - Rate limiting (token bucket algorithm)
+  - Request body size limits (50KB)
+  - Comprehensive security headers (CSP, X-Frame-Options, etc.)
+  - Input validation and XSS sanitization
+
+- **Monitoring & Operations**
+  - Health endpoints (/health public, /health/detailed authenticated)
+  - Structured JSON logging with PII masking
+  - Graceful shutdown handling
+  - Docker deployment with health checks
+
+- **Quality Assurance**
+  - 223 passing tests (87.51% coverage)
+  - Integration, unit, and security test suites
+  - TypeScript strict mode
+  - ESLint + Prettier code quality
+
+### v1.0.1 Improvements 🆕
+- Node.js 20+ support for latest features
+- X-Source-Origin header support for proxy/gateway deployments
+- Comprehensive email domain setup documentation (Resend)
+- Improved error messages for domain verification
+- Production deployment checklist
+- Hono Node.js server adapter for proper HTTP server binding
+
+### Next Steps 🚀
 - **Phase 2 (Q1 2026)**: SMS + Push notifications
 - **Phase 3 (Q2 2026)**: Webhooks & integrations
 - **Phase 4 (Q3 2026)**: Advanced features (analytics, scheduling, A/B testing)
