@@ -98,7 +98,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 
 **Option B: Docker**
 ```bash
-git clone https://github.com/yourusername/conduit.git
+git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 docker build -t conduit .
 docker run -p 3000:3000 --env-file .env conduit
@@ -220,7 +220,7 @@ Conduit is open source and welcomes contributions!
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/conduit.git
+git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 
 # Install dependencies (once implemented)
@@ -262,9 +262,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Support
 
 - **Documentation**: [docs/README.md](docs/README.md)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/conduit/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/conduit/discussions)
-- **Security**: Report security issues to security@yourdomain.com
+- **Issues**: [GitHub Issues](https://github.com/eldtechnologies/conduit/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/eldtechnologies/conduit/discussions)
+- **Security**: Report security issues to security@eldtechnologies.com
 
 ---
 
@@ -282,5 +282,5 @@ Inspired by the need for secure, simple communication from frontend applications
 <p align="center">
   <strong>One API for all your communication needs</strong>
   <br>
-  Made with ❤️ by <a href="https://github.com/yourusername">Your Name</a>
+  Made with ❤️ by <a href="https://github.com/eldtechnologies">ELD Technologies SL</a>
 </p>
