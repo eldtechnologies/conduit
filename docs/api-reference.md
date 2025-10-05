@@ -106,7 +106,7 @@ X-Source-Origin: https://yourdomain.com
   "templateId": "contact-form",
   "to": "recipient@example.com",
   "from": {
-    "email": "noreply@yourdomain.com",
+    "email": "onboarding@resend.dev",
     "name": "Your Company"
   },
   "replyTo": "customer@example.com",
@@ -114,7 +114,7 @@ X-Source-Origin: https://yourdomain.com
     "name": "John Doe",
     "email": "john@example.com",
     "message": "Your message here",
-    "phone": "+1234567890"
+    "subject": "Contact Form Submission"
   }
 }
 ```

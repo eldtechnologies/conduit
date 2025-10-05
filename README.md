@@ -124,6 +124,38 @@ node -e "console.log('KEY_MYSITE_' + require('crypto').randomBytes(16).toString(
 
 See **[Getting Started Guide](docs/getting-started.md)** for complete integration examples.
 
+### 4. Production Deployment Checklist
+
+Before deploying to production, complete these steps:
+
+**Email Setup (Resend):**
+- [ ] **Verify email domain** on Resend ([guide](https://resend.com/domains))
+  - ✅ Use a subdomain (e.g., `mail.yourdomain.com`) to protect your main domain reputation
+  - Add DNS records (SPF, DKIM)
+  - Wait for verification (5-30 minutes)
+- [ ] **Update frontend** to use verified domain in `from.email` field
+- [ ] **Test email delivery** with verified domain
+
+**Security & Configuration:**
+- [ ] **Set environment variables**
+  - `RESEND_API_KEY` - Your Resend API key
+  - `API_KEY_*` - One per frontend app (generate with crypto.randomBytes)
+  - `ALLOWED_ORIGINS` - Whitelist your frontend domains
+- [ ] **Configure CORS** - Add all production domains to `ALLOWED_ORIGINS`
+- [ ] **Review rate limits** - Adjust `RATE_LIMIT_*` if needed (default: 10/min, 100/hr, 500/day)
+- [ ] **Enable HTTPS** - Ensure `x-forwarded-proto` header is set by your proxy/load balancer
+
+**Testing:**
+- [ ] **Test API endpoint** - `curl https://conduit.yourdomain.com/health`
+- [ ] **Verify CORS** - Test requests from your frontend domain
+- [ ] **Test email sending** - Send test email with verified domain
+- [ ] **Check rate limits** - Verify rate limiting works as expected
+
+**Monitoring:**
+- [ ] **Set up logging** - Review structured JSON logs
+- [ ] **Monitor health endpoint** - `/health` for basic status, `/health/detailed` for diagnostics
+- [ ] **Track error rates** - Watch for provider errors (domain verification, rate limits)
+
 ---
 
 ## Documentation

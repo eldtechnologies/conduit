@@ -65,7 +65,7 @@ export const emailHandler: ChannelHandler = {
       // SECURITY: Sanitize sender name to prevent email header injection
       const from = request.from
         ? `${sanitizeSenderName(request.from.name || 'Conduit')} <${request.from.email}>`
-        : 'Conduit <noreply@conduit.example.com>'; // Default sender
+        : 'Conduit <onboarding@resend.dev>'; // Default sender (test domain, works without verification)
 
       const emailParams = {
         from,
@@ -93,8 +93,25 @@ export const emailHandler: ChannelHandler = {
 
       // Check for errors in response
       if (response.error) {
+        const errorMsg = response.error.message;
+
+        // Detect common domain verification errors and provide helpful guidance
+        if (errorMsg.includes('not verified') || errorMsg.includes('domain is not verified')) {
+          throw new ProviderError(
+            `Resend API error: ${errorMsg}. ` +
+              `To fix: Verify your domain at https://resend.com/domains or use onboarding@resend.dev for testing.`,
+            ErrorCode.PROVIDER_ERROR,
+            {
+              provider: 'resend',
+              error: response.error,
+              hint: 'domain_not_verified',
+            }
+          );
+        }
+
+        // Generic Resend error
         throw new ProviderError(
-          `Resend API error: ${response.error.message}`,
+          `Resend API error: ${errorMsg}`,
           ErrorCode.PROVIDER_ERROR,
           {
             provider: 'resend',

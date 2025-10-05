@@ -303,7 +303,7 @@ Perfect for contact forms.
   "templateId": "contact-form",
   "to": "hello@yourcompany.com",
   "from": {
-    "email": "noreply@yourcompany.com",
+    "email": "onboarding@resend.dev",
     "name": "Your Company"
   },
   "replyTo": "customer@example.com",
@@ -418,6 +418,91 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 ALLOWED_ORIGINS=https://site1.com,https://site2.com,https://site3.com
 ```
 
+### Email Domain Setup (Resend)
+
+Before sending emails in production, you must verify your domain on Resend.
+
+#### Why Use a Subdomain? (RECOMMENDED)
+
+Resend strongly recommends using **subdomains** instead of your top-level domain:
+
+✅ **Good examples:**
+- `mail.yourdomain.com`
+- `notifications.yourdomain.com`
+- `updates.yourdomain.com`
+
+❌ **Avoid:**
+- `yourdomain.com` (can hurt your main domain's email reputation)
+
+**Benefits of subdomains:**
+- Isolates sending reputation (protects your main domain)
+- Communicates intent more clearly to recipients
+- Follows email industry best practices
+
+#### Domain Verification Steps
+
+1. **Choose your sending domain**
+   - Use a subdomain (e.g., `mail.yourdomain.com`)
+
+2. **Add domain to Resend**
+   - Go to https://resend.com/domains
+   - Click "Add Domain"
+   - Enter your subdomain
+
+3. **Add DNS records**
+
+   Resend will provide two essential DNS records:
+
+   **SPF (Sender Policy Framework):**
+   - Authorizes Resend's servers to send email from your domain
+   - Type: `TXT`
+   - Example: `v=spf1 include:_spf.resend.com ~all`
+
+   **DKIM (DomainKeys Identified Mail):**
+   - Provides cryptographic authentication for your emails
+   - Type: `TXT`
+   - Resend provides the specific value
+
+4. **Wait for verification**
+   - DNS propagation typically takes 5-30 minutes
+   - Resend automatically verifies once records are detected
+   - Check verification status on the Resend dashboard
+
+5. **Update your frontend code**
+   ```javascript
+   "from": {
+     "email": "noreply@mail.yourdomain.com",  // Use your verified domain
+     "name": "Your Company Name"
+   }
+   ```
+
+#### Testing Without Domain Verification
+
+For development and testing, use Resend's test domain (no verification needed):
+
+```javascript
+"from": {
+  "email": "onboarding@resend.dev",  // Works immediately
+  "name": "Your Company Name"
+}
+```
+
+**Limitations of test domain:**
+- ⚠️ Only for testing/development
+- ⚠️ Low sending limits
+- ⚠️ May be marked as spam
+- ⚠️ Cannot receive replies
+
+#### Common Domain Errors
+
+**Error:** `"The yourdomain.com domain is not verified"`
+- **Cause:** Email address domain doesn't match verified domain on Resend
+- **Fix:** Either verify the domain or use `onboarding@resend.dev` for testing
+
+**Error:** `"DNS records not found"`
+- **Cause:** DNS records not added or not propagated yet
+- **Fix:** Double-check DNS records and wait up to 30 minutes
+
 ## API Reference
 
 ### POST /api/send
@@ -516,7 +601,7 @@ curl -X POST https://conduit.yourdomain.com/api/send \
     "channel": "email",
     "templateId": "contact-form",
     "to": "test@example.com",
-    "from": {"email": "noreply@yourcompany.com", "name": "Test"},
+    "from": {"email": "onboarding@resend.dev", "name": "Test"},
     "data": {"name": "Test", "email": "test@example.com", "message": "Test"}
   }'
 ```
