@@ -179,7 +179,7 @@ Comprehensive security documentation, analysis, and implementation guide.
 1. SMS is planned for Phase 2 (Q1 2026)
 2. See roadmap in [API Reference](api-reference.md) → Product Roadmap
 3. Review architecture in [Architecture](architecture.md) → Channel System
-4. Watch [GitHub releases](https://github.com/yourusername/conduit/releases) for updates
+4. Watch [GitHub releases](https://github.com/eldtechnologies/conduit/releases) for updates
 
 ## 📋 Documentation Roadmap
 
@@ -212,15 +212,15 @@ Comprehensive security documentation, analysis, and implementation guide.
 
 Found an issue or want to improve the docs?
 
-1. **For errors**: [Open an issue](https://github.com/yourusername/conduit/issues)
+1. **For errors**: [Open an issue](https://github.com/eldtechnologies/conduit/issues)
 2. **For improvements**: Submit a pull request
-3. **For questions**: [Start a discussion](https://github.com/yourusername/conduit/discussions)
+3. **For questions**: [Start a discussion](https://github.com/eldtechnologies/conduit/discussions)
 
 ## 📞 Need Help?
 
-- **GitHub Issues**: [Report bugs or request features](https://github.com/yourusername/conduit/issues)
-- **GitHub Discussions**: [Ask questions or share ideas](https://github.com/yourusername/conduit/discussions)
-- **Email**: support@yourdomain.com (for security issues)
+- **GitHub Issues**: [Report bugs or request features](https://github.com/eldtechnologies/conduit/issues)
+- **GitHub Discussions**: [Ask questions or share ideas](https://github.com/eldtechnologies/conduit/discussions)
+- **Email**: security@eldtechnologies.com (for security issues)
 
 ---
 

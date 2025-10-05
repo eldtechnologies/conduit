@@ -34,7 +34,7 @@ Get Conduit up and running in 5 minutes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/conduit.git
+git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 
 # Create .env file
@@ -250,5 +250,5 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
 
 ### Need Help?
 
-- [GitHub Issues](https://github.com/yourusername/conduit/issues)
+- [GitHub Issues](https://github.com/eldtechnologies/conduit/issues)
 - [Documentation](README.md)

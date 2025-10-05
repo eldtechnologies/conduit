@@ -64,7 +64,7 @@ Perfect for contact forms, verification codes, notifications, and any scenario w
 #### Option B: Docker Locally
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/conduit.git
+git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 
 # Create .env file
@@ -578,7 +578,7 @@ ALLOWED_ORIGINS=https://yoursite.com
 - Scheduled sending
 - A/B testing
 
-Want a feature sooner? [Open an issue](https://github.com/yourusername/conduit/issues) or contribute!
+Want a feature sooner? [Open an issue](https://github.com/eldtechnologies/conduit/issues) or contribute!
 
 ## Security Best Practices
 
@@ -687,8 +687,8 @@ Check [CHANGELOG](CHANGELOG.md) before upgrading.
 ## Support
 
 - **Documentation**: [CONDUIT_SPEC.md](CONDUIT_SPEC.md)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/conduit/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/conduit/discussions)
+- **Issues**: [GitHub Issues](https://github.com/eldtechnologies/conduit/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/eldtechnologies/conduit/discussions)
 
 ## License
 
