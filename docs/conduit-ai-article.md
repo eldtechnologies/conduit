@@ -1,13 +1,3 @@
----
-title: "When Claude Code Built Production Software in 5 Hours (And Why I Still Had to Save It)"
-date: "2025-10-05"
-category: "software-engineering"
-tags: ["AI", "Claude Code", "production software", "security", "software architecture", "agentic development", "engineering experience", "code quality"]
-description: "I let Claude Code build an entire production system in 5 hours. It worked brilliantly. It also almost shipped with critical security flaws. Here's what really happens when AI writes all your code."
-author: "Magnus Jonsson"
-readingTime: "8 min"
----
-
 # When Claude Code Built Production Software in 5 Hours (And Why I Still Had to Save It)
 
 I just watched an AI build production-ready software in 5 hours. Not a prototype. Not a proof of concept. A complete, secure, multi-channel communication proxy with 217 tests passing and 87.51% code coverage.
