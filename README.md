@@ -8,6 +8,15 @@
 
 ---
 
+## 🤖 AI-Powered Development Experiment
+
+> **Note**: This project is an experiment in Agentic AI Development using [Claude Code](https://claude.com/claude-code). The entire codebase was built by Claude Code (Sonnet 4.5) with only instruction and orchestration by a human developer. The goal is to showcase not only a functional service, but exceptional code quality, security, and documentation.
+>
+> **Total development time**: 5 hours
+> **Built with**: Claude Code 2.0 + Claude Sonnet 4.5
+
+---
+
 ## Why Conduit?
 
 Frontend applications often need to send emails, SMS, or push notifications, but **exposing provider API keys in client-side code is dangerous**. Conduit solves this by providing a secure backend proxy that:
