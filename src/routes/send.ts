@@ -23,12 +23,20 @@ const sendRequestSchema = z.object({
     errorMap: () => ({ message: 'Invalid channel. Supported channels: email' }),
   }),
   templateId: z.string().min(1, 'Template ID is required'),
-  to: z.string().min(1, 'Recipient is required'),
+  to: z
+    .string()
+    .email('Invalid recipient email address')
+    .max(320, 'Email address too long'),
   data: z.record(z.unknown()),
   from: z
     .object({
       email: z.string().email('Invalid from email'),
-      name: z.string().optional(),
+      name: z
+        .string()
+        .refine((val) => !val.includes('\r') && !val.includes('\n'), {
+          message: 'Name cannot contain newline characters',
+        })
+        .optional(),
     })
     .optional(),
   replyTo: z.string().email('Invalid reply-to email').optional(),

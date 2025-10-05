@@ -18,6 +18,19 @@ import { getTemplate } from '../templates/index.js';
 const resend = new Resend(config.resendApiKey);
 
 /**
+ * Sanitize email sender name to prevent header injection
+ *
+ * Removes newline characters (\r, \n) that could be used to inject
+ * additional email headers (BCC, CC, Subject, etc.)
+ *
+ * @param name - The sender name to sanitize
+ * @returns Sanitized name with newlines removed
+ */
+function sanitizeSenderName(name: string): string {
+  return name.replace(/[\r\n]/g, '').trim();
+}
+
+/**
  * Email channel handler
  *
  * Implements the ChannelHandler interface for email delivery via Resend.
@@ -49,8 +62,9 @@ export const emailHandler: ChannelHandler = {
       };
 
       // Prepare email parameters
+      // SECURITY: Sanitize sender name to prevent email header injection
       const from = request.from
-        ? `${request.from.name || 'Conduit'} <${request.from.email}>`
+        ? `${sanitizeSenderName(request.from.name || 'Conduit')} <${request.from.email}>`
         : 'Conduit <noreply@conduit.example.com>'; // Default sender
 
       const emailParams = {
