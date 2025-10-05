@@ -12,11 +12,11 @@
 
 Frontend applications often need to send emails, SMS, or push notifications, but **exposing provider API keys in client-side code is dangerous**. Conduit solves this by providing a secure backend proxy that:
 
-✅ **Keeps API keys secure** - Provider credentials stay on the backend, never exposed to clients
-✅ **Provides one unified API** - Send email, SMS, push, and webhooks through a single endpoint
-✅ **Prevents abuse** - Built-in rate limiting and CORS protection
-✅ **Scales effortlessly** - Share one Conduit instance across multiple frontend apps
-✅ **Stays lightweight** - Built with Hono, minimal dependencies, fast startup
+- ✅ **Keeps API keys secure** - Provider credentials stay on the backend, never exposed to clients
+- ✅ **Provides one unified API** - Send email, SMS, push, and webhooks through a single endpoint
+- ✅ **Prevents abuse** - Built-in rate limiting and CORS protection
+- ✅ **Scales effortlessly** - Share one Conduit instance across multiple frontend apps
+- ✅ **Stays lightweight** - Built with Hono, minimal dependencies, fast startup
 
 ---
 
