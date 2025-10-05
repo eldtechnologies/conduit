@@ -1,6 +1,6 @@
 # Conduit Implementation TODO
 
-**Status**: Phase 0 Complete - Core Infrastructure In Progress
+**Status**: Phase 1 Complete - Security Layer Next
 **Last Updated**: 2025-10-05
 
 ---
@@ -70,43 +70,45 @@
 
 ---
 
-## Phase 1: Core Infrastructure 🏗️
+## Phase 1: Core Infrastructure ✅ COMPLETE
 
 ### 1.1 Configuration Management
-- [ ] Implement `src/config.ts`:
+- [x] Implement `src/config.ts`:
   - Environment variable loading
-  - Zod validation for env vars
+  - Validation for required env vars
   - Parse API keys (API_KEY_* pattern)
   - Parse ALLOWED_ORIGINS
   - Export TIMEOUTS constants
-- [ ] Write tests for config validation
-- [ ] Test missing required env vars throw errors
+- [x] Write tests for config validation
+- [x] Test missing required env vars throw errors
 
 ### 1.2 Type Definitions
-- [ ] Create `src/types/api.ts`:
+- [x] Create `src/types/api.ts`:
   - `SendMessageRequest`
   - `SendMessageResponse`
   - `ErrorResponse`
   - `ErrorCode` enum
-- [ ] Create `src/types/channels.ts`:
+- [x] Create `src/types/channels.ts`:
   - `ChannelHandler` interface
   - Channel-specific request/response types
-- [ ] Create `src/types/templates.ts`:
+- [x] Create `src/types/templates.ts`:
   - `Template` interface
   - `RenderedTemplate` types
 
 ### 1.3 Error Handling
-- [ ] Implement `src/utils/errors.ts`:
-  - Custom error classes
-  - `sanitizeError()` function
-  - Error code mappings
-- [ ] Write tests for error sanitization
+- [x] Implement `src/utils/errors.ts`:
+  - Custom error classes (ConduitError, AuthError, ValidationError, RateLimitError, ProviderError, InternalError)
+  - `sanitizeError()` function (hides details in production)
+  - Error code mappings (ErrorCode enum)
+  - `createErrorResponse()` helper
+- [x] Write tests for error sanitization (16 tests)
 
 ### 1.4 Utility Functions
-- [ ] Implement `src/utils/sanitize.ts`:
-  - `sanitizeHtml()` with DOMPurify
-  - `sanitizeRichText()` for future use
-- [ ] Write XSS sanitization tests
+- [x] Implement `src/utils/sanitize.ts`:
+  - `sanitizeHtml()` with DOMPurify (strips all HTML)
+  - `sanitizeRichText()` (allows safe formatting tags)
+  - `sanitizeEmail()`, `sanitizeUrl()`, `escapeHtml()`, `truncate()`
+- [x] Write XSS sanitization tests (38 tests including attack vectors)
 
 ---
 
