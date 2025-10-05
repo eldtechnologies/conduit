@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Form - Conduit Example</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      background-color: #f8f9fa;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      color: #007bff;
+    }
+
+    .contact-form {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #495057;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      font-size: 16px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #007bff;
+    }
+
+    input:disabled, textarea:disabled {
+      background-color: #e9ecef;
+      cursor: not-allowed;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: #0056b3;
+    }
+
+    button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .alert {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 4px;
+      display: none;
+    }
+
+    .alert.show {
+      display: block;
+    }
+
+    .alert-success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .alert-error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+  </style>
+</head>
+<body>
+  <h1>Contact Form</h1>
+
+  <form class="contact-form" id="contactForm">
+    <div class="form-group">
+      <label for="name">Name *</label>
+      <input type="text" id="name" name="name" required maxlength="100">
+    </div>
+
+    <div class="form-group">
+      <label for="email">Email *</label>
+      <input type="email" id="email" name="email" required>
+    </div>
+
+    <div class="form-group">
+      <label for="subject">Subject (optional)</label>
+      <input type="text" id="subject" name="subject" maxlength="200">
+    </div>
+
+    <div class="form-group">
+      <label for="message">Message *</label>
+      <textarea id="message" name="message" rows="5" required maxlength="5000"></textarea>
+    </div>
+
+    <button type="submit" id="submitBtn">Send Message</button>
+
+    <div class="alert alert-success" id="successAlert">
+      ✅ Message sent successfully!
+    </div>
+
+    <div class="alert alert-error" id="errorAlert">
+      ❌ <span id="errorMessage"></span>
+    </div>
+  </form>
+
+  <script>
+    // Configuration
+    const CONDUIT_API_URL = 'https://your-conduit-api.com/api/send';
+    const API_KEY = 'KEY_MYSITE_your_actual_key_here'; // Replace with your actual key
+    const DESTINATION_EMAIL = 'contact@yoursite.com'; // Your destination email
+
+    const form = document.getElementById('contactForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorMessage = document.getElementById('errorMessage');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // Get form data
+      const formData = new FormData(form);
+      const data = {
+        name: formData.get('name'),
+        email: formData.get('email'),
+        message: formData.get('message'),
+        subject: formData.get('subject') || undefined,
+      };
+
+      // Update UI
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      successAlert.classList.remove('show');
+      errorAlert.classList.remove('show');
+
+      try {
+        const response = await fetch(CONDUIT_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+          },
+          body: JSON.stringify({
+            channel: 'email',
+            templateId: 'contact-form',
+            to: DESTINATION_EMAIL,
+            data: data,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to send message');
+        }
+
+        // Success
+        successAlert.classList.add('show');
+        form.reset();
+      } catch (error) {
+        // Error
+        errorMessage.textContent = error.message || 'An error occurred';
+        errorAlert.classList.add('show');
+      } finally {
+        // Reset button
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Message';
+      }
+    });
+  </script>
+</body>
+</html>
