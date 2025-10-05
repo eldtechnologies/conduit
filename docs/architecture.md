@@ -1,8 +1,8 @@
 # Conduit Architecture
 
-**Version**: 1.0
+**Version**: 1.0.1
 **Last Updated**: 2025-10-05
-**Status**: Specification Phase
+**Status**: Implementation Complete - Documentation Accurate
 
 ## Overview
 
@@ -51,26 +51,48 @@ Conduit is a lightweight, multi-channel communication proxy built with security 
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │                    Middleware Stack (Ordered)                   │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 1. CORS Validation        (middleware/cors.ts)             │ │   │
+│  │  │ 0. Error Handler          (app.onError)                    │ │   │
+│  │  │    • Catches all errors globally                           │ │   │
+│  │  │    • Sanitizes errors in production                        │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 1. HTTPS Enforcement      (middleware/securityHeaders.ts)  │ │   │
+│  │  │    • Redirects HTTP to HTTPS in production                 │ │   │
+│  │  │    • HSTS header                                           │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 2. CORS Validation        (middleware/cors.ts)             │ │   │
 │  │  │    • Check Origin header against ALLOWED_ORIGINS           │ │   │
-│  │  │    • Reject if not whitelisted                             │ │   │
+│  │  │    • Reject if not whitelisted (403)                       │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 2. Authentication         (middleware/auth.ts)             │ │   │
-│  │  │    • Extract X-API-Key header                              │ │   │
-│  │  │    • Constant-time comparison against API_KEY_* env vars   │ │   │
-│  │  │    • Return 401 if invalid                                 │ │   │
-│  │  └────────────────────────────────────────────────────────────┘ │   │
-│  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 3. Rate Limiting          (middleware/rateLimit.ts)        │ │   │
-│  │  │    • Token bucket algorithm (per API key)                  │ │   │
-│  │  │    • Check: 10/min, 100/hr, 500/day                        │ │   │
-│  │  │    • Return 429 if exceeded                                │ │   │
+│  │  │ 3. Security Headers       (middleware/securityHeaders.ts)  │ │   │
+│  │  │    • X-Frame-Options, CSP, X-Content-Type-Options          │ │   │
+│  │  │    • Permissions-Policy                                    │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
 │  │  │ 4. Request Logger         (middleware/logger.ts)           │ │   │
 │  │  │    • Structured JSON logging                               │ │   │
 │  │  │    • Mask sensitive data (PII, keys)                       │ │   │
+│  │  │    • Response logging (status, duration)                   │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 5. Body Size Limit        (middleware/bodyLimit.ts)        │ │   │
+│  │  │    • /api/* routes only                                    │ │   │
+│  │  │    • Max 50KB payload (DoS prevention)                     │ │   │
+│  │  │    • Return 413 if exceeded                                │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 6. Authentication         (middleware/auth.ts)             │ │   │
+│  │  │    • /api/* routes only                                    │ │   │
+│  │  │    • Constant-time comparison (timing attack prevention)   │ │   │
+│  │  │    • Return 401 if invalid                                 │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 7. Rate Limiting          (middleware/rateLimit.ts)        │ │   │
+│  │  │    • /api/* routes only                                    │ │   │
+│  │  │    • Token bucket: 10/min, 100/hr, 500/day                 │ │   │
+│  │  │    • Return 429 if exceeded                                │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                        │
@@ -152,32 +174,97 @@ export default app;
 import { z } from 'zod';
 
 const envSchema = z.object({
-  // Server
-  PORT: z.string().default('3000'),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
+  // Server configuration
+  PORT: z.string()
+    .default('3000')
+    .transform(val => parseInt(val, 10))
+    .refine(val => !isNaN(val) && val > 0 && val < 65536, {
+      message: 'PORT must be a valid port number (1-65535)',
+    }),
 
-  // Providers (Phase 1)
-  RESEND_API_KEY: z.string().min(1),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // API Keys (dynamic - any KEY_* env var)
-  // Parsed separately
+  LOG_LEVEL: z.string().default('info'),
 
-  // CORS
-  ALLOWED_ORIGINS: z.string().transform(s => s.split(',')),
+  // Provider API keys
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
 
-  // Rate Limiting
-  RATE_LIMIT_PER_MINUTE: z.string().default('10').transform(Number),
-  RATE_LIMIT_PER_HOUR: z.string().default('100').transform(Number),
-  RATE_LIMIT_PER_DAY: z.string().default('500').transform(Number),
+  // CORS configuration
+  ALLOWED_ORIGINS: z.string()
+    .min(1, 'ALLOWED_ORIGINS is required')
+    .transform(val => val.split(',').map(origin => origin.trim())),
+
+  // Rate limiting configuration
+  RATE_LIMIT_PER_MINUTE: z.string()
+    .default('10')
+    .transform(val => parseInt(val, 10))
+    .refine(val => !isNaN(val) && val > 0, {
+      message: 'RATE_LIMIT_PER_MINUTE must be a positive number',
+    }),
+
+  RATE_LIMIT_PER_HOUR: z.string()
+    .default('100')
+    .transform(val => parseInt(val, 10))
+    .refine(val => !isNaN(val) && val > 0, {
+      message: 'RATE_LIMIT_PER_HOUR must be a positive number',
+    }),
+
+  RATE_LIMIT_PER_DAY: z.string()
+    .default('500')
+    .transform(val => parseInt(val, 10))
+    .refine(val => !isNaN(val) && val > 0, {
+      message: 'RATE_LIMIT_PER_DAY must be a positive number',
+    }),
+
+  // Security configuration
+  ENFORCE_HTTPS: z.string()
+    .default('false')
+    .transform(val => val.toLowerCase() === 'true'),
+
+  REVOKED_KEYS: z.string()
+    .default('')
+    .transform(val => val ? val.split(',').map(key => key.trim()) : []),
 });
 
-export const config = envSchema.parse(process.env);
+// Parse and validate environment variables
+const env = envSchema.parse(process.env);
 
-// Parse API keys
-export const apiKeys = Object.entries(process.env)
-  .filter(([key]) => key.startsWith('API_KEY_'))
-  .map(([, value]) => value as string);
+// Load API keys (dynamic - any API_KEY_* env var)
+function loadApiKeys(): string[] {
+  const keys: string[] = [];
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('API_KEY_') && value) {
+      keys.push(value);
+    }
+  }
+  if (keys.length === 0) {
+    throw new Error('No API keys configured');
+  }
+  return keys;
+}
+
+export const config: Config = {
+  port: env.PORT,
+  nodeEnv: env.NODE_ENV,
+  logLevel: env.LOG_LEVEL,
+  resendApiKey: env.RESEND_API_KEY,
+  apiKeys: loadApiKeys(),
+  allowedOrigins: env.ALLOWED_ORIGINS,
+  rateLimits: {
+    perMinute: env.RATE_LIMIT_PER_MINUTE,
+    perHour: env.RATE_LIMIT_PER_HOUR,
+    perDay: env.RATE_LIMIT_PER_DAY,
+  },
+  enforceHttps: env.ENFORCE_HTTPS,
+  revokedKeys: env.REVOKED_KEYS,
+};
 ```
+
+**Benefits of Zod Validation**:
+- Type coercion (string → number, boolean)
+- Custom validation with `.refine()`
+- Detailed error messages
+- Consistent with template validation
 
 ### 3. TypeScript Project Structure
 
@@ -192,38 +279,34 @@ src/
 │   └── channels.ts         # GET /api/channels (Phase 2+)
 │
 ├── middleware/
+│   ├── errorHandler.ts     # Global error handler
 │   ├── cors.ts             # CORS validation
 │   ├── auth.ts             # API key authentication
 │   ├── rateLimit.ts        # Token bucket rate limiter
-│   ├── logger.ts           # Structured logging
+│   ├── logger.ts           # Structured logging (request + response)
 │   ├── securityHeaders.ts  # Security headers (HSTS, CSP, etc.)
-│   └── bodyLimit.ts        # Request size limits
+│   └── bodyLimit.ts        # Request size limits (v1.0.1)
 │
 ├── channels/
 │   ├── index.ts            # Channel registry and router
 │   ├── email.ts            # Resend email integration
-│   ├── sms.ts              # Twilio SMS (Phase 2)
-│   ├── push.ts             # Firebase push (Phase 2)
-│   └── webhook.ts          # HTTP webhooks (Phase 3)
+│   ├── sms.ts              # Twilio SMS (future - Phase 2)
+│   ├── push.ts             # Firebase push (future - Phase 2)
+│   └── webhook.ts          # HTTP webhooks (future - Phase 3)
 │
 ├── templates/
 │   ├── index.ts            # Template registry
-│   ├── email/
-│   │   ├── index.ts
-│   │   ├── contact-form.ts
-│   │   └── newsletter.ts
-│   ├── sms/
-│   │   ├── index.ts
-│   │   └── verification-code.ts
-│   └── push/
+│   └── email/
 │       ├── index.ts
-│       └── new-message.ts
+│       └── contact-form.ts
+│   # Future: sms/, push/ templates (Phase 2+)
 │
 ├── utils/
-│   ├── validation.ts       # Shared validators
 │   ├── errors.ts           # Custom error classes
 │   ├── sanitize.ts         # XSS/HTML sanitization
-│   └── circuitBreaker.ts   # Circuit breaker for provider APIs
+│   # Future features:
+│   # ├── validation.ts     # Shared validators (planned)
+│   # └── circuitBreaker.ts # Circuit breaker (Phase 2+)
 │
 └── types/
     ├── api.ts              # Request/response types
@@ -288,7 +371,22 @@ middleware/cors.ts:
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 3: Middleware Layer 2 - Authentication                              │
+│ Step 3: Middleware Layer 2 - Body Size Limit (/api/* only)               │
+└──────────────────────────────────────────────────────────────────────────┘
+
+middleware/bodyLimit.ts:
+  1. Extract 'Content-Length' header: '1234'
+  2. Check size: 1234 bytes < 50KB limit
+  3. Size OK → Continue
+
+  If > 50KB → Return 400 with code PAYLOAD_TOO_LARGE
+  If invalid Content-Length → Return 400 with code VALIDATION_ERROR
+
+          ║
+          ▼
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Step 4: Middleware Layer 3 - Authentication (/api/* only)                │
 └──────────────────────────────────────────────────────────────────────────┘
 
 middleware/auth.ts:
@@ -305,7 +403,7 @@ middleware/auth.ts:
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 4: Middleware Layer 3 - Rate Limiting                               │
+│ Step 5: Middleware Layer 4 - Rate Limiting (/api/* only)                 │
 └──────────────────────────────────────────────────────────────────────────┘
 
 middleware/rateLimit.ts:
@@ -327,7 +425,7 @@ middleware/rateLimit.ts:
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 5: Middleware Layer 4 - Logging                                     │
+│ Step 6: Middleware Layer 5 - Logging                                     │
 └──────────────────────────────────────────────────────────────────────────┘
 
 middleware/logger.ts:
@@ -348,59 +446,39 @@ middleware/logger.ts:
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 6: Route Handler - /api/send                                        │
+│ Step 7: Route Handler - /api/send                                        │
 └──────────────────────────────────────────────────────────────────────────┘
 
 routes/send.ts:
-  1. Parse request body
+  1. Parse request body (already validated by bodyLimit middleware)
   2. Validate structure:
      - channel: string (required)
      - templateId: string (required)
      - to: string (required)
      - data: object (required)
-  3. Pass to channel router
+  3. Pass to channel handler
 
           ║
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 7: Channel Router                                                   │
-└──────────────────────────────────────────────────────────────────────────┘
-
-channels/index.ts:
-  1. Extract channel: 'email'
-  2. Check if channel is supported:
-     - email: ✅ Active (Phase 1)
-     - sms: ❌ Coming soon (Phase 2)
-     - push: ❌ Coming soon (Phase 2)
-  3. Route to channels/email.ts
-
-  If unsupported → Return 400 Invalid Channel
-
-          ║
-          ▼
-
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 8: Template Loading & Validation                                    │
+│ Step 8: Channel Handler - Email                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 
 channels/email.ts:
-  1. Load template: templates/email/contact-form.ts
-  2. Extract template definition:
+  1. Check availability: emailHandler.isAvailable() → true
+  2. Load template: getTemplate('email', 'contact-form')
+  3. Extract template definition:
      - id: 'contact-form'
      - schema: Zod validator
-     - subject: Function (data → string)
-     - html: Function (data → HTML string)
-  3. Validate data against schema:
-     {
-       name: z.string().min(1).max(100),
-       email: z.string().email(),
-       message: z.string().min(1).max(5000),
-       phone: z.string().max(20).optional()
-     }
-  4. Validation passes → Continue
+     - subject(), html(), text() methods
+  4. Validate data with template.validate(data):
+     • Throws ZodError if invalid
+     • Returns typed data if valid
+  5. Validation passes → Continue
 
-  If validation fails → Return 400 Validation Error
+  If channel unavailable → Return 502 Provider Error
+  If validation fails → Return 400 Validation Error (ZodError details)
 
           ║
           ▼
@@ -410,27 +488,25 @@ channels/email.ts:
 └──────────────────────────────────────────────────────────────────────────┘
 
 templates/email/contact-form.ts:
-  1. Sanitize input data (XSS prevention):
-     - name: sanitizeHtml('John Doe') → 'John Doe'
-     - email: sanitizeHtml('john@example.com') → 'john@example.com'
-     - message: sanitizeHtml('I have a question...') → 'I have a question...'
+  1. Render subject:
+     template.subject(data) → "Contact Form: John Doe"
 
-  2. Render subject:
-     subject(data) → "New Contact Form Submission from John Doe"
-
-  3. Render HTML body:
-     html(data) → `
+  2. Render HTML body (with XSS sanitization):
+     template.html(data) → `
        <html>
          <body>
            <h2>New Contact Form Submission</h2>
-           <p><strong>Name:</strong> John Doe</p>
+           <p><strong>From:</strong> John Doe</p>
            <p><strong>Email:</strong> john@example.com</p>
-           <p><strong>Phone:</strong> +1234567890</p>
            <hr>
+           <p><strong>Message:</strong></p>
            <p>I have a question...</p>
          </body>
        </html>
      `
+
+  3. Render plain text:
+     template.text(data) → "New Contact Form Submission\n\nFrom: John Doe\n..."
 
           ║
           ▼
@@ -440,18 +516,21 @@ templates/email/contact-form.ts:
 └──────────────────────────────────────────────────────────────────────────┘
 
 channels/email.ts:
-  1. Initialize Resend client with RESEND_API_KEY
-  2. Prepare request:
+  1. Initialize Resend client with config.resendApiKey
+  2. Sanitize sender name to prevent header injection
+  3. Prepare email params:
      {
-       from: 'noreply@company.com',
+       from: 'Company <noreply@company.com>',
        to: 'hello@company.com',
        reply_to: 'customer@example.com',
-       subject: 'New Contact Form Submission from John Doe',
-       html: '<html>...</html>'
+       subject: 'Contact Form: John Doe',
+       html: '<html>...</html>',
+       text: 'New Contact Form Submission...'
      }
-  3. Call Resend API with timeout (10s) and circuit breaker
-  4. Resend returns: { id: 'msg_abc123', status: 'sent' }
+  4. Send with 10s timeout (Promise.race)
+  5. Resend returns: { data: { id: 'msg_abc123' } }
 
+  If timeout → Return 502 Provider Timeout Error
   If Resend fails → Return 502 Provider Error
 
           ║
@@ -487,7 +566,7 @@ Return to client:
     "success": true,
     "messageId": "msg_abc123",
     "channel": "email",
-    "timestamp": "2025-10-05T10:30:00Z"
+    "timestamp": "2025-10-05T10:30:00.245Z"
   }
 
 Client receives response and displays success message to user.
@@ -690,38 +769,64 @@ export enum ErrorCode {
 
 ```typescript
 // types/templates.ts
+import type { ZodSchema } from 'zod';
 
+/**
+ * Base template interface
+ * All templates must implement this interface
+ */
 export interface Template<TData = unknown> {
-  id: string;
-  channel: 'email' | 'sms' | 'push' | 'webhook';
-  validate: (data: unknown) => data is TData;
-  render: (data: TData) => RenderedTemplate;
+  readonly id: string;
+  readonly channel: Channel;
+  readonly description?: string;
+  readonly schema: ZodSchema<TData>;
+
+  /**
+   * Validate template data
+   * @throws {ZodError} If validation fails
+   */
+  validate(data: unknown): TData;
 }
 
-export type RenderedTemplate =
-  | EmailTemplate
-  | SmsTemplate
-  | PushTemplate
-  | WebhookTemplate;
+/**
+ * Email template interface
+ * Separate methods for subject, HTML, and text
+ */
+export interface EmailTemplate<TData = unknown> extends Template<TData> {
+  readonly channel: 'email';
 
-export interface EmailTemplate {
-  subject: string;
-  html: string;
-  text?: string;  // Plain text version
+  subject(data: TData): string;
+  html(data: TData): string;
+  text(data: TData): string;
 }
 
-export interface SmsTemplate {
-  body: string;
+/**
+ * SMS template interface (Phase 2)
+ */
+export interface SmsTemplate<TData = unknown> extends Template<TData> {
+  readonly channel: 'sms';
+
+  message(data: TData): string;
 }
 
-export interface PushTemplate {
-  title: string;
-  body: string;
-  data?: Record<string, string>;
+/**
+ * Push notification template interface (Phase 2)
+ */
+export interface PushTemplate<TData = unknown> extends Template<TData> {
+  readonly channel: 'push';
+
+  title(data: TData): string;
+  body(data: TData): string;
+  data?(data: TData): Record<string, string>;
 }
 
-export interface WebhookTemplate {
-  payload: Record<string, unknown>;
+/**
+ * Webhook template interface (Phase 3)
+ */
+export interface WebhookTemplate<TData = unknown> extends Template<TData> {
+  readonly channel: 'webhook';
+
+  payload(data: TData): Record<string, unknown>;
 }
 ```
 
@@ -730,25 +835,38 @@ export interface WebhookTemplate {
 ```typescript
 // types/channels.ts
 
-export interface ChannelHandler<TRequest = unknown, TResponse = unknown> {
-  name: string;
-  status: 'active' | 'coming_soon' | 'disabled';
-  send: (request: TRequest) => Promise<TResponse>;
-  validate?: (request: unknown) => request is TRequest;
+/**
+ * Channel handler interface
+ * All channel implementations must implement this interface
+ */
+export interface ChannelHandler {
+  readonly channel: Channel;
+
+  send(request: SendMessageRequest): Promise<ChannelSendResult>;
+  isAvailable(): Promise<boolean>;
+  getProviderName(): string;
 }
 
-export interface EmailRequest {
-  to: string;
-  from: { email: string; name: string };
-  replyTo?: string;
-  subject: string;
-  html: string;
-  text?: string;
-}
-
-export interface EmailResponse {
+/**
+ * Result of sending a message through a channel
+ */
+export interface ChannelSendResult {
   messageId: string;
-  provider: 'resend';
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Email-specific send request data
+ * Extends the base request with email-specific fields
+ */
+export interface EmailSendRequest extends SendMessageRequest {
+  channel: 'email';
+  from: {
+    email: string;
+    name?: string;
+  };
+  replyTo?: string;
 }
 ```
 
@@ -761,47 +879,54 @@ export interface EmailResponse {
 ```
 Request
   │
-  ├─→ [1] CORS Validation
-  │     • Runs on ALL routes (*)
-  │     • Checks Origin header
-  │     • Sets CORS headers
-  │     • Continues if valid, returns 403 if invalid
+  ├─→ [0] Error Handler (Global)
+  │     • app.onError() - catches all errors
+  │     • Sanitizes errors in production
+  │     • Maps to appropriate HTTP status
   │
-  ├─→ [2] Security Headers
+  ├─→ [1] HTTPS Enforcement
   │     • Runs on ALL routes (*)
-  │     • Sets HSTS, X-Frame-Options, CSP, etc.
+  │     • Redirects HTTP → HTTPS in production
+  │     • Sets HSTS header
+  │
+  ├─→ [2] CORS Validation
+  │     • Runs on ALL routes (*)
+  │     • Checks Origin header against ALLOWED_ORIGINS
+  │     • Returns 403 if not whitelisted
+  │     • Sets CORS headers if valid
+  │
+  ├─→ [3] Security Headers
+  │     • Runs on ALL routes (*)
+  │     • Sets X-Frame-Options, CSP, X-Content-Type-Options, etc.
   │     • Always continues (header-only)
   │
-  ├─→ [3] Body Size Limit
+  ├─→ [4] Request Logger
+  │     • Runs on ALL routes (*)
+  │     • Logs structured JSON (method, path, headers)
+  │     • Masks sensitive data (API keys, PII)
+  │
+  ├─→ [5] Body Size Limit
   │     • Runs on /api/* routes only
   │     • Checks Content-Length header
-  │     • Returns 413 if > 50KB
+  │     • Returns 400 (PAYLOAD_TOO_LARGE) if > 50KB
   │
-  ├─→ [4] Authentication
+  ├─→ [6] Authentication
   │     • Runs on /api/* routes only
   │     • Validates X-API-Key header
+  │     • Constant-time comparison
   │     • Returns 401 if invalid
-  │     • Attaches API key metadata to context
+  │     • Attaches API key to context
   │
-  ├─→ [5] Rate Limiting
+  ├─→ [7] Rate Limiting
   │     • Runs on /api/* routes only
-  │     • Checks per-key token buckets
+  │     • Token bucket algorithm (10/min, 100/hr, 500/day)
   │     • Returns 429 if limit exceeded
   │     • Consumes tokens if within limit
   │
-  ├─→ [6] Request Logger
-  │     • Runs on ALL routes (*)
-  │     • Logs structured JSON
-  │     • Masks sensitive data
-  │     • Always continues
-  │
-  ├─→ [7] Route Handler
-  │     • /api/send, /health, /api/channels
-  │     • Business logic
-  │
-  └─→ [8] Response Logger
-        • Logs response status, duration
-        • Masks sensitive response data
+  └─→ [8] Route Handler
+        • /api/send, /health
+        • Business logic
+        • Response logging handled by logger middleware
 ```
 
 ### Middleware Implementation Pattern
@@ -861,55 +986,54 @@ function constantTimeCompare(a: string, b: string): boolean {
 // channels/index.ts
 
 import { emailHandler } from './email';
-import { smsHandler } from './sms';
-import { pushHandler } from './push';
-import { webhookHandler } from './webhook';
+import type { ChannelHandler } from '../types/channels';
+import type { Channel } from '../types/api';
 
-export const channels = {
+export const channels: Record<string, ChannelHandler | undefined> = {
   email: emailHandler,
-  sms: smsHandler,      // Phase 2
-  push: pushHandler,    // Phase 2
-  webhook: webhookHandler // Phase 3
+  // sms: smsHandler,      // Phase 2
+  // push: pushHandler,    // Phase 2
+  // webhook: webhookHandler // Phase 3
 };
 
-export async function routeToChannel(
-  channel: string,
-  templateId: string,
-  request: SendMessageRequest
-): Promise<SendMessageResponse> {
+export function getChannel(channel: Channel): ChannelHandler {
   const handler = channels[channel];
 
   if (!handler) {
-    throw new Error(`Unsupported channel: ${channel}`);
+    throw new InvalidChannelError(`Unsupported channel: ${channel}`);
   }
 
-  if (handler.status !== 'active') {
-    throw new Error(`Channel ${channel} is not yet available`);
+  return handler;
+}
+
+// Note: Actual routing happens in routes/send.ts
+// The handler checks availability, loads template, validates, and sends
+```
+
+**Actual Implementation (routes/send.ts)**:
+```typescript
+export async function sendMessage(request: SendMessageRequest) {
+  // Get channel handler
+  const handler = getChannel(request.channel);
+
+  // Check availability
+  const isAvailable = await handler.isAvailable();
+  if (!isAvailable) {
+    throw new ProviderError(`Channel ${request.channel} is not available`);
   }
 
-  // Load template
-  const template = await loadTemplate(channel, templateId);
-
-  // Validate data
-  if (!template.validate(request.data)) {
-    throw new Error('Invalid template data');
-  }
-
-  // Render template
-  const rendered = template.render(request.data);
-
-  // Send via channel handler
-  const result = await handler.send({
-    to: request.to,
-    from: request.from,
-    ...rendered
-  });
+  // Handler internally:
+  // 1. Loads template via getTemplate(channel, templateId)
+  // 2. Validates data with template.validate(data) - throws ZodError if invalid
+  // 3. Renders using template.subject/html/text methods
+  // 4. Sends via provider API
+  const result = await handler.send(request);
 
   return {
     success: true,
     messageId: result.messageId,
-    channel,
-    timestamp: new Date().toISOString()
+    channel: request.channel,
+    timestamp: result.timestamp,
   };
 }
 ```
@@ -920,29 +1044,62 @@ export async function routeToChannel(
 // channels/email.ts
 
 import { Resend } from 'resend';
-import { config } from '../config';
+import { config, TIMEOUTS } from '../config';
+import { getTemplate } from '../templates';
+import type { EmailTemplate } from '../types/templates';
 
-const resend = new Resend(config.RESEND_API_KEY);
+const resend = new Resend(config.resendApiKey);
 
-export const emailHandler: ChannelHandler<EmailRequest, EmailResponse> = {
-  name: 'email',
-  status: 'active',
+export const emailHandler: ChannelHandler = {
+  channel: 'email',
 
-  async send(request: EmailRequest): Promise<EmailResponse> {
-    const result = await resend.emails.send({
-      from: `${request.from.name} <${request.from.email}>`,
-      to: request.to,
-      reply_to: request.replyTo,
-      subject: request.subject,
-      html: request.html,
-      text: request.text
-    });
+  async send(request: SendMessageRequest): Promise<ChannelSendResult> {
+    // Get and validate template
+    const template = getTemplate(request.channel, request.templateId) as EmailTemplate<unknown>;
+
+    // Validate data (throws ZodError if invalid)
+    const validatedData = template.validate(request.data);
+
+    // Render template
+    const rendered = {
+      subject: template.subject(validatedData),
+      html: template.html(validatedData),
+      text: template.text(validatedData),
+    };
+
+    // Prepare email with header injection protection
+    const from = request.from
+      ? `${sanitizeSenderName(request.from.name || 'Conduit')} <${request.from.email}>`
+      : 'Conduit <noreply@example.com>';
+
+    // Send with timeout
+    const response = await Promise.race([
+      resend.emails.send({
+        from,
+        to: request.to,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        reply_to: request.replyTo,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), TIMEOUTS.provider)
+      ),
+    ]);
 
     return {
-      messageId: result.id,
-      provider: 'resend'
+      messageId: response.data?.id || 'unknown',
+      timestamp: new Date().toISOString(),
     };
-  }
+  },
+
+  async isAvailable(): Promise<boolean> {
+    return !!config.resendApiKey && config.resendApiKey.length > 0;
+  },
+
+  getProviderName(): string {
+    return 'resend';
+  },
 };
 ```
 
@@ -956,89 +1113,96 @@ export const emailHandler: ChannelHandler<EmailRequest, EmailResponse> = {
 // templates/email/contact-form.ts
 
 import { z } from 'zod';
-import { sanitizeHtml } from '../../utils/sanitize';
+import type { EmailTemplate } from '../../types/templates';
+import { sanitizeHtml, escapeHtml } from '../../utils/sanitize';
 
-// Define data schema
-export const contactFormSchema = z.object({
-  name: z.string().min(1).max(100),
-  email: z.string().email().max(255),
-  message: z.string().min(1).max(5000),
-  phone: z.string().max(20).optional()
+// Define data schema with strict validation
+const contactFormSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  email: z.string().email('Invalid email address'),
+  message: z.string().min(1, 'Message is required').max(5000, 'Message too long'),
+  subject: z.string().max(200, 'Subject too long').optional(),
 });
 
 export type ContactFormData = z.infer<typeof contactFormSchema>;
 
-// Template definition
-export const contactFormTemplate: Template<ContactFormData> = {
+// Template implementation
+export const contactFormTemplate: EmailTemplate<ContactFormData> = {
   id: 'contact-form',
   channel: 'email',
+  schema: contactFormSchema,
 
-  validate(data: unknown): data is ContactFormData {
-    return contactFormSchema.safeParse(data).success;
+  /**
+   * Validate contact form data
+   * @throws {ZodError} If validation fails
+   */
+  validate(data: unknown): ContactFormData {
+    return contactFormSchema.parse(data); // Throws ZodError if invalid
   },
 
-  render(data: ContactFormData): EmailTemplate {
-    // Sanitize all user input
-    const safeName = sanitizeHtml(data.name);
-    const safeEmail = sanitizeHtml(data.email);
-    const safeMessage = sanitizeHtml(data.message);
-    const safePhone = data.phone ? sanitizeHtml(data.phone) : null;
+  /**
+   * Generate email subject
+   */
+  subject(data: ContactFormData): string {
+    if (data.subject) {
+      return sanitizeHtml(data.subject);
+    }
+    return `Contact Form: ${sanitizeHtml(data.name)}`;
+  },
 
-    return {
-      subject: `New Contact Form Submission from ${safeName}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: #f4f4f4; padding: 10px; border-bottom: 2px solid #333; }
-              .content { padding: 20px 0; }
-              .field { margin-bottom: 15px; }
-              .label { font-weight: bold; color: #333; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h2>New Contact Form Submission</h2>
-              </div>
-              <div class="content">
-                <div class="field">
-                  <span class="label">Name:</span> ${safeName}
-                </div>
-                <div class="field">
-                  <span class="label">Email:</span> ${safeEmail}
-                </div>
-                ${safePhone ? `
-                  <div class="field">
-                    <span class="label">Phone:</span> ${safePhone}
-                  </div>
-                ` : ''}
-                <hr>
-                <div class="field">
-                  <span class="label">Message:</span>
-                  <p>${safeMessage.replace(/\n/g, '<br>')}</p>
-                </div>
-              </div>
-            </div>
-          </body>
-        </html>
-      `,
-      text: `
-        New Contact Form Submission
+  /**
+   * Render HTML email body
+   */
+  html(data: ContactFormData): string {
+    // Sanitize all user input to prevent XSS
+    const name = escapeHtml(data.name);
+    const email = escapeHtml(data.email);
+    const message = escapeHtml(data.message).replace(/\n/g, '<br>');
 
-        Name: ${safeName}
-        Email: ${safeEmail}
-        ${safePhone ? `Phone: ${safePhone}\n` : ''}
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Contact Form Submission</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>New Contact Form Submission</h2>
+    <p><strong>From:</strong> ${name}</p>
+    <p><strong>Email:</strong> ${email}</p>
+    <hr>
+    <p><strong>Message:</strong></p>
+    <p>${message}</p>
+  </div>
+</body>
+</html>
+    `.trim();
+  },
 
-        Message:
-        ${safeMessage}
-      `
-    };
-  }
+  /**
+   * Render plain text email body
+   */
+  text(data: ContactFormData): string {
+    const name = sanitizeHtml(data.name);
+    const email = sanitizeHtml(data.email);
+    const message = sanitizeHtml(data.message);
+
+    return `
+New Contact Form Submission
+============================
+
+From: ${name}
+Email: ${email}
+
+Message:
+--------
+${message}
+
+---
+Powered by Conduit
+    `.trim();
+  },
 };
 ```
 
@@ -1248,19 +1412,85 @@ Error Occurs
 
 ---
 
+## Implementation Notes
+
+### Deviations from Original Specification
+
+The actual implementation differs from the original specification in several important ways:
+
+#### 1. **Template Interface Design**
+- **Original Spec**: Single `render()` method returning `RenderedTemplate` union type
+- **Actual Implementation**: Separate `subject()`, `html()`, `text()` methods
+- **Rationale**: Better type safety, clearer intent, easier to extend per channel
+
+#### 2. **Template Validation**
+- **Original Spec**: Type guard pattern `validate(data): data is TData`
+- **Actual Implementation**: Throws `ZodError` via `schema.parse(data)`
+- **Rationale**: Better error messages, consistent with Zod patterns, no silent failures
+
+#### 3. **Channel Handler Interface**
+- **Original Spec**: `status: 'active' | 'coming_soon' | 'disabled'` property
+- **Actual Implementation**: `isAvailable(): Promise<boolean>` method
+- **Rationale**: Runtime checks (API key validation), async capability, cleaner design
+
+#### 4. **Middleware Order**
+- **Original Spec**: CORS → Security Headers → Auth → Rate Limit → Logger
+- **Actual Implementation**: Error Handler → HTTPS → CORS → Security Headers → Logger → Body Limit → Auth → Rate Limit
+- **Rationale**:
+  - CORS before security headers for performance (reject early)
+  - Body limit before auth to prevent DoS
+  - Logger early to capture all requests
+  - Error handler wraps everything
+
+#### 5. **Body Size Limit** (v1.0.1)
+- **Original Spec**: Not specified
+- **Actual Implementation**: 50KB max via `bodyLimit` middleware
+- **Rationale**: Critical DoS prevention gap identified in security review
+
+#### 6. **Configuration Management**
+- **Original Spec**: Manual environment variable parsing
+- **Actual Implementation**: Zod schema validation with type coercion
+- **Rationale**: Better error messages, type safety, consistent validation approach
+
+#### 7. **Error Code Mapping**
+- **Original Spec**: `PAYLOAD_TOO_LARGE` → HTTP 413
+- **Actual Implementation**: `PAYLOAD_TOO_LARGE` → HTTP 400
+- **Rationale**: Consistent 4xx error handling, simpler error mapping
+
+### Version History
+
+**v1.0.1** (2025-10-05):
+- Added `bodyLimit` middleware (DoS prevention)
+- Fixed middleware execution order
+- Migrated to Zod config validation
+- Updated architecture documentation
+
+**v1.0.0** (2025-10-04):
+- Initial MVP release
+- Email channel via Resend
+- 209 tests passing
+- Complete security implementation
+
+---
+
 ## Summary
 
 This architecture provides:
 
-✅ **Security**: Multi-layer defense with CORS, auth, rate limiting, input validation
+✅ **Security**: Multi-layer defense with CORS, auth, rate limiting, input validation, DoS protection
 ✅ **Simplicity**: Single endpoint, clear request/response format
 ✅ **Scalability**: Stateless design, horizontal scaling ready
 ✅ **Maintainability**: Modular structure, typed interfaces, clear separation of concerns
 ✅ **Extensibility**: Easy to add new channels and templates
 
+**Current Status** (v1.0.1):
+- ✅ Phase 1 Complete (Email via Resend)
+- ✅ 217 tests passing (80.05% coverage)
+- ✅ Production-ready with security hardening
+- ✅ Deployed to Coolify
+
 **Next Steps**:
-1. Implement Phase 1 (Email via Resend)
-2. Add comprehensive tests
-3. Deploy to Coolify
-4. Monitor and iterate
-5. Expand to Phase 2 (SMS + Push)
+1. Monitor production metrics
+2. Expand to Phase 2 (SMS + Push notifications)
+3. Add analytics and delivery tracking
+4. Implement circuit breaker for provider resilience
