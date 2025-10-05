@@ -88,11 +88,14 @@ curl http://localhost:3000/health
 Each frontend needs its own API key. Generate them securely:
 
 ```bash
-# Generate a random API key
-node -e "console.log('KEY_MYSITE_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15))"
+# Generate a cryptographically secure API key
+node -e "console.log('KEY_MYSITE_' + require('crypto').randomBytes(16).toString('hex'))"
+
+# Or use the built-in script:
+npm run generate-key -- MYSITE
 ```
 
-Example output: `KEY_MYSITE_a8f9d2c1b4e6x7h3`
+Example output: `KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1`
 
 Add to your Conduit environment variables:
 ```bash
@@ -121,7 +124,7 @@ interface ContactFormData {
   name: string;
   email: string;
   message: string;
-  phone?: string;
+  subject?: string;
 }
 
 export async function sendEmail(data: ContactFormData): Promise<boolean> {
@@ -187,7 +190,6 @@ function ContactForm() {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
       message: formData.get('message') as string,
-      phone: formData.get('phone') as string,
     });
 
     if (success) {
@@ -201,7 +203,6 @@ function ContactForm() {
     <form onSubmit={handleSubmit}>
       <input name="name" required placeholder="Your name" />
       <input name="email" type="email" required placeholder="your@email.com" />
-      <input name="phone" placeholder="Phone (optional)" />
       <textarea name="message" required placeholder="Your message" />
       <button type="submit">Send Message</button>
     </form>
@@ -310,7 +311,7 @@ Perfect for contact forms.
     "name": "John Doe",
     "email": "john@example.com",
     "message": "I'd like to learn more about your services.",
-    "phone": "+1 (555) 123-4567"
+    "subject": "Inquiry about services"
   }
 }
 ```
@@ -462,26 +463,22 @@ X-Source-Origin: https://yoursite.com
 
 ### GET /health
 
-Health check with channel status.
+Public health check endpoint.
 
 **Response (200)**:
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2025-10-05T10:30:00Z",
-  "version": "1.0.0",
-  "channels": {
-    "email": "active",
-    "sms": "coming_soon",
-    "push": "coming_soon",
-    "webhook": "coming_soon"
-  }
+  "status": "healthy"
 }
 ```
 
+**Note**: For detailed diagnostics (memory, uptime, channel status), use `GET /health/detailed` (requires authentication).
+
 ### GET /api/channels
 
-List available channels (Phase 2+).
+**⚠️ Future Feature (Phase 2+)** - Not yet implemented.
+
+List available channels and their templates.
 
 **Response (200)**:
 ```json
@@ -492,7 +489,14 @@ List available channels (Phase 2+).
       "name": "Email",
       "status": "active",
       "provider": "Resend",
-      "templates": ["contact-form", "newsletter"]
+      "templates": ["contact-form"]
+    },
+    {
+      "id": "sms",
+      "name": "SMS",
+      "status": "coming_soon",
+      "provider": "Twilio",
+      "templates": []
     }
   ]
 }
@@ -680,13 +684,13 @@ docker build -t conduit .
 ```
 
 ### Breaking Changes
-Check [CHANGELOG](CHANGELOG.md) before upgrading.
+Check release notes on [GitHub](https://github.com/eldtechnologies/conduit/releases) before upgrading.
 
-**v1.0 → v2.0**: `channel` parameter becomes required (no default).
+**Future v2.0**: `channel` parameter will become required (no default).
 
 ## Support
 
-- **Documentation**: [CONDUIT_SPEC.md](CONDUIT_SPEC.md)
+- **Documentation**: [API Reference](api-reference.md) | [Architecture](architecture.md) | [Security](security/)
 - **Issues**: [GitHub Issues](https://github.com/eldtechnologies/conduit/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/eldtechnologies/conduit/discussions)
 
