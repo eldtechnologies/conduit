@@ -171,7 +171,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current Phase**: 🚧 Phase 2 Complete - Health & Basic Routes Next
+**Current Phase**: 🚧 Phase 3 Complete - Email Channel (MVP) Next
 
 - ✅ Complete API specification
 - ✅ Architecture design
@@ -187,7 +187,13 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - ✅ Rate limiting (token bucket algorithm)
   - ✅ Request logging with PII masking
   - ✅ 144 tests passing (including security tests)
-- ⏳ Health & basic routes (Phase 3 - next)
+- ✅ Health & basic routes (Phase 3)
+  - ✅ Public health endpoint (/health)
+  - ✅ Authenticated detailed health endpoint (/health/detailed)
+  - ✅ Full middleware stack wired up
+  - ✅ Graceful shutdown handling
+  - ✅ 154 tests passing (10 new integration tests)
+- ⏳ Email channel implementation (Phase 4 - next)
 
 **Roadmap**:
 - **Phase 1 (Q4 2025)**: Email via Resend - **MVP**

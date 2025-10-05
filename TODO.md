@@ -1,6 +1,6 @@
 # Conduit Implementation TODO
 
-**Status**: Phase 2 Complete - Health & Basic Routes Next
+**Status**: Phase 3 Complete - Email Channel (MVP) Next
 **Last Updated**: 2025-10-05
 
 ---
@@ -195,30 +195,36 @@
 
 ---
 
-## Phase 3: Health & Basic Routes 🏥
+## Phase 3: Health & Basic Routes ✅ COMPLETE
 
-### 3.1 Health Endpoint
-- [ ] Implement `src/routes/health.ts`:
+### 3.1 Health Endpoint ✅
+- [x] Implement `src/routes/health.ts`:
   - Public `GET /health` (minimal info)
   - Authenticated `GET /health/detailed` (full diagnostics)
-  - Channel status
-  - Memory usage
-  - Uptime
-- [ ] Write tests for both endpoints
+  - Channel status (email configured check)
+  - Memory usage (heap used/total in MB)
+  - Uptime (seconds since startup)
+- [x] Write tests for both endpoints (10 integration tests)
 
-### 3.2 Main Application
-- [ ] Update `src/index.ts`:
+### 3.2 Main Application ✅
+- [x] Update `src/index.ts`:
   - Initialize Hono app
   - Apply middleware in correct order:
-    1. Security headers
-    2. CORS
-    3. Body limit (for /api/* routes)
-    4. Auth (for /api/* routes)
-    5. Rate limit (for /api/* routes)
-    6. Logger
-  - Mount health routes
-  - Start server
-- [ ] Add graceful shutdown handling
+    1. Error handler (global)
+    2. Security headers (HTTPS + headers)
+    3. CORS protection
+    4. Logger (structured JSON)
+    5. Auth (for /health/detailed and future /api/* routes)
+    6. Rate limit (for future /api/* routes)
+  - Mount health routes at /health
+  - Start server with startup logging
+- [x] Add graceful shutdown handling (SIGTERM/SIGINT)
+
+**Implementation Notes**:
+- Middleware order is documented and critical for security
+- Health endpoint returns different data based on authentication
+- Graceful shutdown prepares for future database/connection cleanup
+- All 154 tests passing (10 new integration tests)
 
 ---
 
