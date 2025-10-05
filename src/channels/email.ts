@@ -114,9 +114,9 @@ export const emailHandler: ChannelHandler = {
    *
    * @returns true if the channel is available
    */
-  async isAvailable(): Promise<boolean> {
+  isAvailable(): Promise<boolean> {
     // Check if API key is configured
-    return !!config.resendApiKey && config.resendApiKey.length > 0;
+    return Promise.resolve(!!config.resendApiKey && config.resendApiKey.length > 0);
   },
 
   /**

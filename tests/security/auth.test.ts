@@ -177,7 +177,9 @@ describe('Authentication Middleware', () => {
       // Log timing information for debugging
       console.log(`Valid key avg: ${avgValid.toFixed(3)}ms`);
       console.log(`Invalid key avg: ${avgInvalid.toFixed(3)}ms`);
-      console.log(`Difference: ${difference.toFixed(3)}ms (${((difference / avgValid) * 100).toFixed(1)}%)`);
+      console.log(
+        `Difference: ${difference.toFixed(3)}ms (${((difference / avgValid) * 100).toFixed(1)}%)`
+      );
     }, 30000); // 30 second timeout for this test
 
     it('should check all keys (not break early)', async () => {
@@ -226,7 +228,9 @@ describe('Authentication Middleware', () => {
 
       console.log(`First key avg: ${avgFirst.toFixed(3)}ms`);
       console.log(`Second key avg: ${avgSecond.toFixed(3)}ms`);
-      console.log(`Difference: ${difference.toFixed(3)}ms (${((difference / avgFirst) * 100).toFixed(1)}%)`);
+      console.log(
+        `Difference: ${difference.toFixed(3)}ms (${((difference / avgFirst) * 100).toFixed(1)}%)`
+      );
     }, 30000); // 30 second timeout for this test
   });
 });

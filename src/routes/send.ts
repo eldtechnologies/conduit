@@ -67,16 +67,14 @@ const sendRequestSchema = z.object({
  */
 send.post('/send', async (c) => {
   // Parse and validate request body
-  const body = await c.req.json();
+  const body: unknown = await c.req.json();
 
   const parseResult = sendRequestSchema.safeParse(body);
   if (!parseResult.success) {
     const errors = parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
-    throw new ValidationError(
-      `Invalid request: ${errors.join(', ')}`,
-      ErrorCode.VALIDATION_ERROR,
-      { validationErrors: parseResult.error.errors }
-    );
+    throw new ValidationError(`Invalid request: ${errors.join(', ')}`, ErrorCode.VALIDATION_ERROR, {
+      validationErrors: parseResult.error.errors,
+    });
   }
 
   const request = parseResult.data;

@@ -172,7 +172,7 @@ export async function logger(c: Context, next: Next) {
   const apiKey = c.get('apiKey') as string | undefined;
 
   // Log request start
-  console.log(
+  console.info(
     JSON.stringify({
       type: 'request',
       requestId,
@@ -191,7 +191,7 @@ export async function logger(c: Context, next: Next) {
   const duration = Date.now() - startTime;
 
   // Log request completion
-  console.log(
+  console.info(
     JSON.stringify({
       type: 'response',
       requestId,

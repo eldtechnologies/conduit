@@ -157,10 +157,7 @@ export async function rateLimit(c: Context, next: Next) {
       limitType = 'per-day';
     }
 
-    throw new RateLimitError(
-      `Rate limit exceeded (${limitType})`,
-      retryAfter
-    );
+    throw new RateLimitError(`Rate limit exceeded (${limitType})`, retryAfter);
   }
 
   // Add rate limit headers to response

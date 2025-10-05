@@ -45,7 +45,10 @@ function createTemplateKey(channel: Channel, templateId: string): string {
  * @returns The template implementation
  * @throws ValidationError if template is not found
  */
-export function getTemplate<TData = unknown>(channel: Channel, templateId: string): Template<TData> {
+export function getTemplate<TData = unknown>(
+  channel: Channel,
+  templateId: string
+): Template<TData> {
   const key = createTemplateKey(channel, templateId);
   const template = templateRegistry.get(key);
 
