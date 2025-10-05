@@ -9,7 +9,7 @@ import { Resend } from 'resend';
 import type { SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
 import { config, TIMEOUTS } from '../config.js';
-import { ProviderError, InternalError } from '../utils/errors.js';
+import { ProviderError, InternalError, ConduitError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 import { getTemplate } from '../templates/index.js';
 
@@ -92,8 +92,8 @@ export const emailHandler: ChannelHandler = {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      // Re-throw known errors
-      if (error instanceof ProviderError) {
+      // Re-throw all Conduit errors (ValidationError, ProviderError, etc.)
+      if (error instanceof ConduitError) {
         throw error;
       }
 

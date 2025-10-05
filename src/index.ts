@@ -21,6 +21,7 @@ import { rateLimit } from './middleware/rateLimit.js';
 
 // Routes
 import health from './routes/health.js';
+import send from './routes/send.js';
 
 const app = new Hono();
 
@@ -54,9 +55,9 @@ app.use('*', logger);
  * Health check endpoints are public (or have their own auth).
  */
 
-// Auth + Rate limiting for /api/* routes (future)
-// app.use('/api/*', authenticate);
-// app.use('/api/*', rateLimit);
+// Auth + Rate limiting for /api/* routes
+app.use('/api/*', authenticate);
+app.use('/api/*', rateLimit);
 
 // Auth for /health/detailed (detailed diagnostics)
 app.use('/health/detailed', authenticate);
@@ -68,8 +69,8 @@ app.use('/health/detailed', authenticate);
 // Health check endpoints
 app.route('/health', health);
 
-// Future: API routes will be mounted here
-// app.route('/api/send', sendRoutes); // Phase 6
+// API routes - Send messages through any channel
+app.route('/api', send);
 
 /**
  * Server startup
