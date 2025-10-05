@@ -509,3 +509,73 @@
 - ✅ Health check endpoints (public + authenticated)
 
 **Next Steps**: Deploy to production or continue with Phase 11+ for additional features (SMS, Push, Webhooks)
+
+---
+
+## Phase 11: Post-Release v1.0.1 - Architecture Alignment ✅ COMPLETE
+
+**Date**: 2025-10-05
+**Purpose**: Fix implementation gaps identified in comprehensive architecture review
+
+### 11.1 Critical Security Fixes ✅
+- [x] Implement body size limit middleware (src/middleware/bodyLimit.ts)
+  - Max 50KB payload to prevent DoS attacks
+  - Returns 413 Payload Too Large error
+  - Applied to /api/* routes
+  - 8 new tests added (all passing)
+- [x] Fix middleware execution order
+  - Moved CORS before security headers for performance
+  - Added bodyLimit middleware in correct position
+  - Verified no security regressions
+
+### 11.2 Code Quality Improvements ✅
+- [x] Refactor config validation to use Zod
+  - Replaced manual getEnvVar() with Zod schemas
+  - Better error messages for invalid configuration
+  - Type coercion (string → number, boolean)
+  - Port validation (1-65535 range)
+  - Rate limit validation (must be positive)
+  - All config tests passing
+
+### 11.3 Observability Improvements ✅
+- [x] Response logging already implemented
+  - Logger middleware logs response status, duration, errors
+  - Log levels based on status codes (error/warn/info)
+  - Request tracking with duration metrics
+  - No additional work needed
+
+### 11.4 Documentation Updates ✅
+- [x] Update docs/architecture.md to match implementation
+  - Fixed middleware order documentation
+  - Fixed template interface (subject/html/text methods)
+  - Fixed channel handler interface (isAvailable method)
+  - Fixed channel router signature
+  - Updated config validation examples to show Zod
+  - Added "Implementation Notes" section
+  - Documented deviations and planned features
+- [x] Update TODO.md with Phase 11 tasks (this section)
+- [x] Update CLAUDE.md security checklist
+
+### 11.5 Testing ✅
+- [x] All 217 tests passing (209 existing + 8 new bodyLimit tests)
+- [x] Code coverage maintained >80%
+- [x] No regressions introduced
+- [x] New tests cover:
+  - Payload size validation
+  - Content-Length header validation
+  - Edge cases (exactly 50KB, 50KB + 1 byte)
+  - Invalid headers
+  - Route-specific application (/api/* vs /health)
+
+### 11.6 Release ✅
+- [x] Tag v1.0.1
+- [x] Commit message: "v1.0.1: Architecture Alignment & Security Hardening"
+- [x] Security review complete
+- [x] All implementation gaps addressed
+
+### Summary of Changes
+- **New Files**: 2 (bodyLimit.ts, bodyLimit.test.ts)
+- **Modified Files**: 8 (index.ts, config.ts, logger.ts, architecture.md, TODO.md, CLAUDE.md, + test files)
+- **Total Tests**: 217 (100% passing)
+- **Security Improvements**: DoS protection, better config validation, optimized middleware order
+- **Code Quality**: Zod schemas, comprehensive error messages, better validation

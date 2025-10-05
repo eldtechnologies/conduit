@@ -78,16 +78,16 @@ See [docs/architecture.md](docs/architecture.md) for complete request flow diagr
 ### Security Checklist for Implementation
 
 **MANDATORY for Phase 1 (MVP)**:
-- [ ] HTTPS enforcement with HSTS header
-- [ ] Request size limit (50KB max body size)
-- [ ] Cryptographically secure API key generation (`crypto.randomBytes`, NOT `Math.random()`)
-- [ ] Constant-time API key comparison (`timingSafeEqual`)
-- [ ] XSS sanitization for all user input (`isomorphic-dompurify`)
-- [ ] Security headers (X-Content-Type-Options, X-Frame-Options, CSP, etc.)
-- [ ] Template field length limits (Zod schema validation)
-- [ ] Provider API timeouts (10s timeout, AbortSignal)
-- [ ] Split health endpoint (public `/health` vs authenticated `/health/detailed`)
-- [ ] Error sanitization in production (hide stack traces)
+- [x] HTTPS enforcement with HSTS header
+- [x] Request size limit (50KB max body size) - bodyLimit middleware (v1.0.1)
+- [x] Cryptographically secure API key generation (`crypto.randomBytes`, NOT `Math.random()`)
+- [x] Constant-time API key comparison (`timingSafeEqual`)
+- [x] XSS sanitization for all user input (`isomorphic-dompurify`)
+- [x] Security headers (X-Content-Type-Options, X-Frame-Options, CSP, etc.)
+- [x] Template field length limits (Zod schema validation)
+- [x] Provider API timeouts (10s timeout, AbortSignal)
+- [x] Split health endpoint (public `/health` vs authenticated `/health/detailed`)
+- [x] Error sanitization in production (hide stack traces)
 
 **RECOMMENDED for Phase 2**:
 - [ ] IP-based rate limiting (secondary protection)

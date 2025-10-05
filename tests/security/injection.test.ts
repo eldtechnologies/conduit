@@ -192,7 +192,6 @@ describe('Email Header Injection Prevention', () => {
 
     it('should reject email addresses exceeding 320 characters', async () => {
       // Create a very long email address (321 characters)
-      const longEmail = 'a'.repeat(300) + '@example.com'; // 313 chars total, within limit
       const tooLongEmail = 'a'.repeat(310) + '@example.com'; // 323 chars total, exceeds limit
 
       const req = new Request('http://localhost:3000/api/send', {

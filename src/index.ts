@@ -18,6 +18,7 @@ import { corsProtection } from './middleware/cors.js';
 import { logger } from './middleware/logger.js';
 import { authenticate } from './middleware/auth.js';
 import { rateLimit } from './middleware/rateLimit.js';
+import { bodyLimit } from './middleware/bodyLimit.js';
 
 // Routes
 import health from './routes/health.js';
@@ -29,21 +30,27 @@ const app = new Hono();
  * Middleware Stack
  *
  * Order is critical for security and functionality:
- * 1. Error handler - catches all errors
- * 2. Security headers - HTTPS enforcement and security headers
- * 3. CORS - origin validation
- * 4. Logger - request/response logging (after CORS to log rejected requests)
+ * 0. Error handler - catches all errors
+ * 1. HTTPS enforcement - redirects HTTP to HTTPS in production
+ * 2. CORS validation - reject unauthorized origins early (performance)
+ * 3. Security headers - set security headers on all responses
+ * 4. Request logger - structured logging for all requests
+ * 5. Body size limit - prevent DoS attacks via large payloads (/api/* only)
+ * 6. Authentication - validate API keys (/api/* only)
+ * 7. Rate limiting - token bucket per API key (/api/* only)
  */
 
-// 1. Global error handler
+// 0. Global error handler
 app.onError(errorHandler);
 
-// 2. Security headers (HTTPS + headers) - applies to ALL routes
+// 1. HTTPS enforcement - applies to ALL routes
 app.use('*', enforceHttps);
-app.use('*', securityHeaders);
 
-// 3. CORS protection - applies to ALL routes
+// 2. CORS protection - applies to ALL routes (reject unauthorized origins early)
 app.use('*', corsProtection);
+
+// 3. Security headers - applies to ALL routes
+app.use('*', securityHeaders);
 
 // 4. Request logging - applies to ALL routes
 app.use('*', logger);
@@ -51,12 +58,17 @@ app.use('*', logger);
 /**
  * Route-specific middleware
  *
- * Authentication and rate limiting only apply to /api/* routes.
+ * Body limit, authentication, and rate limiting only apply to /api/* routes.
  * Health check endpoints are public (or have their own auth).
  */
 
-// Auth + Rate limiting for /api/* routes
+// 5. Body size limit for /api/* routes (prevent DoS)
+app.use('/api/*', bodyLimit);
+
+// 6. Authentication for /api/* routes
 app.use('/api/*', authenticate);
+
+// 7. Rate limiting for /api/* routes
 app.use('/api/*', rateLimit);
 
 // Auth for /health/detailed (detailed diagnostics)

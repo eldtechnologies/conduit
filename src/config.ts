@@ -3,7 +3,10 @@
  *
  * Loads and validates environment variables with sensible defaults.
  * All configuration is loaded once at startup.
+ * Uses Zod for robust validation and type coercion.
  */
+
+import { z } from 'zod';
 
 export interface Config {
   // Server
@@ -32,14 +35,74 @@ export interface Config {
   revokedKeys: string[];
 }
 
-function getEnvVar(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (!value && defaultValue === undefined) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value || defaultValue || '';
-}
+/**
+ * Zod schema for environment variable validation
+ * Provides type coercion, transformation, and detailed error messages
+ */
+const envSchema = z.object({
+  // Server configuration
+  PORT: z
+    .string()
+    .default('3000')
+    .transform((val) => parseInt(val, 10))
+    .refine((val) => !isNaN(val) && val > 0 && val < 65536, {
+      message: 'PORT must be a valid port number (1-65535)',
+    }),
 
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+
+  LOG_LEVEL: z.string().default('info'),
+
+  // Provider API keys
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
+
+  // CORS configuration
+  ALLOWED_ORIGINS: z
+    .string()
+    .min(1, 'ALLOWED_ORIGINS is required')
+    .transform((val) => val.split(',').map((origin) => origin.trim())),
+
+  // Rate limiting configuration
+  RATE_LIMIT_PER_MINUTE: z
+    .string()
+    .default('10')
+    .transform((val) => parseInt(val, 10))
+    .refine((val) => !isNaN(val) && val > 0, {
+      message: 'RATE_LIMIT_PER_MINUTE must be a positive number',
+    }),
+
+  RATE_LIMIT_PER_HOUR: z
+    .string()
+    .default('100')
+    .transform((val) => parseInt(val, 10))
+    .refine((val) => !isNaN(val) && val > 0, {
+      message: 'RATE_LIMIT_PER_HOUR must be a positive number',
+    }),
+
+  RATE_LIMIT_PER_DAY: z
+    .string()
+    .default('500')
+    .transform((val) => parseInt(val, 10))
+    .refine((val) => !isNaN(val) && val > 0, {
+      message: 'RATE_LIMIT_PER_DAY must be a positive number',
+    }),
+
+  // Security configuration
+  ENFORCE_HTTPS: z
+    .string()
+    .default('false')
+    .transform((val) => val.toLowerCase() === 'true'),
+
+  REVOKED_KEYS: z
+    .string()
+    .default('')
+    .transform((val) => (val ? val.split(',').map((key) => key.trim()) : [])),
+});
+
+/**
+ * Load API keys from environment variables
+ * API keys are defined as API_KEY_* environment variables
+ */
 function loadApiKeys(): string[] {
   const keys: string[] = [];
 
@@ -57,43 +120,24 @@ function loadApiKeys(): string[] {
   return keys;
 }
 
-function loadAllowedOrigins(): string[] {
-  const origins = getEnvVar('ALLOWED_ORIGINS', '');
-  if (!origins) {
-    throw new Error('ALLOWED_ORIGINS environment variable is required');
-  }
-
-  return origins.split(',').map((origin) => origin.trim());
-}
-
-function loadRevokedKeys(): string[] {
-  const revokedKeys = getEnvVar('REVOKED_KEYS', '');
-  if (!revokedKeys) {
-    return [];
-  }
-
-  return revokedKeys.split(',').map((key) => key.trim());
-}
+// Parse and validate environment variables
+const env = envSchema.parse(process.env);
 
 // Load configuration once at module load
 export const config: Config = {
-  port: parseInt(getEnvVar('PORT', '3000'), 10),
-  nodeEnv: getEnvVar('NODE_ENV', 'development') as Config['nodeEnv'],
-  logLevel: getEnvVar('LOG_LEVEL', 'info'),
-
-  resendApiKey: getEnvVar('RESEND_API_KEY'),
-
+  port: env.PORT,
+  nodeEnv: env.NODE_ENV,
+  logLevel: env.LOG_LEVEL,
+  resendApiKey: env.RESEND_API_KEY,
   apiKeys: loadApiKeys(),
-  allowedOrigins: loadAllowedOrigins(),
-
+  allowedOrigins: env.ALLOWED_ORIGINS,
   rateLimits: {
-    perMinute: parseInt(getEnvVar('RATE_LIMIT_PER_MINUTE', '10'), 10),
-    perHour: parseInt(getEnvVar('RATE_LIMIT_PER_HOUR', '100'), 10),
-    perDay: parseInt(getEnvVar('RATE_LIMIT_PER_DAY', '500'), 10),
+    perMinute: env.RATE_LIMIT_PER_MINUTE,
+    perHour: env.RATE_LIMIT_PER_HOUR,
+    perDay: env.RATE_LIMIT_PER_DAY,
   },
-
-  enforceHttps: getEnvVar('ENFORCE_HTTPS', 'false') === 'true',
-  revokedKeys: loadRevokedKeys(),
+  enforceHttps: env.ENFORCE_HTTPS,
+  revokedKeys: env.REVOKED_KEYS,
 };
 
 // Timeout constants (in milliseconds)
