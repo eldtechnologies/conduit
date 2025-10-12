@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![Version: 1.0.1](https://img.shields.io/badge/Version-1.0.1-blue.svg)]()
+[![Version: 1.0.2](https://img.shields.io/badge/Version-1.0.2-blue.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -223,7 +223,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current Version**: 🚀 v1.0.1 - PRODUCTION READY!
+**Current Version**: 🚀 v1.0.2 - PRODUCTION READY!
 
 ### Completed Features ✅
 - **Core Email Functionality**
@@ -253,7 +253,14 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - TypeScript strict mode
   - ESLint + Prettier code quality
 
-### v1.0.1 Improvements 🆕
+### Recent Improvements 🆕
+
+**v1.0.2** (2025-10-13):
+- Zero known vulnerabilities (updated dev dependencies)
+- vitest 3.2.4 (was 2.1.9) - resolves esbuild GHSA-67mh-4wv8-2f99
+- All 223 tests passing with updated test framework
+
+**v1.0.1** (2025-10-05):
 - Node.js 20+ support for latest features
 - X-Source-Origin header support for proxy/gateway deployments
 - Comprehensive email domain setup documentation (Resend)
