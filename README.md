@@ -80,7 +80,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
   - XSS sanitization with DOMPurify
 - **Structured JSON logging** with request/response tracking
 - **Health monitoring** - Public `/health` endpoint + authenticated `/health/detailed`
-- **223 passing tests** with 87.51% code coverage
+- **237 passing tests** with 97.5% pass rate
 
 ### Phase 2: SMS & Push (Q1 2026) 📱
 - SMS via Twilio
@@ -197,11 +197,11 @@ Before deploying to production, complete these steps:
 ## Architecture
 
 ```
-Frontend Apps → HTTPS → [CORS] → [Auth] → [Rate Limit] → [Logger]
-                            ↓
-                 Channel Router → Template Validator
-                            ↓
-       [Email|SMS|Push|Webhook] Handler → Provider API
+Frontend Apps → HTTPS → [CORS] → [Auth] → [Recipient Validation] → [Rate Limit] → [Logger]
+                                      ↓
+                           Channel Router → Template Validator
+                                      ↓
+                 [Email|SMS|Push|Webhook] Handler → Provider API
 ```
 
 **Key Components**:
@@ -262,14 +262,14 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - Docker deployment with health checks
 
 - **Quality Assurance**
-  - 223 passing tests (87.51% coverage)
+  - 237 passing tests (97.5% pass rate)
   - Integration, unit, and security test suites
   - TypeScript strict mode
   - ESLint + Prettier code quality
 
 ### Recent Improvements 🆕
 
-**v1.1.0** (2025-10-14):
+**v1.1.0** (2025-10-15):
 - 🛡️ **Recipient whitelisting** - Prevent stolen API keys from spamming arbitrary recipients
   - Configure per-API-key email and domain whitelists via environment variables
   - 95% risk reduction for stolen key abuse scenarios
@@ -278,7 +278,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - [Spam Prevention Guide](docs/security/spam-prevention.md) - Quick 15-minute setup (honeypot, CAPTCHA, LLM filtering)
   - [Advanced Protections](docs/security/advanced-protections.md) - Multi-tier defense strategies
   - [Recipient Whitelisting Guide](docs/features/recipient-whitelisting.md) - Complete implementation spec
-- ✅ All 223 tests passing with new validation tests
+- ✅ All 237 tests passing with new validation tests
 
 **v1.0.2** (2025-10-13):
 - Zero known vulnerabilities (updated dev dependencies)

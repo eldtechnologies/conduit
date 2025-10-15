@@ -10,10 +10,16 @@ docs/
 ├── user-guide.md           # Complete integration guide for frontend developers
 ├── api-reference.md        # Full API specification and reference
 ├── architecture.md         # System design and technical architecture
+├── features/
+│   ├── README.md           # Feature planning framework
+│   ├── recipient-whitelisting.md  # v1.1.0 - Prevent stolen key abuse
+│   └── llm-spam-filtering.md      # v1.2.0 - AI-powered spam detection (planned)
 └── security/
     ├── README.md           # Security overview and checklist
     ├── review.md           # Comprehensive security analysis
-    └── implementation.md   # Step-by-step security hardening guide
+    ├── implementation.md   # Step-by-step security hardening guide
+    ├── spam-prevention.md  # Quick 15-min spam protection setup
+    └── advanced-protections.md  # Multi-tier defense strategies
 ```
 
 ## 🚀 Quick Links by Role
@@ -39,6 +45,8 @@ docs/
 1. **[Security Overview](security/README.md)** - Security checklist and status
 2. **[Security Review](security/review.md)** - Threat model, vulnerabilities, compliance
 3. **[Security Implementation](security/implementation.md)** - Step-by-step hardening guide
+4. **[Spam Prevention](security/spam-prevention.md)** - Quick 15-minute setup (honeypot, CAPTCHA, LLM filtering)
+5. **[Advanced Protections](security/advanced-protections.md)** - Multi-tier defense strategies
 
 ## 📖 Documentation Guide
 
@@ -150,6 +158,35 @@ Comprehensive security documentation, analysis, and implementation guide.
 
 ---
 
+### [Features](features/)
+**Time**: Reference documents
+**Audience**: Product managers, developers
+
+Feature planning and implementation guides for Conduit features.
+
+#### [Features Overview](features/README.md)
+- Feature planning framework and lifecycle
+- Prioritization criteria
+- Feature proposal template
+- Current and planned features roadmap
+
+#### [Recipient Whitelisting](features/recipient-whitelisting.md) (v1.1.0 - Implemented)
+- **Value Proposition**: Prevent stolen API keys from spamming arbitrary recipients
+- **Security Impact**: 95% risk reduction for stolen key abuse scenarios
+- **Configuration**: Per-API-key email and domain whitelists via environment variables
+- **Backward Compatible**: No whitelist = allow all recipients (existing behavior)
+
+#### [LLM Spam Filtering](features/llm-spam-filtering.md) (v1.2.0 - Planned)
+- **Value Proposition**: AI-powered spam detection without exposing LLM API keys to frontend
+- **Architecture**: Conduit server-side middleware (keeps LLM keys secure)
+- **Providers**: Anthropic Claude, OpenAI, Google Gemini, local Ollama
+- **Cost**: $0-15/month depending on provider and volume
+- **Timeline**: 2-3 weeks after v1.1.0 release
+
+**Start here if**: You want to understand planned features or propose new ones.
+
+---
+
 ## 🎯 Common Tasks
 
 ### "I want to send emails from my React app"
@@ -169,6 +206,13 @@ Comprehensive security documentation, analysis, and implementation guide.
 3. Create template following the pattern
 4. Test with validation
 
+### "I want to prevent spam on my contact form"
+1. Read [Spam Prevention Guide](security/spam-prevention.md) - Quick 15-minute setup
+2. Configure [Recipient Whitelisting](features/recipient-whitelisting.md) (v1.1.0)
+3. Add honeypot fields (90% bot reduction)
+4. Optional: Enable CAPTCHA (Cloudflare Turnstile)
+5. Planned: Enable LLM filtering when available (v1.2.0)
+
 ### "I need to understand the security requirements"
 1. Start with [Security Overview](security/README.md)
 2. Review [Security Checklist](security/README.md#critical-security-checklist)
@@ -183,30 +227,42 @@ Comprehensive security documentation, analysis, and implementation guide.
 
 ## 📋 Documentation Roadmap
 
-### Current Status: Specification Phase ✅
+### Phase 1: MVP (v1.1.0) ✅ COMPLETE
 - ✅ Complete API specification
 - ✅ Architecture documentation
 - ✅ Security review and implementation guide
 - ✅ User integration guide
 - ✅ Getting started guide
+- ✅ Core email functionality (Resend integration)
+- ✅ 237 passing tests (97.5% pass rate)
+- ✅ Production deployment guides
+- ✅ Spam prevention documentation
+- ✅ Recipient whitelisting feature
+- ✅ Feature planning framework (docs/features/)
 
-### Phase 1: Implementation (Next)
-- ⏳ Implementation of core features
-- ⏳ Unit and integration tests
-- ⏳ Deployment guides (specific to Coolify, Railway, Render)
+### Phase 2: SMS & Push (Q1 2026)
+- ⏳ SMS via Twilio
+- ⏳ Push notifications via Firebase
+- ⏳ LLM spam filtering (v1.2.0)
+- ⏳ WhatsApp Business API integration
+- ⏳ Multi-channel templates
 - ⏳ API client libraries (TypeScript, Python)
 
-### Phase 2: Expansion
-- ⏳ SMS and Push documentation
-- ⏳ Webhook integration guides
+### Phase 3: Webhooks (Q2 2026)
+- ⏳ HTTP webhooks documentation
+- ⏳ Slack/Discord integration guides
+- ⏳ Custom integration examples
 - ⏳ Migration guides
 - ⏳ Performance tuning guide
 
-### Phase 3: Maturity
+### Phase 4: Advanced Features (Q3 2026)
+- ⏳ Analytics dashboard
+- ⏳ Delivery tracking & webhooks
+- ⏳ Scheduled sending
+- ⏳ A/B testing
 - ⏳ Video tutorials
 - ⏳ Interactive examples
 - ⏳ Community recipes and patterns
-- ⏳ Advanced use cases
 
 ## 🤝 Contributing to Documentation
 
@@ -224,6 +280,6 @@ Found an issue or want to improve the docs?
 
 ---
 
-**Last Updated**: 2025-10-05
-**Documentation Version**: 1.0.0
-**Project Status**: Specification Phase
+**Last Updated**: 2025-10-15
+**Documentation Version**: 1.1.0
+**Project Status**: Production Ready (v1.1.0)
