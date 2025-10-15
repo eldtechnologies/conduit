@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Conduit** is a lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.
 
-**Current Status**: Phase 0 Complete - Project setup finished, ready for core implementation.
+**Current Status**: Phase 1 Complete - v1.1.0 Production Ready with recipient whitelisting.
 
 **Tech Stack** (planned):
 - Runtime: Node.js 18+
@@ -268,6 +268,9 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed origins
 - `PORT` - Server port (default: 3000)
 - Rate limit overrides: `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_PER_HOUR`, `RATE_LIMIT_PER_DAY`
+- Recipient whitelisting (v1.1.0, optional):
+  - `API_KEY_*_RECIPIENTS` - Comma-separated list of allowed email addresses
+  - `API_KEY_*_RECIPIENT_DOMAINS` - Comma-separated list of allowed domains
 
 ## Phased Development
 
@@ -453,8 +456,9 @@ Apply middleware in this exact order:
 2. CORS (validate origin)
 3. Body Limit (for /api/* routes)
 4. Authentication (for /api/* routes)
-5. Rate Limiting (for /api/* routes)
-6. Request Logger (structured JSON logging)
+5. Recipient Validation (for /api/send route) - v1.1.0
+6. Rate Limiting (for /api/* routes)
+7. Request Logger (structured JSON logging)
 
 ### Git Workflow
 - **Commits**: Small, atomic commits with clear messages

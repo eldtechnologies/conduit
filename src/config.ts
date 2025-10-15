@@ -8,6 +8,11 @@
 
 import { z } from 'zod';
 
+export interface RecipientWhitelist {
+  emails: string[];
+  domains: string[];
+}
+
 export interface Config {
   // Server
   port: number;
@@ -33,6 +38,9 @@ export interface Config {
   // Security
   enforceHttps: boolean;
   revokedKeys: string[];
+
+  // Recipient whitelisting (v1.1.0)
+  recipientWhitelists: Map<string, RecipientWhitelist>;
 }
 
 /**
@@ -109,7 +117,10 @@ function loadApiKeys(): string[] {
   // Find all environment variables starting with API_KEY_
   for (const [key, value] of Object.entries(process.env)) {
     if (key.startsWith('API_KEY_') && value) {
-      keys.push(value);
+      // Skip if it's a recipient/domain whitelist variable
+      if (!key.includes('_RECIPIENTS') && !key.includes('_RECIPIENT_DOMAINS')) {
+        keys.push(value);
+      }
     }
   }
 
@@ -120,8 +131,65 @@ function loadApiKeys(): string[] {
   return keys;
 }
 
+/**
+ * Load recipient whitelists from environment variables
+ * Whitelists are defined as API_KEY_*_RECIPIENTS and API_KEY_*_RECIPIENT_DOMAINS
+ * Returns a Map keyed by API key value
+ */
+function loadRecipientWhitelists(apiKeys: string[]): Map<string, RecipientWhitelist> {
+  const whitelists = new Map<string, RecipientWhitelist>();
+
+  // For each API key, look for corresponding whitelist variables
+  for (const [envKey, envValue] of Object.entries(process.env)) {
+    if (!envKey.startsWith('API_KEY_')) continue;
+
+    // Extract the API key name (e.g., "WEBSITE" from "API_KEY_WEBSITE_RECIPIENTS")
+    let apiKeyName: string | null = null;
+
+    if (envKey.endsWith('_RECIPIENTS')) {
+      apiKeyName = envKey.substring('API_KEY_'.length, envKey.length - '_RECIPIENTS'.length);
+    } else if (envKey.endsWith('_RECIPIENT_DOMAINS')) {
+      apiKeyName = envKey.substring(
+        'API_KEY_'.length,
+        envKey.length - '_RECIPIENT_DOMAINS'.length
+      );
+    }
+
+    if (!apiKeyName) continue;
+
+    // Find the actual API key value
+    const apiKeyValue = process.env[`API_KEY_${apiKeyName}`];
+    if (!apiKeyValue || !apiKeys.includes(apiKeyValue)) continue;
+
+    // Get or create whitelist for this API key
+    let whitelist = whitelists.get(apiKeyValue);
+    if (!whitelist) {
+      whitelist = { emails: [], domains: [] };
+      whitelists.set(apiKeyValue, whitelist);
+    }
+
+    // Parse the whitelist values
+    if (envKey.endsWith('_RECIPIENTS') && envValue) {
+      whitelist.emails = envValue
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter((email) => email.length > 0);
+    } else if (envKey.endsWith('_RECIPIENT_DOMAINS') && envValue) {
+      whitelist.domains = envValue
+        .split(',')
+        .map((domain) => domain.trim().toLowerCase())
+        .filter((domain) => domain.length > 0);
+    }
+  }
+
+  return whitelists;
+}
+
 // Parse and validate environment variables
 const env = envSchema.parse(process.env);
+
+// Load API keys first
+const apiKeys = loadApiKeys();
 
 // Load configuration once at module load
 export const config: Config = {
@@ -129,7 +197,7 @@ export const config: Config = {
   nodeEnv: env.NODE_ENV,
   logLevel: env.LOG_LEVEL,
   resendApiKey: env.RESEND_API_KEY,
-  apiKeys: loadApiKeys(),
+  apiKeys,
   allowedOrigins: env.ALLOWED_ORIGINS,
   rateLimits: {
     perMinute: env.RATE_LIMIT_PER_MINUTE,
@@ -138,6 +206,7 @@ export const config: Config = {
   },
   enforceHttps: env.ENFORCE_HTTPS,
   revokedKeys: env.REVOKED_KEYS,
+  recipientWhitelists: loadRecipientWhitelists(apiKeys),
 };
 
 // Timeout constants (in milliseconds)

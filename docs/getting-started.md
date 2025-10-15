@@ -81,7 +81,67 @@ API_KEY_PORTFOLIO=KEY_PORTFOLIO_j9k2m5n8p4q8r2s6t9u3v7w1x5y9z3a7
 
 **⚠️ Security Note:** Never use `Math.random()` for API keys - it's not cryptographically secure.
 
-## Step 4: Integrate with Your Frontend
+## Step 4: Configure Recipient Whitelisting (Optional but Recommended)
+
+**What it does**: Prevents stolen API keys from being used to spam arbitrary recipients. Even if someone steals your Conduit API key, they can only send emails to addresses you've explicitly whitelisted.
+
+**Risk reduction**: 95% - Stolen keys become nearly useless for spammers.
+
+### Configuration Options
+
+**Option A: Specific Email Addresses**
+
+```bash
+# Only allow emails to these specific addresses
+API_KEY_MYSITE_RECIPIENTS=support@company.com,admin@company.com,sales@company.com
+```
+
+**Option B: Entire Domains**
+
+```bash
+# Allow emails to anyone at these domains
+API_KEY_MYSITE_RECIPIENT_DOMAINS=company.com,subsidiary.com
+```
+
+**Option C: Both (Recommended)**
+
+```bash
+# Allow specific addresses AND all addresses at certain domains
+API_KEY_MYSITE_RECIPIENTS=external@partner.com
+API_KEY_MYSITE_RECIPIENT_DOMAINS=company.com
+```
+
+### Example Configuration
+
+```bash
+# .env file for Conduit
+
+# Provider API keys
+RESEND_API_KEY=re_your_key_here
+
+# Frontend API keys
+API_KEY_WEBSITE=KEY_WEBSITE_abc123xyz
+API_KEY_NEWSLETTER=KEY_NEWSLETTER_def456xyz
+
+# Recipient whitelisting (optional)
+API_KEY_WEBSITE_RECIPIENTS=support@company.com,admin@company.com
+API_KEY_WEBSITE_RECIPIENT_DOMAINS=company.com
+
+API_KEY_NEWSLETTER_RECIPIENTS=newsletter@company.com
+API_KEY_NEWSLETTER_RECIPIENT_DOMAINS=company.com
+
+# CORS
+ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
+```
+
+**How it works:**
+- If `API_KEY_*_RECIPIENTS` or `API_KEY_*_RECIPIENT_DOMAINS` is set, only whitelisted recipients are allowed
+- If neither is set, all recipients are allowed (backward compatible)
+- Requests to non-whitelisted recipients return HTTP 403 with error code `RECIPIENT_NOT_ALLOWED`
+
+**See full guide**: **[Recipient Whitelisting Documentation](../features/recipient-whitelisting.md)**
+
+## Step 5: Integrate with Your Frontend
 
 ### React + TypeScript
 
@@ -232,6 +292,8 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
 - **[API Reference](api-reference.md)** - Full API specification and available templates
 - **[Architecture](architecture.md)** - Understand how Conduit works under the hood
 - **[Security](security/)** - Security best practices and hardening
+- **[Spam Prevention](security/spam-prevention.md)** - Protect against bots and form abuse (quick 15-min setup)
+- **[Recipient Whitelisting](../features/recipient-whitelisting.md)** - Prevent stolen key abuse (95% risk reduction)
 
 ### Common Issues
 

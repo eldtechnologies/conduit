@@ -74,8 +74,13 @@ const sendRequestSchema = z.object({
  * }
  */
 send.post('/send', async (c) => {
-  // Parse and validate request body
-  const body: unknown = await c.req.json();
+  // Use pre-parsed body from recipientValidation middleware if available (v1.1.0)
+  // The body is parsed by recipientValidation middleware to prevent consumption issues
+  // Fall back to parsing here if middleware not applied (backward compatible)
+  let body: unknown = (c.get as any)('parsedBody');
+  if (!body) {
+    body = await c.req.json();
+  }
 
   const parseResult = sendRequestSchema.safeParse(body);
   if (!parseResult.success) {

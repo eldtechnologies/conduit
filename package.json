@@ -1,6 +1,6 @@
 {
   "name": "conduit",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications",
   "type": "module",
   "main": "dist/index.js",

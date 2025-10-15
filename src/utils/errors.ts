@@ -24,12 +24,22 @@ export class ConduitError extends Error {
 }
 
 /**
- * Authentication/Authorization errors (401/403)
+ * Authentication errors (401)
  */
 export class AuthError extends ConduitError {
   constructor(message: string, code: ErrorCode, details?: Record<string, unknown>) {
     super(message, code, 401, details);
     this.name = 'AuthError';
+  }
+}
+
+/**
+ * Authorization/Forbidden errors (403)
+ */
+export class ForbiddenError extends ConduitError {
+  constructor(message: string, code: ErrorCode, details?: Record<string, unknown>) {
+    super(message, code, 403, details);
+    this.name = 'ForbiddenError';
   }
 }
 

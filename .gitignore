@@ -175,3 +175,4 @@ dump.rdb
 !docs/**
 !src/**
 !scripts/**
+docs/.DS_Store
