@@ -11,7 +11,7 @@ import app from '@/index.js';
 // Mock LLM API key for testing
 process.env.LLM_PROVIDER = 'anthropic';
 process.env.LLM_API_KEY = 'sk-ant-test-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-process.env.LLM_MODEL = 'claude-3-haiku-20240307';
+process.env.LLM_MODEL = 'claude-haiku-4-5-20251001';
 process.env.LLM_TIMEOUT = '5000';
 process.env.LLM_FALLBACK_MODE = 'allow';
 
@@ -54,7 +54,7 @@ describe('LLM Filtering Integration', () => {
               }),
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           stop_reason: 'end_turn',
           usage: { input_tokens: 100, output_tokens: 50 },
         }),
@@ -109,7 +109,7 @@ describe('LLM Filtering Integration', () => {
                 }),
               },
             ],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-haiku-4-5-20251001',
             stop_reason: 'end_turn',
             usage: { input_tokens: 80, output_tokens: 40 },
           }),
@@ -169,7 +169,7 @@ describe('LLM Filtering Integration', () => {
               }),
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           stop_reason: 'end_turn',
           usage: { input_tokens: 90, output_tokens: 45 },
         }),
@@ -220,7 +220,7 @@ describe('LLM Filtering Integration', () => {
               }),
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           stop_reason: 'end_turn',
           usage: { input_tokens: 110, output_tokens: 55 },
         }),
@@ -346,7 +346,7 @@ describe('LLM Filtering Integration', () => {
                 }),
               },
             ],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-haiku-4-5-20251001',
             stop_reason: 'end_turn',
             usage: { input_tokens: 70, output_tokens: 35 },
           }),
@@ -408,7 +408,7 @@ describe('LLM Filtering Integration', () => {
                 content: [
                   { type: 'text', text: JSON.stringify({ allowed: true, confidence: 0.9, categories: ['safe'], reasoning: 'OK' }) },
                 ],
-                model: 'claude-3-haiku-20240307',
+                model: 'claude-haiku-4-5-20251001',
                 stop_reason: 'end_turn',
                 usage: { input_tokens: 50, output_tokens: 25 },
               }),

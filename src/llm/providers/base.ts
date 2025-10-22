@@ -82,7 +82,7 @@ export interface LLMProvider {
 export interface LLMProviderConfig {
   provider: 'anthropic' | 'openai' | 'gemini' | 'ollama';
   apiKey?: string; // Required for cloud providers (Anthropic, OpenAI, Gemini)
-  model: string; // Model name (e.g., 'claude-3-haiku-20240307')
+  model: string; // Model name (e.g., 'claude-haiku-4-5-20251001')
   timeout: number; // Max request time in milliseconds
   endpoint?: string; // Custom endpoint (for Ollama or regional endpoints)
 }

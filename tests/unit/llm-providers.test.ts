@@ -37,7 +37,7 @@ describe('AnthropicProvider', () => {
     provider = new AnthropicProvider({
       provider: 'anthropic',
       apiKey: 'test-api-key',
-      model: 'claude-3-haiku-20240307',
+      model: 'claude-haiku-4-5-20251001',
       timeout: 5000,
     });
   });
@@ -62,7 +62,7 @@ describe('AnthropicProvider', () => {
               }),
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           stop_reason: 'end_turn',
           usage: { input_tokens: 100, output_tokens: 50 },
         }),
@@ -96,7 +96,7 @@ describe('AnthropicProvider', () => {
               }),
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           stop_reason: 'end_turn',
           usage: { input_tokens: 80, output_tokens: 40 },
         }),
@@ -122,7 +122,7 @@ describe('AnthropicProvider', () => {
               text: '```json\n{"allowed": false, "confidence": 0.85, "categories": ["abuse"], "reasoning": "Threatening language"}\n```',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           stop_reason: 'end_turn',
           usage: { input_tokens: 90, output_tokens: 45 },
         }),
@@ -145,7 +145,7 @@ describe('AnthropicProvider', () => {
       const shortTimeoutProvider = new AnthropicProvider({
         provider: 'anthropic',
         apiKey: 'test-api-key',
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         timeout: 50,
       });
 

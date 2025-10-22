@@ -134,7 +134,7 @@ interface FilterResult {
 # Global provider configuration
 LLM_PROVIDER=anthropic               # anthropic | openai | gemini | ollama
 LLM_API_KEY=sk-ant-api...            # Provider API key (Conduit keeps this secure)
-LLM_MODEL=claude-3-haiku-20240307    # Fast, cheap model recommended
+LLM_MODEL=claude-haiku-4-5-20251001    # Fast, cheap model recommended
 LLM_TIMEOUT=5000                     # Max LLM request time (ms)
 LLM_FALLBACK_MODE=allow              # allow | block - what to do if LLM fails
 
@@ -295,7 +295,7 @@ POST /api/send
   "timestamp": "2025-10-15T12:00:00.000Z",
   "llmAnalysis": {
     "provider": "anthropic",
-    "model": "claude-3-haiku-20240307",
+    "model": "claude-haiku-4-5-20251001",
     "allowed": true,
     "confidence": 0.95,
     "categories": [],
