@@ -1,8 +1,31 @@
 # Advanced Protection Techniques
 
-**Status**: 🔬 Experimental
+**Status**: 🔬 Experimental / Planned
 **Version**: 1.1.0+
 **Last Updated**: 2025-10-14
+
+> **⚠️ IMPLEMENTATION STATUS**: Most features in this document are **NOT yet implemented** in Conduit.
+> This is a planning and design document for future enhancements. See the table below for current status.
+
+## Implementation Status
+
+| Feature | Status | Version | Location | Notes |
+|---------|--------|---------|----------|-------|
+| Honeypot Fields | 📋 Documented | - | Frontend only | Implementation guide only |
+| Form Timing Checks | 📋 Documented | - | Frontend only | Implementation guide only |
+| Keyword Filtering | 📋 Documented | - | Frontend only | Implementation guide only |
+| CAPTCHA Integration | 📋 Documented | - | Frontend + Conduit | Implementation guide only |
+| Behavioral Analysis | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
+| IP Rate Limiting | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
+| Domain Rate Limiting | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
+| Reputation Throttling | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
+| Content Filtering | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
+| **LLM Filtering (Local)** | 🔬 Planned | v1.3.0 | Conduit middleware | Architecture documented |
+| **LLM Filtering (API)** | 🔬 Planned | v1.3.0 | Conduit middleware | Architecture documented |
+
+**Legend**: ✅ Implemented | 📋 Documented (not coded) | 🔬 Planned (design only)
+
+---
 
 ## Table of Contents
 

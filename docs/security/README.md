@@ -14,11 +14,11 @@ Conduit's core security principles:
 
 ## Quick Security Status
 
-### Current Status: **PRODUCTION READY v1.0.1** ✅
+### Current Status: **PRODUCTION READY v1.1.0** ✅
 
 🎉 **All critical security measures implemented and tested!**
 
-**Security Audit**: [View full audit report](security-audit-v1.0.1.md)
+**Security Audit**: [View v1.0.1 audit report](archive/security-audit-v1.0.1.md) (archived)
 - **Verdict**: APPROVED FOR PRODUCTION DEPLOYMENT
 - **Confidence Level**: HIGH (9/10)
 - **Vulnerabilities**: Zero critical or high-severity issues
@@ -30,6 +30,7 @@ Conduit's core security principles:
 - ✅ Specification complete
 - ✅ All critical security measures implemented
 - ✅ Comprehensive security testing (71 dedicated security tests)
+- ✅ **v1.1.0**: Recipient whitelisting to prevent stolen key abuse
 
 **Phase 2 (Hardening)**: ⏳ **PLANNED**
 - ⏳ IP-based rate limiting (recommended for Phase 2)
@@ -257,17 +258,20 @@ See [implementation.md#security-testing](implementation.md#security-testing) for
 4. **Recover**: Generate new keys, distribute securely
 5. **Post-Mortem**: Document root cause, update security measures
 
-See [review.md#incident-response](review.md#incident-response) for detailed procedures.
+See [archive/review-pre-v1.0.0.md#incident-response](archive/review-pre-v1.0.0.md#incident-response) for detailed procedures (archived historical document).
 
 ## Security Documentation
 
 ### Documents in This Folder
 
-- **[README.md](README.md)** (this file) - Security overview and checklist
-- **[security-audit-v1.0.1.md](security-audit-v1.0.1.md)** - ⭐ **Production security audit** (2025-10-05)
-- **[review.md](review.md)** - Comprehensive security analysis, threat model, vulnerabilities
+- **[README.md](README.md)** (this file) - Security overview and checklist (v1.1.0)
 - **[implementation.md](implementation.md)** - Step-by-step security hardening guide with code
-- **[security-review-2025-10-05.md](security-review-2025-10-05.md)** - Pre-implementation security review
+- **[advanced-protections.md](advanced-protections.md)** - Advanced protection techniques (experimental)
+- **[spam-prevention.md](spam-prevention.md)** - Practical spam prevention guide
+
+**Archived Documents:**
+- **[archive/security-audit-v1.0.1.md](archive/security-audit-v1.0.1.md)** - Production security audit (2025-10-05)
+- **[archive/review-pre-v1.0.0.md](archive/review-pre-v1.0.0.md)** - Pre-implementation security review (historical)
 
 ### External References
 
@@ -276,7 +280,7 @@ See [review.md#incident-response](review.md#incident-response) for detailed proc
 - **[CWE Top 25](https://cwe.mitre.org/top25/)**
 - **[GDPR Guidelines](https://gdpr.eu/)**
 
-## v1.0.1 Security Achievements 🎉
+## v1.1.0 Security Achievements 🎉
 
 **Production-ready security implementation achieved:**
 
@@ -284,8 +288,9 @@ See [review.md#incident-response](review.md#incident-response) for detailed proc
 2. ✅ **Secrets**: Environment variables with Zod validation
 3. ✅ **Monitoring**: Structured JSON logging with PII masking
 4. ✅ **Rate Limiting**: Token bucket algorithm across 3 time windows
-5. ✅ **Testing**: 223 tests including 71 dedicated security tests
-6. ✅ **OWASP Coverage**: 9/10 categories with EXCELLENT implementation
+5. ✅ **Recipient Whitelisting**: Per-API-key email restrictions (v1.1.0)
+6. ✅ **Testing**: 223 tests including 71 dedicated security tests
+7. ✅ **OWASP Coverage**: 9/10 categories with EXCELLENT implementation
 
 **Next Steps for Enhanced Security:**
 - Update dev dependencies (vitest ecosystem)
