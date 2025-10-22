@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-blue.svg)]()
+[![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-blue.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -65,8 +65,15 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 
 ## Features
 
-### Phase 1: Email (Production Ready - v1.1.0) ✅
+### Phase 1: Email & Spam Filtering (Production Ready - v1.2.0) ✅
 - **Email delivery** via [Resend.com](https://resend.com) with comprehensive domain setup guide
+- **🤖 AI-powered spam filtering** (Optional) - Block spam, abuse, phishing, and prompt injection attacks
+  - Anthropic Claude and OpenAI GPT support
+  - Configurable per API key with custom rules and thresholds
+  - Fail-open/fail-closed modes for reliability
+  - Budget limits to control LLM costs (~$0.0005 per message)
+  - Sender whitelisting to skip trusted emails
+  - See [LLM Spam Filtering Guide](docs/features/llm-spam-filtering.md)
 - **Contact form template** with XSS sanitization and header injection prevention
 - **API key authentication** with constant-time comparison (timing attack resistant)
 - **Rate limiting** (10/min, 100/hr, 500/day per key) - token bucket algorithm
@@ -80,7 +87,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
   - XSS sanitization with DOMPurify
 - **Structured JSON logging** with request/response tracking
 - **Health monitoring** - Public `/health` endpoint + authenticated `/health/detailed`
-- **237 passing tests** with 97.5% pass rate
+- **260+ passing tests** with comprehensive coverage
 
 ### Phase 2: SMS & Push (Q1 2026) 📱
 - SMS via Twilio

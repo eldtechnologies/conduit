@@ -95,12 +95,16 @@ send.post('/send', async (c) => {
   // Route to the appropriate channel
   const result = await routeToChannel(request);
 
+  // Get LLM analysis from context (if LLM filtering was applied)
+  const llmAnalysis = (c.get as any)('llmAnalysis');
+
   // Return success response
   const response: SendMessageResponse = {
     success: true,
     messageId: result.messageId,
     channel: request.channel,
     timestamp: result.timestamp,
+    ...(llmAnalysis && { llmAnalysis }), // Include LLM analysis if available
   };
 
   return c.json(response, 200);
