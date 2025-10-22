@@ -1,7 +1,7 @@
 # Conduit Architecture
 
-**Version**: 1.1.0
-**Last Updated**: 2025-10-15
+**Version**: 1.2.0
+**Last Updated**: 2025-10-22
 **Status**: Implementation Complete - Documentation Accurate
 
 ## Overview
@@ -96,7 +96,15 @@ Conduit is a lightweight, multi-channel communication proxy built with security 
 │  │  │    • Backward compatible (no whitelist = allow all)        │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 8. Rate Limiting          (middleware/rateLimit.ts)        │ │   │
+│  │  │ 8. LLM Spam Filter        (middleware/llmFilter.ts)        │ │   │
+│  │  │    • /api/send route only (v1.2.0, optional)               │ │   │
+│  │  │    • Analyze content using LLM providers (Claude, GPT)     │ │   │
+│  │  │    • Detect spam, abuse, phishing, prompt injection        │ │   │
+│  │  │    • Return 403 if confidence > threshold                  │ │   │
+│  │  │    • Budget limits & sender whitelisting per API key       │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 9. Rate Limiting          (middleware/rateLimit.ts)        │ │   │
 │  │  │    • /api/* routes only                                    │ │   │
 │  │  │    • Token bucket: 10/min, 100/hr, 500/day                 │ │   │
 │  │  │    • Return 429 if exceeded                                │ │   │
@@ -290,6 +298,7 @@ src/
 │   ├── cors.ts                # CORS validation
 │   ├── auth.ts                # API key authentication
 │   ├── recipientValidation.ts # Recipient whitelisting (v1.1.0)
+│   ├── llmFilter.ts           # LLM spam filtering (v1.2.0)
 │   ├── rateLimit.ts           # Token bucket rate limiter
 │   ├── logger.ts              # Structured logging (request + response)
 │   ├── securityHeaders.ts     # Security headers (HSTS, CSP, etc.)
@@ -308,6 +317,13 @@ src/
 │       ├── index.ts
 │       └── contact-form.ts
 │   # Future: sms/, push/ templates (Phase 2+)
+│
+├── llm/                     # LLM providers (v1.2.0)
+│   ├── index.ts            # LLM provider registry
+│   └── providers/
+│       ├── base.ts         # Base provider interface
+│       ├── anthropic.ts    # Anthropic Claude integration
+│       └── openai.ts       # OpenAI GPT integration
 │
 ├── utils/
 │   ├── errors.ts           # Custom error classes
@@ -803,6 +819,12 @@ export enum ErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   RECIPIENT_NOT_ALLOWED = 'RECIPIENT_NOT_ALLOWED',  // v1.1.0
+  CONTENT_BLOCKED_SPAM = 'CONTENT_BLOCKED_SPAM',  // v1.2.0
+  CONTENT_BLOCKED_ABUSE = 'CONTENT_BLOCKED_ABUSE',  // v1.2.0
+  CONTENT_BLOCKED_PHISHING = 'CONTENT_BLOCKED_PHISHING',  // v1.2.0
+  CONTENT_BLOCKED_PROMPT_INJECTION = 'CONTENT_BLOCKED_PROMPT_INJECTION',  // v1.2.0
+  LLM_BUDGET_EXCEEDED = 'LLM_BUDGET_EXCEEDED',  // v1.2.0
+  LLM_PROVIDER_ERROR = 'LLM_PROVIDER_ERROR',  // v1.2.0
   PROVIDER_ERROR = 'PROVIDER_ERROR',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
@@ -968,13 +990,22 @@ Request
   │     • Backward compatible (no whitelist = allow all)
   │     • 95% risk reduction for stolen key spam abuse
   │
-  ├─→ [8] Rate Limiting
+  ├─→ [8] LLM Spam Filter (v1.2.0, optional)
+  │     • Runs on /api/send route only (if enabled)
+  │     • Analyzes message content using LLM providers
+  │     • Detects spam, abuse, phishing, prompt injection
+  │     • Per-API-key configuration (rules, threshold, budget)
+  │     • Returns 403 if confidence > threshold
+  │     • Sender whitelist bypass available
+  │     • Daily budget limits to control costs
+  │
+  ├─→ [9] Rate Limiting
   │     • Runs on /api/* routes only
   │     • Token bucket algorithm (10/min, 100/hr, 500/day)
   │     • Returns 429 if limit exceeded
   │     • Consumes tokens if within limit
   │
-  └─→ [9] Route Handler
+  └─→ [10] Route Handler
         • /api/send, /health
         • Business logic
         • Response logging handled by logger middleware
@@ -1510,6 +1541,16 @@ The actual implementation differs from the original specification in several imp
 
 ### Version History
 
+**v1.2.0** (2025-10-22):
+- Added `llmFilter` middleware (AI-powered spam detection)
+- Support for multiple LLM providers (Anthropic Claude, OpenAI GPT)
+- Per-API-key LLM filter configuration (rules, threshold, budget)
+- Daily budget limits to control LLM API costs
+- Sender whitelisting to bypass LLM analysis for trusted senders
+- Fail-open/fail-closed modes for LLM provider errors
+- Detects spam, abuse, phishing, prompt injection, profanity, scams
+- Updated LLM model to Claude Haiku 4.5 for improved performance
+
 **v1.1.0** (2025-10-15):
 - Added `recipientValidation` middleware (spam abuse prevention)
 - Per-API-key recipient whitelisting (95% risk reduction for stolen keys)
@@ -1542,16 +1583,17 @@ This architecture provides:
 ✅ **Maintainability**: Modular structure, typed interfaces, clear separation of concerns
 ✅ **Extensibility**: Easy to add new channels and templates
 
-**Current Status** (v1.1.0):
+**Current Status** (v1.2.0):
 - ✅ Phase 1 Complete (Email via Resend)
-- ✅ 237 tests passing (97.5% passing rate)
 - ✅ Production-ready with security hardening
 - ✅ Recipient whitelisting (95% risk reduction for stolen keys)
+- ✅ LLM spam filtering with multi-provider support (Claude, GPT)
+- ✅ Per-API-key spam detection configuration
 - ✅ Deployed to Coolify
 
 **Next Steps**:
-1. Implement LLM spam filtering as Conduit middleware (v1.2.0)
-2. Monitor production metrics
+1. Monitor LLM spam detection effectiveness and adjust thresholds
+2. Add support for additional LLM providers (Gemini, Ollama)
 3. Expand to Phase 2 (SMS + Push notifications)
 4. Add analytics and delivery tracking
 5. Implement circuit breaker for provider resilience
