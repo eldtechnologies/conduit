@@ -4,6 +4,10 @@
 **Version**: 1.1.0+
 **Last Updated**: 2025-10-14
 
+> **⚠️ IMPORTANT**: LLM spam filtering (mentioned in Tier 3) is NOT yet implemented in Conduit.
+> This is a **planned feature for v1.2.0+**. For current spam protection, use Tier 1-2 methods
+> (honeypot, CAPTCHA, recipient whitelisting). See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -50,9 +54,9 @@ This guide helps you implement spam prevention for Conduit in **under 1 hour** w
 3. CAPTCHA → Blocks 99% of remaining bots
 4. Behavioral analysis → Blocks 80% of rapid-fire abuse
 5. Content filtering → Blocks 70% of keyword spam
-6. LLM filtering (Conduit feature) → Blocks 95% of semantic spam
+6. LLM filtering → Blocks 95% of semantic spam (planned for v1.2.0+)
 
-> **Note**: LLM filtering (#6) is implemented as **optional Conduit middleware** (v1.2.0+), not in frontend code. This keeps LLM API keys secure on the server. See [LLM Spam Filtering Feature](../features/llm-spam-filtering.md) for details.
+> **Note**: LLM filtering (#6) is **planned for v1.2.0+** as optional Conduit middleware, not in frontend code. This will keep LLM API keys secure on the server. See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md) for architecture details.
 
 ---
 
@@ -399,12 +403,12 @@ See [recipient-whitelisting.md](../features/recipient-whitelisting.md) for compl
 
 **Includes**:
 - Everything in Tier 2, plus:
-- LLM-based content filtering as Conduit middleware (Anthropic Claude, OpenAI, or local Ollama)
-- Domain-based rate limiting
-- Reputation-based throttling
-- Advanced behavioral analysis
+- LLM-based content filtering as Conduit middleware (planned for v1.2.0+)
+- Domain-based rate limiting (planned)
+- Reputation-based throttling (planned)
+- Advanced behavioral analysis (planned)
 
-> **Important**: LLM filtering is implemented as **Conduit server-side middleware** (v1.2.0+), NOT in frontend code. This approach keeps your LLM API keys secure and provides spam detection without exposing credentials to clients. See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md) for complete architecture and implementation details.
+> **Important**: LLM filtering is **PLANNED for v1.2.0+** as Conduit server-side middleware, NOT in frontend code. This approach will keep your LLM API keys secure and provide spam detection without exposing credentials to clients. See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md) for complete architecture and implementation details.
 
 #### Setup: LLM Content Filtering (2-3 hours)
 

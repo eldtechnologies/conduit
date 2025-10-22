@@ -504,13 +504,170 @@ export default health;
 
 ---
 
+## 9. Recipient Whitelisting (v1.1.0)
+
+**Requirement**: Restrict which email addresses can receive messages per API key
+
+**Why**: Prevents stolen API keys from being used to spam arbitrary recipients. This is a critical defense-in-depth measure.
+
+**Implementation**:
+
+Recipient whitelisting is configured via environment variables and enforced by middleware. No code changes needed in application logic.
+
+**Environment Configuration**:
+
+```bash
+# .env
+
+# Option 1: Whitelist specific email addresses
+API_KEY_MYSITE_RECIPIENTS=support@company.com,admin@company.com,contact@company.com
+
+# Option 2: Whitelist entire domains
+API_KEY_MYSITE_RECIPIENT_DOMAINS=company.com,subsidiary.com
+
+# Option 3: Combine both (recipient must match EITHER list)
+API_KEY_WEBSITE_RECIPIENTS=newsletter@company.com
+API_KEY_WEBSITE_RECIPIENT_DOMAINS=company.com
+
+# Multiple API keys with different restrictions
+API_KEY_SUPPORT_RECIPIENTS=support@company.com
+API_KEY_SUPPORT_RECIPIENT_DOMAINS=company.com
+
+API_KEY_MARKETING_RECIPIENTS=marketing@company.com
+API_KEY_MARKETING_RECIPIENT_DOMAINS=company.com,partner.com
+```
+
+**How It Works**:
+
+1. Middleware extracts recipient email from request (`to` field)
+2. Looks up API key's whitelist configuration from environment variables
+3. Checks if recipient email matches:
+   - Exact match in `API_KEY_*_RECIPIENTS` list, OR
+   - Domain matches one in `API_KEY_*_RECIPIENT_DOMAINS` list
+4. Blocks request with 403 if no match
+
+**Configuration Examples**:
+
+```bash
+# Single recipient only (contact form)
+API_KEY_CONTACT_RECIPIENTS=support@company.com
+
+# Multiple recipients (support team)
+API_KEY_SUPPORT_RECIPIENTS=support@company.com,tech@company.com,admin@company.com
+
+# Entire domain (internal tools)
+API_KEY_INTERNAL_RECIPIENT_DOMAINS=company.com
+
+# Domain + exceptions (newsletter service)
+API_KEY_NEWSLETTER_RECIPIENTS=newsletter@mailservice.com
+API_KEY_NEWSLETTER_RECIPIENT_DOMAINS=company.com
+
+# Multiple domains (multi-brand company)
+API_KEY_MULTIBRAND_RECIPIENT_DOMAINS=brand1.com,brand2.com,brand3.com
+```
+
+**Error Response** (when recipient not whitelisted):
+
+```json
+{
+  "success": false,
+  "code": "RECIPIENT_NOT_ALLOWED",
+  "error": "Recipient 'attacker@evil.com' is not whitelisted for this API key"
+}
+```
+
+**Testing**:
+
+```typescript
+// tests/security/recipientWhitelist.test.ts
+import { describe, it, expect } from 'vitest';
+
+describe('Recipient Whitelisting', () => {
+  it('allows whitelisted email addresses', async () => {
+    const res = await app.request('/api/send', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': 'KEY_WEBSITE_abc123',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channel: 'email',
+        templateId: 'contact-form',
+        to: 'support@company.com', // Whitelisted
+        data: { name: 'Test', email: 'test@example.com', message: 'Test' }
+      })
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks non-whitelisted email addresses', async () => {
+    const res = await app.request('/api/send', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': 'KEY_WEBSITE_abc123',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channel: 'email',
+        templateId: 'contact-form',
+        to: 'attacker@evil.com', // NOT whitelisted
+        data: { name: 'Test', email: 'test@example.com', message: 'Test' }
+      })
+    });
+
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.code).toBe('RECIPIENT_NOT_ALLOWED');
+  });
+
+  it('allows emails from whitelisted domains', async () => {
+    const res = await app.request('/api/send', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': 'KEY_WEBSITE_abc123',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channel: 'email',
+        templateId: 'contact-form',
+        to: 'anyone@company.com', // Domain whitelisted
+        data: { name: 'Test', email: 'test@example.com', message: 'Test' }
+      })
+    });
+
+    expect(res.status).toBe(200);
+  });
+});
+```
+
+**Security Benefits**:
+
+1. **Stolen Key Protection**: Even if API key is exposed, attacker can only send to whitelisted recipients
+2. **Spam Prevention**: Prevents using Conduit for arbitrary spam campaigns
+3. **Cost Control**: Limits potential abuse and associated costs
+4. **Compliance**: Helps meet data protection requirements by controlling where PII can be sent
+
+**Best Practices**:
+
+- ✅ Use domain whitelisting for internal tools (e.g., `company.com`)
+- ✅ Use specific email whitelisting for external services (e.g., `newsletter@mailservice.com`)
+- ✅ Review whitelist configuration quarterly
+- ✅ Log blocked attempts for security monitoring
+- ❌ Don't use overly broad domain whitelists (e.g., `gmail.com`)
+- ❌ Don't skip whitelisting for "low-risk" API keys
+
+**Documentation**: See [../features/recipient-whitelisting.md](../features/recipient-whitelisting.md) for complete feature documentation and use cases.
+
+---
+
 ## Important Security Enhancements
 
 The following are **recommended** for production but not critical for MVP.
 
 ---
 
-## 9. IP-Based Rate Limiting (Secondary)
+## 10. IP-Based Rate Limiting (Secondary)
 
 **Purpose**: Additional protection if API key is compromised
 
@@ -548,7 +705,7 @@ export async function rateLimit(c: Context, next: Next) {
 
 ---
 
-## 10. Circuit Breaker for Provider APIs
+## 11. Circuit Breaker for Provider APIs
 
 **Purpose**: Prevent cascading failures when providers are down
 
@@ -619,7 +776,7 @@ export async function sendEmail(data: EmailData) {
 
 ---
 
-## 11. API Key Revocation Mechanism
+## 12. API Key Revocation Mechanism
 
 **Purpose**: Invalidate compromised keys without redeployment
 
@@ -690,7 +847,7 @@ app.post('/admin/revoke-key', adminAuth, async (c) => {
 
 ---
 
-## 12. Error Sanitization
+## 13. Error Sanitization
 
 **Requirement**: Hide internal errors in production
 
