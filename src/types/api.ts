@@ -33,6 +33,19 @@ export enum ErrorCode {
   // Recipient validation (403) - v1.1.0
   RECIPIENT_NOT_ALLOWED = 'RECIPIENT_NOT_ALLOWED',
 
+  // LLM spam filtering (403) - v1.2.0
+  CONTENT_BLOCKED_SPAM = 'CONTENT_BLOCKED_SPAM',
+  CONTENT_BLOCKED_ABUSE = 'CONTENT_BLOCKED_ABUSE',
+  CONTENT_BLOCKED_PROFANITY = 'CONTENT_BLOCKED_PROFANITY',
+  CONTENT_BLOCKED_PHISHING = 'CONTENT_BLOCKED_PHISHING',
+  CONTENT_BLOCKED_SCAM = 'CONTENT_BLOCKED_SCAM',
+  CONTENT_BLOCKED_PROMPT_INJECTION = 'CONTENT_BLOCKED_PROMPT_INJECTION',
+
+  // LLM provider errors (503) - v1.2.0
+  LLM_PROVIDER_ERROR = 'LLM_PROVIDER_ERROR',
+  LLM_TIMEOUT = 'LLM_TIMEOUT',
+  LLM_BUDGET_EXCEEDED = 'LLM_BUDGET_EXCEEDED',
+
   // Provider errors (502)
   PROVIDER_ERROR = 'PROVIDER_ERROR',
   PROVIDER_TIMEOUT = 'PROVIDER_TIMEOUT',
@@ -72,6 +85,20 @@ export interface SendMessageRequest {
 }
 
 /**
+ * LLM analysis metadata (v1.2.0)
+ */
+export interface LLMAnalysis {
+  provider: string;
+  model?: string;
+  allowed: boolean;
+  confidence: number;
+  categories: string[];
+  latency: number;
+  fallback?: boolean;
+  fallbackReason?: string;
+}
+
+/**
  * Success response
  */
 export interface SendMessageResponse {
@@ -79,6 +106,7 @@ export interface SendMessageResponse {
   messageId: string;
   channel: Channel;
   timestamp: string;
+  llmAnalysis?: LLMAnalysis; // Optional LLM analysis metadata (v1.2.0)
 }
 
 /**

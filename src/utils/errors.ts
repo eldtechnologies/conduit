@@ -78,6 +78,16 @@ export class ProviderError extends ConduitError {
 }
 
 /**
+ * Service unavailable errors (503)
+ */
+export class ServiceUnavailableError extends ConduitError {
+  constructor(message: string, code: ErrorCode, details?: Record<string, unknown>) {
+    super(message, code, 503, details);
+    this.name = 'ServiceUnavailableError';
+  }
+}
+
+/**
  * Internal server errors (500)
  */
 export class InternalError extends ConduitError {

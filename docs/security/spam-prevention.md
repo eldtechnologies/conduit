@@ -492,7 +492,7 @@ volumes:
 # .env - Conduit server configuration (v1.2.0+)
 LLM_PROVIDER=anthropic
 LLM_API_KEY=sk-ant-api...  # Kept secure on Conduit server
-LLM_MODEL=claude-3-haiku-20240307  # Fast, cheap, accurate
+LLM_MODEL=claude-haiku-4-5-20251001  # Fast, cheap, accurate
 LLM_TIMEOUT=5000
 LLM_FALLBACK_MODE=allow
 

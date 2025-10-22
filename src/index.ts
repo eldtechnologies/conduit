@@ -19,6 +19,7 @@ import { corsProtection } from './middleware/cors.js';
 import { logger } from './middleware/logger.js';
 import { authenticate } from './middleware/auth.js';
 import { validateRecipient } from './middleware/recipientValidation.js';
+import { llmFilter } from './middleware/llmFilter.js';
 import { rateLimit } from './middleware/rateLimit.js';
 import { bodyLimit } from './middleware/bodyLimit.js';
 
@@ -40,7 +41,8 @@ const app = new Hono();
  * 5. Body size limit - prevent DoS attacks via large payloads (/api/* only)
  * 6. Authentication - validate API keys (/api/* only)
  * 7. Recipient validation - check whitelist (/api/send only) - v1.1.0
- * 8. Rate limiting - token bucket per API key (/api/* only)
+ * 8. LLM spam filtering - AI-powered content moderation (/api/send only) - v1.2.0
+ * 9. Rate limiting - token bucket per API key (/api/* only)
  */
 
 // 0. Global error handler
@@ -74,7 +76,10 @@ app.use('/api/*', authenticate);
 // 7. Recipient validation for /api/send route (v1.1.0)
 app.use('/api/send', validateRecipient);
 
-// 8. Rate limiting for /api/* routes
+// 8. LLM spam filtering for /api/send route (v1.2.0)
+app.use('/api/send', llmFilter);
+
+// 9. Rate limiting for /api/* routes
 app.use('/api/*', rateLimit);
 
 // Auth for /health/detailed (detailed diagnostics)
@@ -105,6 +110,7 @@ if (process.env.NODE_ENV !== 'test') {
   console.info(`📝 Environment: ${config.nodeEnv}`);
   console.info(`🔑 API Keys loaded: ${config.apiKeys.length}`);
   console.info(`🛡️  Recipient Whitelists: ${config.recipientWhitelists.size} configured`);
+  console.info(`🤖 LLM Filtering: ${config.llm ? `Enabled (${config.llm.provider}, ${config.llmFilterRules.size} API keys)` : 'Disabled'}`);
   console.info(`🌐 Allowed Origins: ${config.allowedOrigins.join(', ')}`);
 
   /**
