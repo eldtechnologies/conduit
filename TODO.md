@@ -1,8 +1,8 @@
 # Conduit Implementation TODO
 
-**Status**: Phase 13 Complete - PRODUCTION READY! 🚀
+**Status**: Phase 14 Complete - PRODUCTION READY! 🚀
 **Last Updated**: 2025-10-22
-**Version**: 1.1.0
+**Version**: 1.2.0
 
 ---
 
@@ -477,9 +477,9 @@
 
 ---
 
-## 🚀 VERSION 1.1.0 RELEASED!
+## 🚀 VERSION 1.2.0 RELEASED!
 
-**All 13 phases complete - Conduit is production-ready with spam prevention!**
+**All 14 phases complete - Conduit is production-ready with AI-powered spam filtering!**
 
 ### Completed Phases:
 - ✅ Phase 0: Project Setup
@@ -495,6 +495,7 @@
 - ✅ Phase 11: Architecture Alignment & Security Hardening (v1.0.1)
 - ✅ Phase 12: Dependency Security Update (v1.0.2)
 - ✅ Phase 13: Recipient Whitelisting & Spam Prevention (v1.1.0)
+- ✅ Phase 14: LLM-Powered Spam Filtering (v1.2.0)
 
 ### Production Features:
 - ✅ Secure API key authentication with timing attack resistance
@@ -695,3 +696,109 @@
 - **Documentation**: 108KB of security guides added
 - **Security Impact**: 95% risk reduction for stolen key abuse
 - **Breaking Changes**: None (fully backward compatible)
+
+---
+
+## Phase 14: v1.2.0 - LLM-Powered Spam Filtering ✅ COMPLETE
+
+**Date**: 2025-10-22
+**Purpose**: Add optional AI-based content analysis to block spam, abuse, phishing, and prompt injection attacks
+
+### 14.1 LLM Spam Filtering Implementation ✅
+- [x] Implement LLM spam filter middleware (src/middleware/llmSpamFilter.ts)
+  - Anthropic Claude Haiku 4.5 support (primary, fastest)
+  - OpenAI GPT support (alternative provider)
+  - Configurable per API key with custom rules and thresholds
+  - Fail-open/fail-closed modes for reliability
+  - Budget limits to control LLM costs (~$0.0005 per message)
+  - Sender whitelisting to skip trusted emails
+  - Comprehensive threat detection:
+    - Spam and marketing abuse
+    - Phishing and social engineering
+    - Hate speech and harassment
+    - Prompt injection attacks
+    - Suspicious patterns and anomalies
+- [x] Update config.ts to parse LLM spam filter configuration
+  - Parse `API_KEY_*_SPAM_FILTER_ENABLED` (boolean)
+  - Parse `API_KEY_*_SPAM_FILTER_PROVIDER` (anthropic|openai)
+  - Parse `API_KEY_*_SPAM_FILTER_THRESHOLD` (0-100)
+  - Parse `API_KEY_*_SPAM_FILTER_FAIL_MODE` (open|closed)
+  - Parse `API_KEY_*_SPAM_FILTER_BUDGET_DAILY` (USD cents)
+  - Parse `API_KEY_*_SPAM_FILTER_WHITELISTED_SENDERS` (comma-separated emails/domains)
+  - Parse `API_KEY_*_SPAM_FILTER_CUSTOM_RULES` (JSON array)
+  - Store in spamFilterConfig map keyed by API key name
+- [x] Apply middleware to /api/send route
+  - Applied after recipient validation, before rate limiting
+  - Analyzes message content for threats
+  - Returns 400 Bad Request with SPAM_DETECTED error for flagged messages
+  - Logs detailed analysis results for audit trail
+
+### 14.2 LLM Integration ✅
+- [x] Implement Anthropic Claude integration (src/utils/llm/anthropic.ts)
+  - Claude Haiku 4.5 model (fastest, most cost-effective)
+  - Structured threat analysis prompt
+  - JSON response parsing with validation
+  - Error handling and timeout support
+- [x] Implement OpenAI integration (src/utils/llm/openai.ts)
+  - GPT-4 mini model support
+  - Consistent threat analysis interface
+  - JSON response parsing with validation
+  - Error handling and timeout support
+- [x] Update environment configuration
+  - Add `ANTHROPIC_API_KEY` for Claude
+  - Add `OPENAI_API_KEY` for GPT
+  - Validate required keys based on enabled providers
+
+### 14.3 Testing ✅
+- [x] Implement comprehensive test suite (tests/integration/llmSpamFilter.test.ts)
+  - Spam detection tests (marketing, bulk email)
+  - Phishing detection tests (credential harvesting, urgency tactics)
+  - Prompt injection detection tests (system prompt manipulation)
+  - Legitimate message tests (contact forms, support requests)
+  - Budget limit enforcement tests
+  - Sender whitelist tests
+  - Provider failover tests
+  - Fail-open/fail-closed mode tests
+  - Custom rules tests
+- [x] All tests passing with mock LLM responses
+- [x] Code coverage maintained >80%
+
+### 14.4 Documentation ✅
+- [x] Create comprehensive LLM spam filtering guide (docs/features/llm-spam-filtering.md)
+  - Feature overview and benefits
+  - Configuration guide with examples
+  - Supported providers and models
+  - Cost analysis and budgeting
+  - Threat detection capabilities
+  - Custom rules and whitelisting
+  - Troubleshooting guide
+  - Performance considerations
+- [x] Update existing documentation
+  - README.md: Add LLM spam filtering to features, update badges
+  - docs/README.md: Add link to LLM spam filtering guide
+  - docs/getting-started.md: Add optional LLM spam filtering setup
+  - docs/user-guide.md: Document LLM spam filter configuration
+  - docs/api-reference.md: Update error codes (SPAM_DETECTED)
+  - CLAUDE.md: Update security checklist
+
+### 14.5 Release ✅
+- [x] Tag v1.2.0
+- [x] Commit message: "feat: Implement LLM-based spam filtering (v1.2.0)"
+- [x] Update README with version badge and changelog
+- [x] Update package.json to version 1.2.0
+- [x] Security review complete
+- [x] Documentation published
+
+### Summary of Changes
+- **New Files**: 5
+  - src/middleware/llmSpamFilter.ts
+  - src/utils/llm/anthropic.ts
+  - src/utils/llm/openai.ts
+  - tests/integration/llmSpamFilter.test.ts
+  - docs/features/llm-spam-filtering.md
+- **Modified Files**: 15+ (config.ts, index.ts, README.md, package.json, all docs)
+- **Total Tests**: 260+ (all passing)
+- **Documentation**: Complete LLM spam filtering guide
+- **Security Impact**: Multi-layer spam defense with AI-powered content analysis
+- **Breaking Changes**: None (fully optional feature, backward compatible)
+- **Cost**: ~$0.0005 per message with Claude Haiku 4.5 (configurable budget limits)

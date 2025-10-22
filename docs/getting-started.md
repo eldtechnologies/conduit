@@ -141,7 +141,54 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 
 **See full guide**: **[Recipient Whitelisting Documentation](../features/recipient-whitelisting.md)**
 
-## Step 5: Integrate with Your Frontend
+## Step 5: Configure LLM Spam Filtering (Optional but Recommended)
+
+**What it does**: Uses AI to analyze message content and block spam, phishing, abuse, and prompt injection attacks before they reach your inbox.
+
+**Providers**: Anthropic Claude Haiku 4.5 (recommended) or OpenAI GPT
+**Cost**: ~$0.0005 per message (~$0.50 per 1,000 messages)
+
+### Quick Setup
+
+**1. Get an LLM API key:**
+- **Anthropic (Recommended)**: [console.anthropic.com](https://console.anthropic.com) - Claude Haiku 4.5 is fastest and cheapest
+- **OpenAI (Alternative)**: [platform.openai.com](https://platform.openai.com)
+
+**2. Add to Conduit environment:**
+
+```bash
+# LLM Provider API Keys (at least one required)
+ANTHROPIC_API_KEY=sk-ant-...
+# or
+OPENAI_API_KEY=sk-...
+
+# Enable per API key
+API_KEY_MYSITE_SPAM_FILTER_ENABLED=true
+API_KEY_MYSITE_SPAM_FILTER_PROVIDER=anthropic  # or "openai"
+API_KEY_MYSITE_SPAM_FILTER_THRESHOLD=70        # 0-100, higher = stricter
+API_KEY_MYSITE_SPAM_FILTER_FAIL_MODE=open      # "open" or "closed"
+API_KEY_MYSITE_SPAM_FILTER_BUDGET_DAILY=500    # USD cents (e.g., 500 = $5.00/day)
+
+# Optional: Skip trusted senders
+API_KEY_MYSITE_SPAM_FILTER_WHITELISTED_SENDERS=trusted@company.com,*@partner.com
+```
+
+**3. What gets blocked:**
+- Marketing spam and bulk email
+- Phishing and credential harvesting attempts
+- Hate speech and harassment
+- Prompt injection attacks
+- Social engineering and scams
+- Suspicious patterns and anomalies
+
+**4. Budget protection:**
+Set `SPAM_FILTER_BUDGET_DAILY` to control costs. Once the daily budget is reached:
+- `fail_mode=open`: Messages pass through without LLM analysis (fail safe)
+- `fail_mode=closed`: Messages are rejected to prevent unfiltered spam (fail secure)
+
+**See full guide**: **[LLM Spam Filtering Documentation](../features/llm-spam-filtering.md)**
+
+## Step 6: Integrate with Your Frontend
 
 ### React + TypeScript
 

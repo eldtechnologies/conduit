@@ -244,7 +244,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current Version**: 🚀 v1.1.0 - PRODUCTION READY!
+**Current Version**: 🚀 v1.2.0 - PRODUCTION READY!
 
 ### Completed Features ✅
 - **Core Email Functionality**
@@ -275,6 +275,16 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - ESLint + Prettier code quality
 
 ### Recent Improvements 🆕
+
+**v1.2.0** (2025-10-22):
+- 🤖 **LLM-powered spam filtering** - Optional AI-based content analysis
+  - Block spam, abuse, phishing, and prompt injection attacks
+  - Anthropic Claude Haiku 4.5 and OpenAI GPT support
+  - Configurable per API key with custom rules and thresholds
+  - Fail-open/fail-closed modes for reliability
+  - Budget limits to control LLM costs (~$0.0005 per message)
+  - Sender whitelisting to skip trusted emails
+  - See [LLM Spam Filtering Guide](docs/features/llm-spam-filtering.md)
 
 **v1.1.0** (2025-10-15):
 - 🛡️ **Recipient whitelisting** - Prevent stolen API keys from spamming arbitrary recipients
