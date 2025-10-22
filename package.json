@@ -32,9 +32,10 @@
   "license": "MIT",
   "dependencies": {
     "@hono/node-server": "^1.19.5",
-    "hono": "^4.6.3",
+    "hono": "^4.10.2",
     "isomorphic-dompurify": "^2.16.0",
     "resend": "^4.0.0",
+    "vite": "^7.1.11",
     "zod": "^3.23.8"
   },
   "devDependencies": {

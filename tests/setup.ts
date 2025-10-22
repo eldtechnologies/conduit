@@ -21,6 +21,25 @@ process.env.API_KEY_TEST_WHITELIST_RECIPIENT_DOMAINS = 'trusted.com';
 
 process.env.API_KEY_TEST_NO_WHITELIST =
   'KEY_TEST_NO_WHITELIST_xyz789abc012def345ghi678jkl901mno';
+
+// LLM spam filtering test keys (v1.2.0)
+process.env.LLM_PROVIDER = 'anthropic';
+process.env.LLM_API_KEY = 'sk-ant-test-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+process.env.LLM_MODEL = 'claude-haiku-4-5-20251001';
+process.env.LLM_TIMEOUT = '5000';
+process.env.LLM_FALLBACK_MODE = 'allow';
+
+// API key with LLM enabled
+process.env.API_KEY_LLM_TEST = 'KEY_LLM_TEST_xyz789abc012def345ghi678jkl901mno234';
+process.env.API_KEY_LLM_TEST_LLM_ENABLED = 'true';
+process.env.API_KEY_LLM_TEST_LLM_RULES = 'spam,abuse,profanity,promptInjection';
+process.env.API_KEY_LLM_TEST_LLM_THRESHOLD = '0.7';
+process.env.API_KEY_LLM_TEST_LLM_FAIL_MODE = 'allow';
+process.env.API_KEY_LLM_TEST_LLM_MAX_CALLS_PER_DAY = '1000';
+
+// API key without LLM
+process.env.API_KEY_NO_LLM = 'KEY_NO_LLM_abc123def456ghi789jkl012mno345pqr567';
+
 process.env.ALLOWED_ORIGINS = 'http://localhost:8080,http://localhost:3001,https://test.com';
 process.env.RATE_LIMIT_PER_MINUTE = '10';
 process.env.RATE_LIMIT_PER_HOUR = '100';
