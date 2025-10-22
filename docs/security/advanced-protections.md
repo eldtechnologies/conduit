@@ -1,11 +1,11 @@
 # Advanced Protection Techniques
 
 **Status**: 🔬 Experimental / Planned
-**Version**: 1.1.0+
-**Last Updated**: 2025-10-14
+**Version**: 1.2.0
+**Last Updated**: 2025-10-22
 
-> **⚠️ IMPLEMENTATION STATUS**: Most features in this document are **NOT yet implemented** in Conduit.
-> This is a planning and design document for future enhancements. See the table below for current status.
+> **✅ v1.2.0 UPDATE**: LLM spam filtering is now implemented and available!
+> Most other features in this document are still in planning. See the table below for current status.
 
 ## Implementation Status
 
@@ -15,13 +15,15 @@
 | Form Timing Checks | 📋 Documented | - | Frontend only | Implementation guide only |
 | Keyword Filtering | 📋 Documented | - | Frontend only | Implementation guide only |
 | CAPTCHA Integration | 📋 Documented | - | Frontend + Conduit | Implementation guide only |
-| Behavioral Analysis | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
-| IP Rate Limiting | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
-| Domain Rate Limiting | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
-| Reputation Throttling | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
-| Content Filtering | 🔬 Planned | v1.2.0 | Conduit middleware | Design complete |
-| **LLM Filtering (Local)** | 🔬 Planned | v1.3.0 | Conduit middleware | Architecture documented |
-| **LLM Filtering (API)** | 🔬 Planned | v1.3.0 | Conduit middleware | Architecture documented |
+| **LLM Filtering (Claude)** | ✅ Implemented | v1.2.0 | Conduit middleware | Production ready |
+| **LLM Filtering (OpenAI)** | ✅ Implemented | v1.2.0 | Conduit middleware | Production ready |
+| Behavioral Analysis | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
+| IP Rate Limiting | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
+| Domain Rate Limiting | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
+| Reputation Throttling | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
+| Content Filtering | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
+| LLM Filtering (Gemini) | 🔬 Planned | v1.3.0 | Conduit middleware | Not yet implemented |
+| LLM Filtering (Ollama) | 🔬 Planned | v1.3.0 | Conduit middleware | Not yet implemented |
 
 **Legend**: ✅ Implemented | 📋 Documented (not coded) | 🔬 Planned (design only)
 
@@ -105,6 +107,8 @@ Message Sent
 
 ### 1. LLM-Based Content Filtering
 
+**Status**: ✅ **Implemented in v1.2.0**
+
 **Purpose**: Detect spam, phishing, and malicious content using AI semantic analysis.
 
 **Benefits**:
@@ -112,8 +116,25 @@ Message Sent
 - Detects phishing attempts and social engineering
 - Adapts to new spam patterns automatically
 - Works across languages
+- Per-API-key configuration (rules, threshold, budget)
+- Sender whitelisting to bypass analysis for trusted users
+- Daily budget limits to control costs
 
-**Options**:
+**Supported Providers** (v1.2.0):
+- ✅ Anthropic Claude (claude-haiku-4-5-20251001)
+- ✅ OpenAI GPT (gpt-4o-mini)
+- 🔬 Google Gemini (planned for v1.3.0)
+- 🔬 Ollama (local, planned for v1.3.0)
+
+**Implementation**: See [spam-prevention.md](./spam-prevention.md#tier-3-advanced-protection-low-cost-2-4-hours) for complete setup guide.
+
+**Legacy Documentation**: The following sections describe the planned architecture for local LLM support (Ollama). For production use in v1.2.0, see the spam-prevention guide above.
+
+---
+
+### Legacy Planning Documentation (for reference only)
+
+**Options for Future Enhancement**:
 
 #### Option A: Local LLM (Ollama)
 

@@ -1,12 +1,12 @@
 # Spam Prevention Guide
 
 **Status**: 📋 Practical Guide
-**Version**: 1.1.0+
-**Last Updated**: 2025-10-14
+**Version**: 1.2.0
+**Last Updated**: 2025-10-22
 
-> **⚠️ IMPORTANT**: LLM spam filtering (mentioned in Tier 3) is NOT yet implemented in Conduit.
-> This is a **planned feature for v1.2.0+**. For current spam protection, use Tier 1-2 methods
-> (honeypot, CAPTCHA, recipient whitelisting). See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md).
+> **✅ NEW in v1.2.0**: LLM spam filtering is now available! Configure AI-powered content analysis
+> using Anthropic Claude or OpenAI GPT to detect spam, abuse, phishing, and prompt injection.
+> See Tier 3 below for configuration details.
 
 ## Table of Contents
 
@@ -54,9 +54,9 @@ This guide helps you implement spam prevention for Conduit in **under 1 hour** w
 3. CAPTCHA → Blocks 99% of remaining bots
 4. Behavioral analysis → Blocks 80% of rapid-fire abuse
 5. Content filtering → Blocks 70% of keyword spam
-6. LLM filtering → Blocks 95% of semantic spam (planned for v1.2.0+)
+6. LLM filtering → Blocks 95% of semantic spam (✅ **Available in v1.2.0**)
 
-> **Note**: LLM filtering (#6) is **planned for v1.2.0+** as optional Conduit middleware, not in frontend code. This will keep LLM API keys secure on the server. See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md) for architecture details.
+> **✅ v1.2.0**: LLM filtering is now implemented as optional Conduit server-side middleware. LLM API keys stay secure on the server. Frontend apps get spam detection without exposing credentials.
 
 ---
 
@@ -403,118 +403,55 @@ See [recipient-whitelisting.md](../features/recipient-whitelisting.md) for compl
 
 **Includes**:
 - Everything in Tier 2, plus:
-- LLM-based content filtering as Conduit middleware (planned for v1.2.0+)
+- LLM-based content filtering as Conduit middleware (✅ **Available in v1.2.0**)
 - Domain-based rate limiting (planned)
 - Reputation-based throttling (planned)
 - Advanced behavioral analysis (planned)
 
-> **Important**: LLM filtering is **PLANNED for v1.2.0+** as Conduit server-side middleware, NOT in frontend code. This approach will keep your LLM API keys secure and provide spam detection without exposing credentials to clients. See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md) for complete architecture and implementation details.
+> **✅ v1.2.0**: LLM filtering is now available as Conduit server-side middleware. LLM API keys stay secure on the server, and frontend apps get spam detection without exposing credentials.
 
 #### Setup: LLM Content Filtering (2-3 hours)
 
-**Status**: 📋 Planned for v1.2.0 (not yet implemented)
+**Status**: ✅ **Available in v1.2.0**
 
-**How it works**: Conduit analyzes message content using LLM APIs (Claude, OpenAI, or local models) as middleware, before sending emails. Frontend apps get spam protection without exposing LLM API keys.
+**How it works**: Conduit analyzes message content using LLM APIs (Claude, OpenAI) as middleware, before sending emails. Frontend apps get spam protection without exposing LLM API keys.
 
-**Configuration Preview** (when v1.2.0 is released):
+**Configuration**:
 
-**Option A: Local LLM (Ollama) - Free**
-
-**1. Install Ollama on Conduit server** (10 min):
+**Option A: Anthropic Claude (Recommended) - ~$0.50-2/month**
 
 ```bash
-# macOS
-brew install ollama
-
-# Linux
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Start service
-ollama serve
-
-# Pull model (3.2B parameters, ~2GB)
-ollama pull llama3.2:3b
-```
-
-**2. Configure Conduit server** (15 min):
-
-```bash
-# .env - Conduit server configuration (v1.2.0+)
-# LLM filtering runs as middleware BEFORE sending emails
-
-# Enable LLM spam filtering
-LLM_PROVIDER=ollama
-LLM_API_KEY=  # Not needed for local Ollama
-LLM_MODEL=llama3.2:3b
+# .env - Conduit server configuration (v1.2.0)
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-api...  # Kept secure on Conduit server
+LLM_MODEL=claude-haiku-4-5-20251001  # Fast, cheap, accurate
 LLM_TIMEOUT=5000
 LLM_FALLBACK_MODE=allow  # allow | block - what to do if LLM fails
 
 # Per-API-key LLM rules
 API_KEY_MYSITE_LLM_ENABLED=true
-API_KEY_MYSITE_LLM_RULES=spam,abuse,profanity
-API_KEY_MYSITE_LLM_THRESHOLD=0.8
+API_KEY_MYSITE_LLM_RULES=spam,abuse,profanity,promptInjection
+API_KEY_MYSITE_LLM_THRESHOLD=0.7
 API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000
 ```
 
-**3. Deploy with Docker Compose** (30 min):
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  conduit:
-    build: .
-    ports:
-      - '3000:3000'
-    environment:
-      - CONTENT_MODERATION_ENABLED=true
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      - ollama
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - '11434:11434'
-    volumes:
-      - ollama-data:/root/.ollama
-    command: >
-      sh -c "ollama serve & sleep 10 && ollama pull llama3.2:3b && wait"
-
-volumes:
-  ollama-data:
-```
-
-**Option B: Anthropic Claude (Recommended) - ~$0.50-2/month**
+**Option B: OpenAI GPT - ~$5/month**
 
 ```bash
-# .env - Conduit server configuration (v1.2.0+)
-LLM_PROVIDER=anthropic
-LLM_API_KEY=sk-ant-api...  # Kept secure on Conduit server
-LLM_MODEL=claude-haiku-4-5-20251001  # Fast, cheap, accurate
+# .env - Conduit server configuration (v1.2.0)
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...  # Kept secure on Conduit server
+LLM_MODEL=gpt-4o-mini
 LLM_TIMEOUT=5000
 LLM_FALLBACK_MODE=allow
 
 # Per-API-key configuration
 API_KEY_MYSITE_LLM_ENABLED=true
-API_KEY_MYSITE_LLM_RULES=spam,abuse,profanity,promptInjection
+API_KEY_MYSITE_LLM_RULES=spam,abuse,phishing
 API_KEY_MYSITE_LLM_THRESHOLD=0.7
 ```
 
-**Option C: OpenAI API - ~$5/month**
-
-```bash
-# .env - Conduit server configuration (v1.2.0+)
-LLM_PROVIDER=openai
-LLM_API_KEY=sk-...  # Kept secure on Conduit server
-LLM_MODEL=gpt-4o-mini
-LLM_TIMEOUT=5000
-```
-
 > **No frontend changes needed**: Conduit handles LLM analysis transparently. Frontend apps send the same requests as before, Conduit analyzes content before forwarding to email provider.
-
-**Complete Feature Documentation**: See [LLM Spam Filtering Feature Plan](../features/llm-spam-filtering.md) for full architecture, API design, security considerations, and phased implementation details.
 
 ---
 
@@ -1188,16 +1125,15 @@ done
 
 **A**: No, for most use cases. **90-99% of spam** is blocked by Tier 1-2 protections (honeypot + CAPTCHA + recipient whitelisting). LLM filtering is only needed if you're facing sophisticated semantic spam that bypasses keyword filters.
 
-LLM filtering is an **optional Conduit feature** (v1.2.0+) that runs server-side. Unlike other protections, you don't need to implement anything in your frontend - just enable it via Conduit environment variables.
+LLM filtering is an **optional Conduit feature** (✅ available in v1.2.0) that runs server-side. Unlike other protections, you don't need to implement anything in your frontend - just enable it via Conduit environment variables.
 
 ### Q: How much does LLM filtering cost?
 
-**A** (when v1.2.0 is released):
-- **Local (Ollama)**: $0/month (requires 4-8GB RAM on Conduit server)
-- **Anthropic Claude Haiku**: ~$0.0005 per message (~$15 for 30k messages/month)
+**A**:
+- **Anthropic Claude Haiku 4.5**: ~$0.0005 per message (~$15 for 30k messages/month)
 - **OpenAI GPT-4o-mini**: ~$0.15 per 1000 messages (~$4.50 for 30k messages/month)
 
-For 1,000 messages/day (30k/month), expect $0-15/month depending on provider.
+For 1,000 messages/day (30k/month), expect $4.50-15/month depending on provider.
 
 **Key advantage**: LLM API keys stay secure on your Conduit server. Frontend apps get spam detection without exposing credentials.
 

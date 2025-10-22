@@ -14,7 +14,7 @@ Conduit's core security principles:
 
 ## Quick Security Status
 
-### Current Status: **PRODUCTION READY v1.1.0** ✅
+### Current Status: **PRODUCTION READY v1.2.0** ✅
 
 🎉 **All critical security measures implemented and tested!**
 
@@ -31,8 +31,10 @@ Conduit's core security principles:
 - ✅ All critical security measures implemented
 - ✅ Comprehensive security testing (71 dedicated security tests)
 - ✅ **v1.1.0**: Recipient whitelisting to prevent stolen key abuse
+- ✅ **v1.2.0**: LLM-powered spam and abuse detection
 
-**Phase 2 (Hardening)**: ⏳ **PLANNED**
+**Phase 2 (Hardening)**: ⏳ **IN PROGRESS**
+- ✅ LLM spam filtering (v1.2.0 - optional, configurable per API key)
 - ⏳ IP-based rate limiting (recommended for Phase 2)
 - ⏳ Circuit breakers (recommended for Phase 2)
 - ⏳ Distributed rate limiting with Redis (when scaling)
@@ -280,7 +282,7 @@ See [archive/review-pre-v1.0.0.md#incident-response](archive/review-pre-v1.0.0.m
 - **[CWE Top 25](https://cwe.mitre.org/top25/)**
 - **[GDPR Guidelines](https://gdpr.eu/)**
 
-## v1.1.0 Security Achievements 🎉
+## v1.2.0 Security Achievements 🎉
 
 **Production-ready security implementation achieved:**
 
@@ -289,10 +291,18 @@ See [archive/review-pre-v1.0.0.md#incident-response](archive/review-pre-v1.0.0.m
 3. ✅ **Monitoring**: Structured JSON logging with PII masking
 4. ✅ **Rate Limiting**: Token bucket algorithm across 3 time windows
 5. ✅ **Recipient Whitelisting**: Per-API-key email restrictions (v1.1.0)
-6. ✅ **Testing**: 223 tests including 71 dedicated security tests
-7. ✅ **OWASP Coverage**: 9/10 categories with EXCELLENT implementation
+6. ✅ **LLM Spam Filtering**: AI-powered content analysis (v1.2.0)
+   - Multi-provider support (Anthropic Claude, OpenAI GPT)
+   - Per-API-key configuration (rules, threshold, budget)
+   - Detects spam, abuse, phishing, prompt injection
+   - Daily budget limits to control costs
+   - Sender whitelist bypass for trusted users
+7. ✅ **Testing**: 223 tests including 71 dedicated security tests
+8. ✅ **OWASP Coverage**: 9/10 categories with EXCELLENT implementation
 
 **Next Steps for Enhanced Security:**
+- Monitor LLM spam detection metrics and optimize thresholds
+- Add support for Gemini and Ollama providers
 - Update dev dependencies (vitest ecosystem)
 - Add CI/CD security scanning (npm audit, container scanning)
 - Plan Redis-based distributed rate limiting for Phase 2
