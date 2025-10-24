@@ -87,7 +87,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
   - XSS sanitization with DOMPurify
 - **Structured JSON logging** with request/response tracking
 - **Health monitoring** - Public `/health` endpoint + authenticated `/health/detailed`
-- **260+ passing tests** with comprehensive coverage
+- **258 comprehensive tests** (100% pass rate with proper API keys)
 
 ### Phase 2: SMS & Push (Q1 2026) 📱
 - SMS via Twilio
@@ -269,7 +269,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - Docker deployment with health checks
 
 - **Quality Assurance**
-  - 237 passing tests (97.5% pass rate)
+  - 258 comprehensive tests (100% pass rate with proper API keys)
   - Integration, unit, and security test suites
   - TypeScript strict mode
   - ESLint + Prettier code quality
@@ -295,7 +295,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - [Spam Prevention Guide](docs/security/spam-prevention.md) - Quick 15-minute setup (honeypot, CAPTCHA, LLM filtering)
   - [Advanced Protections](docs/security/advanced-protections.md) - Multi-tier defense strategies
   - [Recipient Whitelisting Guide](docs/features/recipient-whitelisting.md) - Complete implementation spec
-- ✅ All 237 tests passing with new validation tests
+- ✅ All 258 tests passing (recipient whitelisting + LLM filtering)
 
 **v1.0.2** (2025-10-13):
 - Zero known vulnerabilities (updated dev dependencies)
