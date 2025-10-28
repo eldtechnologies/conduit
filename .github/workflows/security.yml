@@ -36,17 +36,28 @@ jobs:
   osv-scanner:
     name: OSV Scanner
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run OSV Scanner
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            ghcr.io/google/osv-scanner:latest \
-            --lockfile=/workspace/package-lock.json
+        uses: google/osv-scanner-action@v2.2.3
+        with:
+          scan-args: |-
+            --lockfile=package-lock.json
+            --format=sarif
+            --output=results.sarif
+        continue-on-error: true
+
+      - name: Upload SARIF results to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+        if: always()
 
   dependency-review:
     name: Dependency Review
