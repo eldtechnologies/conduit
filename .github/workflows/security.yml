@@ -11,6 +11,11 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   npm-audit:
     name: npm audit
@@ -35,29 +40,12 @@ jobs:
 
   osv-scanner:
     name: OSV Scanner
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run OSV Scanner
-        uses: google/osv-scanner-action@v2
-        with:
-          scan-args: |-
-            --lockfile=package-lock.json
-            --format=sarif
-            --output=results.sarif
-        continue-on-error: true
-
-      - name: Upload SARIF results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-        if: always()
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.3
+    with:
+      scan-args: |-
+        --lockfile=package-lock.json
+      upload-sarif: true
+      fail-on-vuln: false
 
   dependency-review:
     name: Dependency Review
