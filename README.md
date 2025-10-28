@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
 [![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-blue.svg)]()
+[![Security Scan](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -236,6 +237,12 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 - ✅ PII masking in logs (GDPR compliant)
 - ✅ Recipient whitelisting (prevents stolen key abuse)
 - 🛡️ Spam prevention with multi-tier protection (honeypot, CAPTCHA, LLM filtering)
+- 🤖 **Automated Security**:
+  - Daily vulnerability scanning (npm audit + OSV Scanner)
+  - Automated dependency updates via Dependabot
+  - Immediate security patches (auto-PR within hours of CVE disclosure)
+  - GitHub Security Advisories enabled
+  - Zero known vulnerabilities policy
 
 **[→ Security Documentation](docs/security/)**
 **[→ Spam Prevention Guide](docs/security/spam-prevention.md)** - Quick 15-minute setup

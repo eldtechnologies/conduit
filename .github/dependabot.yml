@@ -1,0 +1,80 @@
+# Dependabot Configuration
+# Automated dependency updates and security patches
+#
+# Documentation: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      # Check for updates every Monday at 9 AM UTC
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+
+    # Limit concurrent PRs to avoid overwhelming CI
+    open-pull-requests-limit: 5
+
+    # Group related updates to reduce PR noise
+    groups:
+      # Group all development dependencies (patch + minor)
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Group production dependencies (patch only)
+      # Keep minor/major separate for careful review
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+
+    # PR labels for easy filtering
+    labels:
+      - "dependencies"
+      - "automated"
+
+    # Commit message configuration
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore(dev)"
+      include: "scope"
+
+    # Allow both direct and indirect dependency updates
+    versioning-strategy: auto
+
+    # Rebase strategy for PRs
+    rebase-strategy: "auto"
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Docker dependencies (if you have a Dockerfile)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
