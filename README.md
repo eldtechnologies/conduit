@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-blue.svg)]()
+[![Version: 1.2.2](https://img.shields.io/badge/Version-1.2.2-blue.svg)]()
 [![Security Scan](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -251,7 +251,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current Version**: 🚀 v1.2.0 - PRODUCTION READY!
+**Current Version**: 🚀 v1.2.2 - PRODUCTION READY!
 
 ### Completed Features ✅
 - **Core Email Functionality**
@@ -282,6 +282,11 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
   - ESLint + Prettier code quality
 
 ### Recent Improvements 🆕
+
+**v1.2.2** (2026-02-25):
+- 🔒 **Security update** - Hono 4.10.3 → 4.12.2 (resolves 6 CVEs, 2 High CVSS 8.2)
+  - None exploitable in Conduit's architecture (custom middleware, no JWT/cache/serveStatic usage)
+  - Eliminates scanner findings and prevents future exposure if Hono utilities are adopted
 
 **v1.2.0** (2025-10-22):
 - 🤖 **LLM-powered spam filtering** - Optional AI-based content analysis
