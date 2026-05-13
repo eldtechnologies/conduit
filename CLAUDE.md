@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Current Status**: Phase 1 Complete - v1.1.0 Production Ready with recipient whitelisting.
 
 **Tech Stack** (planned):
-- Runtime: Node.js 18+
+- Runtime: Node.js 20.19+
 - Framework: Hono (ultra-lightweight web framework)
 - Language: TypeScript
 - Email Provider: Resend.com (Phase 1)

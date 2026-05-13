@@ -334,7 +334,7 @@
 ### 7.1 Dockerfile
 - [ ] Create multi-stage Dockerfile:
   - Builder stage (dependencies + build)
-  - Production stage (Node.js 18 Alpine)
+  - Production stage (Node.js 22 Alpine)
   - Non-root user
   - Health check
 - [ ] Test Docker build

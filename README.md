@@ -384,7 +384,7 @@ See **[CLAUDE.md](CLAUDE.md)** for detailed development guidance.
 
 ## Tech Stack
 
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20.19+
 - **Framework**: [Hono](https://hono.dev/) (ultra-lightweight, edge-compatible)
 - **Language**: TypeScript
 - **Validation**: Zod

@@ -1414,7 +1414,7 @@ Error Occurs
 │ Docker Container (conduit:latest)                       │
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
-│  │ Node.js 18 Alpine                                  │ │
+│  │ Node.js 22 Alpine                                  │ │
 │  │ • Minimal base image (~50MB)                       │ │
 │  │ • Security updates applied                         │ │
 │  └────────────────────────────────────────────────────┘ │
