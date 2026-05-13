@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { authenticate } from '../../src/middleware/auth.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
+import { readJson, type ErrorResponse } from '../helpers/response.js';
 
 describe('Authentication Middleware', () => {
   let app: Hono;
@@ -56,7 +57,7 @@ describe('Authentication Middleware', () => {
       const res = await testApp.fetch(req);
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await readJson<{ apiKey: string }>(res);
       expect(body.apiKey).toBe('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
     });
   });
@@ -69,7 +70,7 @@ describe('Authentication Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('UNAUTHORIZED');
     });
 
@@ -99,7 +100,7 @@ describe('Authentication Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('UNAUTHORIZED');
       expect(body.error).toBeDefined();
     });
@@ -122,7 +123,7 @@ describe('Authentication Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('UNAUTHORIZED');
       expect(body.error).toBeDefined();
     });

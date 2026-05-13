@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../../src/index.js';
+import { readJson, type ErrorResponse } from '../helpers/response.js';
 
 const VALID_API_KEY = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 
@@ -42,7 +43,7 @@ describe('Email Header Injection Prevention', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Name cannot contain newline characters');
     });
@@ -72,7 +73,7 @@ describe('Email Header Injection Prevention', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Name cannot contain newline characters');
     });
@@ -102,7 +103,7 @@ describe('Email Header Injection Prevention', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Name cannot contain newline characters');
     });
@@ -159,7 +160,7 @@ describe('Email Header Injection Prevention', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Invalid recipient email address');
     });
@@ -185,7 +186,7 @@ describe('Email Header Injection Prevention', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Invalid recipient email address');
     });
@@ -214,7 +215,7 @@ describe('Email Header Injection Prevention', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Email address too long');
     });

@@ -5,10 +5,32 @@
  * Verifies that API keys can be restricted to specific recipients/domains.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import app from '@/index.js';
+import { readJson, type SuccessResponse, type ErrorResponse } from '../helpers/response.js';
 
 describe('Recipient Validation (v1.1.0)', () => {
+  // Resend SDK invokes global `fetch` under the hood (see node_modules/resend/dist/index.js).
+  // Mocking it here lets these tests exercise the full middleware stack end-to-end
+  // through `app.fetch(...)` without ever reaching the real Resend API with a fake key.
+  const originalFetch = global.fetch;
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'mock-msg-id' }),
+      text: async () => JSON.stringify({ id: 'mock-msg-id' }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
+
   /**
    * NOTE: These tests assume the following environment configuration:
    *
@@ -57,7 +79,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<SuccessResponse>(response);
       expect(data.success).toBe(true);
     });
 
@@ -84,7 +106,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse>(response);
       expect(data.success).toBe(false);
       expect(data.code).toBe('RECIPIENT_NOT_ALLOWED');
       expect(data.error).toContain('not allowed');
@@ -113,7 +135,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<SuccessResponse>(response);
       expect(data.success).toBe(true);
     });
   });
@@ -142,7 +164,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<SuccessResponse>(response);
       expect(data.success).toBe(true);
     });
 
@@ -169,7 +191,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse>(response);
       expect(data.success).toBe(false);
       expect(data.code).toBe('RECIPIENT_NOT_ALLOWED');
     });
@@ -197,7 +219,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<SuccessResponse>(response);
       expect(data.success).toBe(true);
     });
   });
@@ -226,7 +248,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<SuccessResponse>(response);
       expect(data.success).toBe(true);
     });
 
@@ -253,7 +275,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<SuccessResponse>(response);
       expect(data.success).toBe(true);
     });
   });
@@ -282,7 +304,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(400);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse>(response);
       expect(data.success).toBe(false);
       expect(data.code).toBe('VALIDATION_ERROR');
     });
@@ -310,7 +332,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(400);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse>(response);
       expect(data.success).toBe(false);
       expect(data.code).toBe('VALIDATION_ERROR');
     });
@@ -338,7 +360,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse & { details?: { hint?: string } }>(response);
       expect(data.success).toBe(false);
       expect(data.code).toBe('RECIPIENT_NOT_ALLOWED');
       expect(data.error).toContain('not allowed');
@@ -371,7 +393,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse>(response);
 
       // Error message should NOT reveal specific whitelisted emails or domains
       expect(data.error).not.toContain('allowed@example.com');
@@ -404,7 +426,7 @@ describe('Recipient Validation (v1.1.0)', () => {
 
       // Should fail at authentication, not recipient validation
       expect(response.status).toBe(401);
-      const data = await response.json();
+      const data = await readJson<ErrorResponse>(response);
       expect(data.code).toBe('UNAUTHORIZED');
     });
   });
@@ -441,7 +463,9 @@ describe('Recipient Validation (v1.1.0)', () => {
       const rateLimited = responses.filter((r) => r.status === 429);
       expect(rateLimited.length).toBeGreaterThan(0);
 
-      const rateLimitedData = await rateLimited[0].json();
+      const firstRateLimited = rateLimited[0];
+      if (!firstRateLimited) throw new Error('Expected at least one rate-limited response');
+      const rateLimitedData = await readJson<ErrorResponse>(firstRateLimited);
       expect(rateLimitedData.code).toBe('RATE_LIMIT_EXCEEDED');
     });
   });

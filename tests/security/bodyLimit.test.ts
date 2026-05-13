@@ -7,6 +7,11 @@
 
 import { describe, it, expect } from 'vitest';
 import app from '../../src/index.js';
+import { readJson, type ErrorResponse } from '../helpers/response.js';
+
+interface HealthBody {
+  status: string;
+}
 
 const VALID_API_KEY = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 const MAX_SIZE = 50 * 1024; // 50KB
@@ -68,7 +73,7 @@ describe('Body Size Limit Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(400); // ValidationError maps to 400
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Request body too large');
       expect(body.code).toBe('PAYLOAD_TOO_LARGE');
@@ -200,7 +205,7 @@ describe('Body Size Limit Middleware', () => {
 
       // Should be rejected by bodyLimit middleware
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('PAYLOAD_TOO_LARGE');
     });
 
@@ -218,7 +223,7 @@ describe('Body Size Limit Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.error).toContain('Invalid Content-Length');
       expect(body.code).toBe('VALIDATION_ERROR');
     });
@@ -233,7 +238,7 @@ describe('Body Size Limit Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await readJson<HealthBody>(res);
       expect(body.status).toBe('healthy');
     });
   });
