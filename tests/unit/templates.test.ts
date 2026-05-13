@@ -27,7 +27,7 @@ describe('Template Infrastructure', () => {
     });
 
     it('should throw error for invalid channel', () => {
-      expect(() => getTemplate('sms' as any, 'contact-form')).toThrow('Template not found');
+      expect(() => getTemplate('sms', 'contact-form')).toThrow('Template not found');
     });
   });
 
@@ -38,7 +38,7 @@ describe('Template Infrastructure', () => {
 
     it('should return false for non-existent template', () => {
       expect(hasTemplate('email', 'invalid')).toBe(false);
-      expect(hasTemplate('sms' as any, 'contact-form')).toBe(false);
+      expect(hasTemplate('sms', 'contact-form')).toBe(false);
     });
   });
 
@@ -50,7 +50,7 @@ describe('Template Infrastructure', () => {
     });
 
     it('should return empty array for channels with no templates', () => {
-      const templates = getTemplatesForChannel('sms' as any);
+      const templates = getTemplatesForChannel('sms');
       expect(templates).toEqual([]);
     });
   });
