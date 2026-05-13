@@ -9,13 +9,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { authenticate } from '../../src/middleware/auth.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
-import { readJson, type ErrorResponse } from '../helpers/response.js';
+import { readJson, type AppVariables, type ErrorResponse } from '../helpers/response.js';
 
 describe('Authentication Middleware', () => {
-  let app: Hono;
+  let app: Hono<{ Variables: AppVariables }>;
 
   beforeEach(() => {
-    app = new Hono();
+    app = new Hono<{ Variables: AppVariables }>();
     app.onError(errorHandler);
     app.use('*', authenticate);
     app.get('/test', (c) => c.json({ message: 'OK' }));
@@ -43,7 +43,7 @@ describe('Authentication Middleware', () => {
     });
 
     it('should attach API key to context', async () => {
-      const testApp = new Hono();
+      const testApp = new Hono<{ Variables: AppVariables }>();
       testApp.onError(errorHandler);
       testApp.use('*', authenticate);
       testApp.get('/test', (c) => {

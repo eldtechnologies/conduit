@@ -50,3 +50,23 @@ export interface ErrorResponse {
   retryAfter?: number;
   [key: string]: unknown;
 }
+
+/**
+ * Hono context `Variables` shape for Conduit's middleware stack.
+ *
+ * The auth middleware (`src/middleware/auth.ts`) attaches the validated API
+ * key to the request context via `c.set('apiKey', apiKey)`. Downstream
+ * middleware (rate limit, logger) and route handlers retrieve it with
+ * `c.get('apiKey')`. Tests that construct a `new Hono(...)` and exercise this
+ * contract must declare it so `c.set`/`c.get` type-check against the same
+ * shape used in production.
+ *
+ * Usage:
+ * ```typescript
+ * import type { AppVariables } from '../helpers/response.js';
+ * const app = new Hono<{ Variables: AppVariables }>();
+ * ```
+ */
+export interface AppVariables {
+  apiKey: string;
+}
