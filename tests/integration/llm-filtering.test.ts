@@ -468,7 +468,7 @@ describe('LLM Filtering Integration', () => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-API-Key': process.env.API_KEY_LOW_BUDGET,
+              'X-API-Key': process.env.API_KEY_LOW_BUDGET!,
               Origin: 'http://localhost:8080',
             },
             body: JSON.stringify({

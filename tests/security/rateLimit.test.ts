@@ -9,14 +9,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { rateLimit, clearAllRateLimits } from '../../src/middleware/rateLimit.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
-import { readJson, type ErrorResponse } from '../helpers/response.js';
+import { readJson, type AppVariables, type ErrorResponse } from '../helpers/response.js';
 
 describe('Rate Limiting Middleware', () => {
-  let app: Hono;
+  let app: Hono<{ Variables: AppVariables }>;
 
   beforeEach(() => {
     clearAllRateLimits();
-    app = new Hono();
+    app = new Hono<{ Variables: AppVariables }>();
     app.onError(errorHandler);
     app.use('*', (c, next) => {
       // Simulate auth middleware setting API key
@@ -131,7 +131,7 @@ describe('Rate Limiting Middleware', () => {
 
   describe('multiple API keys isolation', () => {
     it('should track rate limits separately for different API keys', async () => {
-      const app1 = new Hono();
+      const app1 = new Hono<{ Variables: AppVariables }>();
       app1.onError(errorHandler);
       app1.use('*', (c, next) => {
         c.set('apiKey', 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
@@ -140,7 +140,7 @@ describe('Rate Limiting Middleware', () => {
       app1.use('*', rateLimit);
       app1.get('/test', (c) => c.json({ message: 'OK' }));
 
-      const app2 = new Hono();
+      const app2 = new Hono<{ Variables: AppVariables }>();
       app2.onError(errorHandler);
       app2.use('*', (c, next) => {
         c.set('apiKey', 'KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3');

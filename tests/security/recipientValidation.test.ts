@@ -21,8 +21,8 @@ describe('Recipient Validation (v1.1.0)', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => ({ id: 'mock-msg-id' }),
-      text: async () => JSON.stringify({ id: 'mock-msg-id' }),
+      json: () => Promise.resolve({ id: 'mock-msg-id' }),
+      text: () => Promise.resolve(JSON.stringify({ id: 'mock-msg-id' })),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
   });
