@@ -39,6 +39,21 @@ process.env.API_KEY_LLM_TEST_LLM_MAX_CALLS_PER_DAY = '1000';
 // API key without LLM
 process.env.API_KEY_NO_LLM = 'KEY_NO_LLM_abc123def456ghi789jkl012mno345pqr567';
 
+// API keys for case-insensitive LLM_RULES parsing tests.
+// Each uses a different casing for the categories to verify the parser
+// normalizes input before matching against canonical camelCase keys.
+process.env.API_KEY_LLM_CASE_LOWER = 'KEY_LLM_CASE_LOWER_abc123def456ghi789jkl012';
+process.env.API_KEY_LLM_CASE_LOWER_LLM_ENABLED = 'true';
+process.env.API_KEY_LLM_CASE_LOWER_LLM_RULES = 'spam,promptinjection';
+
+process.env.API_KEY_LLM_CASE_UPPER = 'KEY_LLM_CASE_UPPER_abc123def456ghi789jkl012';
+process.env.API_KEY_LLM_CASE_UPPER_LLM_ENABLED = 'true';
+process.env.API_KEY_LLM_CASE_UPPER_LLM_RULES = 'SPAM,PROMPTINJECTION';
+
+process.env.API_KEY_LLM_CASE_UNKNOWN = 'KEY_LLM_CASE_UNKNOWN_abc123def456ghi789jkl';
+process.env.API_KEY_LLM_CASE_UNKNOWN_LLM_ENABLED = 'true';
+process.env.API_KEY_LLM_CASE_UNKNOWN_LLM_RULES = 'spam,unknownCategory';
+
 // API key with very low LLM budget (for budget enforcement test).
 // Must be set here in setup.ts so src/config.ts picks it up at module-load time.
 process.env.API_KEY_LOW_BUDGET = 'KEY_LOW_BUDGET_test123test456test789';

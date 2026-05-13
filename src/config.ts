@@ -317,14 +317,23 @@ function loadLLMFilterRules(apiKeys: string[]): Map<string, FilterRules> {
       case 'RULES':
         if (envValue) {
           const categories = envValue.split(',').map((c) => c.trim().toLowerCase());
+          // Build a case-insensitive lookup from lowercase input to the canonical
+          // camelCase keys on rules.categories (e.g. 'promptinjection' -> 'promptInjection').
+          // Without this, camelCase categories like 'promptInjection' would be silently
+          // dropped because the input is lowercased before the membership check.
+          const categoryKeys = Object.keys(rules.categories);
+          const lowercaseToCanonical = new Map<string, string>(
+            categoryKeys.map((key) => [key.toLowerCase(), key])
+          );
           // Reset all to false first
-          Object.keys(rules.categories).forEach((key) => {
+          categoryKeys.forEach((key) => {
             rules.categories[key as keyof typeof rules.categories] = false;
           });
-          // Enable specified categories
+          // Enable specified categories (unknown categories are ignored)
           categories.forEach((cat) => {
-            if (cat in rules.categories) {
-              rules.categories[cat as keyof typeof rules.categories] = true;
+            const canonicalKey = lowercaseToCanonical.get(cat);
+            if (canonicalKey) {
+              rules.categories[canonicalKey as keyof typeof rules.categories] = true;
             }
           });
         }

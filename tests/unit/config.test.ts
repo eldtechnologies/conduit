@@ -82,4 +82,61 @@ describe('Configuration', () => {
       expect(config.rateLimits.perDay).toBeGreaterThan(config.rateLimits.perHour);
     });
   });
+
+  describe('LLM filter rules parsing', () => {
+    it('should enable promptInjection from lowercase env value', () => {
+      const apiKey = 'KEY_LLM_CASE_LOWER_abc123def456ghi789jkl012';
+      const rules = config.llmFilterRules.get(apiKey);
+      expect(rules).toBeDefined();
+      expect(rules?.enabled).toBe(true);
+      expect(rules?.categories.spam).toBe(true);
+      expect(rules?.categories.promptInjection).toBe(true);
+      // Categories not listed should be disabled
+      expect(rules?.categories.abuse).toBe(false);
+      expect(rules?.categories.phishing).toBe(false);
+      expect(rules?.categories.scam).toBe(false);
+    });
+
+    it('should be case-insensitive for uppercase env values (SPAM, PROMPTINJECTION)', () => {
+      const apiKey = 'KEY_LLM_CASE_UPPER_abc123def456ghi789jkl012';
+      const rules = config.llmFilterRules.get(apiKey);
+      expect(rules).toBeDefined();
+      expect(rules?.categories.spam).toBe(true);
+      expect(rules?.categories.promptInjection).toBe(true);
+      expect(rules?.categories.abuse).toBe(false);
+    });
+
+    it('should preserve canonical camelCase keys on rules.categories', () => {
+      // Consumers (e.g. src/llm/providers/openai.ts) read the keys directly
+      // with Object.entries, so they must stay camelCase regardless of input casing.
+      const apiKey = 'KEY_LLM_CASE_LOWER_abc123def456ghi789jkl012';
+      const rules = config.llmFilterRules.get(apiKey);
+      expect(rules).toBeDefined();
+      expect(Object.keys(rules!.categories).sort()).toEqual(
+        ['abuse', 'phishing', 'profanity', 'promptInjection', 'scam', 'spam'].sort()
+      );
+    });
+
+    it('should ignore unknown categories without crashing', () => {
+      const apiKey = 'KEY_LLM_CASE_UNKNOWN_abc123def456ghi789jkl';
+      const rules = config.llmFilterRules.get(apiKey);
+      expect(rules).toBeDefined();
+      expect(rules?.categories.spam).toBe(true);
+      // Unknown category is silently dropped, valid ones still applied
+      expect(rules?.categories.promptInjection).toBe(false);
+      expect(rules?.categories.abuse).toBe(false);
+    });
+
+    it('should still respect mixed-case canonical input (existing behavior)', () => {
+      // The existing API_KEY_LLM_TEST uses camelCase 'promptInjection' input
+      // — confirm this continues to work after the fix.
+      const apiKey = 'KEY_LLM_TEST_xyz789abc012def345ghi678jkl901mno234';
+      const rules = config.llmFilterRules.get(apiKey);
+      expect(rules).toBeDefined();
+      expect(rules?.categories.spam).toBe(true);
+      expect(rules?.categories.abuse).toBe(true);
+      expect(rules?.categories.profanity).toBe(true);
+      expect(rules?.categories.promptInjection).toBe(true);
+    });
+  });
 });
