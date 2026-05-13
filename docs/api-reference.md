@@ -20,7 +20,7 @@ A lightweight, secure multi-channel communication proxy for sending emails, SMS,
 ## Architecture
 
 ### Tech Stack
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20.19+
 - **Framework**: Hono (ultra-lightweight web framework)
 - **Language**: TypeScript
 - **Email Provider**: Resend.com (Phase 1)
@@ -504,7 +504,7 @@ conduit/
 ### Dockerfile
 ```dockerfile
 # Multi-stage build
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -515,7 +515,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
