@@ -10,7 +10,7 @@
 import type { Context, Next } from 'hono';
 import { config, type RecipientWhitelist } from '../config.js';
 import { ForbiddenError, ValidationError } from '../utils/errors.js';
-import { ErrorCode } from '../types/api.js';
+import { ErrorCode, type SendRequestBody } from '../types/api.js';
 
 /**
  * Check if recipient email is allowed by whitelist
@@ -54,10 +54,10 @@ export async function validateRecipient(c: Context, next: Next) {
 
   // ALWAYS parse request body once here and store it
   // This prevents body consumption issues with Hono's Request streams
-  const body: any = await c.req.json();
+  const body = await c.req.json<SendRequestBody>();
 
   // Store parsed body in context for route handler to use
-  (c.set as any)('parsedBody', body);
+  c.set('parsedBody', body);
 
   // Get whitelist for this API key
   const whitelist = config.recipientWhitelists.get(apiKey);
@@ -73,7 +73,7 @@ export async function validateRecipient(c: Context, next: Next) {
     throw new ValidationError('Missing or invalid recipient', ErrorCode.VALIDATION_ERROR);
   }
 
-  const recipient = body.to;
+  const recipient: string = body.to;
 
   // Check if recipient is in whitelist
   if (!isRecipientAllowed(recipient, whitelist)) {

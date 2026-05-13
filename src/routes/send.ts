@@ -9,7 +9,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { routeToChannel } from '../channels/index.js';
 import { ValidationError } from '../utils/errors.js';
-import { ErrorCode, type SendMessageResponse } from '../types/api.js';
+import {
+  ErrorCode,
+  type LLMAnalysis,
+  type SendMessageResponse,
+  type SendRequestBody,
+} from '../types/api.js';
 
 const send = new Hono();
 
@@ -77,9 +82,11 @@ send.post('/send', async (c) => {
   // Use pre-parsed body from recipientValidation middleware if available (v1.1.0)
   // The body is parsed by recipientValidation middleware to prevent consumption issues
   // Fall back to parsing here if middleware not applied (backward compatible)
-  let body: unknown = (c.get as any)('parsedBody');
+  // Cast c.get because parsedBody/llmAnalysis aren't in the Hono Variables map
+  const getVar = c.get as (key: string) => unknown;
+  let body = getVar('parsedBody') as SendRequestBody | undefined;
   if (!body) {
-    body = await c.req.json();
+    body = await c.req.json<SendRequestBody>();
   }
 
   const parseResult = sendRequestSchema.safeParse(body);
@@ -96,7 +103,7 @@ send.post('/send', async (c) => {
   const result = await routeToChannel(request);
 
   // Get LLM analysis from context (if LLM filtering was applied)
-  const llmAnalysis = (c.get as any)('llmAnalysis');
+  const llmAnalysis = getVar('llmAnalysis') as LLMAnalysis | undefined;
 
   // Return success response
   const response: SendMessageResponse = {
