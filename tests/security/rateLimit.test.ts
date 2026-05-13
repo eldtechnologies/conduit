@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { rateLimit, clearAllRateLimits } from '../../src/middleware/rateLimit.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
+import { readJson, type ErrorResponse } from '../helpers/response.js';
 
 describe('Rate Limiting Middleware', () => {
   let app: Hono;
@@ -51,7 +52,7 @@ describe('Rate Limiting Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(429);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
       expect(body.retryAfter).toBeGreaterThan(0);
     });
@@ -66,7 +67,7 @@ describe('Rate Limiting Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(429);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.retryAfter).toBeDefined();
       expect(body.retryAfter).toBeGreaterThan(0);
       expect(body.retryAfter).toBeLessThan(60); // Should be less than 1 minute
@@ -194,7 +195,7 @@ describe('Rate Limiting Middleware', () => {
       // Should be rate limited (per-minute)
       const res = await app.fetch(new Request('http://localhost:3000/test'));
       expect(res.status).toBe(429);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.error).toContain('per-minute');
     });
   });
@@ -207,7 +208,7 @@ describe('Rate Limiting Middleware', () => {
       }
 
       const res = await app.fetch(new Request('http://localhost:3000/test'));
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
 
       expect(body.error).toContain('per-minute');
     });

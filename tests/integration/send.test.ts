@@ -12,6 +12,7 @@ import { errorHandler } from '../../src/middleware/errorHandler.js';
 import { authenticate } from '../../src/middleware/auth.js';
 import { rateLimit, clearAllRateLimits } from '../../src/middleware/rateLimit.js';
 import send from '../../src/routes/send.js';
+import { readJson, type ErrorResponse } from '../helpers/response.js';
 
 describe('Send Endpoint', () => {
   let app: Hono;
@@ -79,7 +80,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('VALIDATION_ERROR');
     });
 
@@ -100,7 +101,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('VALIDATION_ERROR');
       expect(body.error).toContain('Invalid channel');
     });
@@ -159,7 +160,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.error).toContain('Invalid from email');
     });
 
@@ -181,7 +182,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.error).toContain('Invalid reply-to email');
     });
   });
@@ -204,7 +205,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('INVALID_TEMPLATE');
       expect(body.error).toContain('Template not found');
     });
@@ -226,7 +227,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(500); // Template validation error becomes internal error
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
     });
   });
@@ -269,7 +270,7 @@ describe('Send Endpoint', () => {
 
       const res = await app.fetch(req);
       expect(res.status).toBe(429);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
     });
   });
@@ -300,7 +301,7 @@ describe('Send Endpoint', () => {
       const res = await app.fetch(req);
       expect(res.status).toBe(200);
 
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(true);
       expect(body.messageId).toBeDefined();
       expect(body.channel).toBe('email');

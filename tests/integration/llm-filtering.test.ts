@@ -7,6 +7,26 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import app from '@/index.js';
+import { readJson } from '../helpers/response.js';
+
+interface LlmAnalysis {
+  allowed: boolean;
+  provider?: string;
+  confidence?: number;
+  fallback?: boolean;
+}
+
+interface LlmSendResponse {
+  success: boolean;
+  code?: string;
+  error?: string;
+  messageId?: string;
+  llmAnalysis?: LlmAnalysis;
+  details?: {
+    categories?: string[];
+    [key: string]: unknown;
+  };
+}
 
 // Mock LLM API key for testing
 process.env.LLM_PROVIDER = 'anthropic';
@@ -82,11 +102,11 @@ describe('LLM Filtering Integration', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.success).toBe(false);
       expect(data.code).toBe('CONTENT_BLOCKED_SPAM');
       expect(data.details).toBeDefined();
-      expect(data.details.categories).toContain('spam');
+      expect(data.details!.categories).toContain('spam');
     });
 
     it('should allow legitimate messages and include LLM analysis', async () => {
@@ -142,12 +162,12 @@ describe('LLM Filtering Integration', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.success).toBe(true);
       expect(data.llmAnalysis).toBeDefined();
-      expect(data.llmAnalysis.allowed).toBe(true);
-      expect(data.llmAnalysis.provider).toBe('anthropic');
-      expect(data.llmAnalysis.confidence).toBeGreaterThan(0.8);
+      expect(data.llmAnalysis!.allowed).toBe(true);
+      expect(data.llmAnalysis!.provider).toBe('anthropic');
+      expect(data.llmAnalysis!.confidence).toBeGreaterThan(0.8);
     });
 
     it('should block abusive content', async () => {
@@ -197,7 +217,7 @@ describe('LLM Filtering Integration', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.code).toBe('CONTENT_BLOCKED_ABUSE');
     });
 
@@ -249,7 +269,7 @@ describe('LLM Filtering Integration', () => {
       );
 
       expect(response.status).toBe(403);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.code).toBe('CONTENT_BLOCKED_PROMPT_INJECTION');
     });
 
@@ -285,10 +305,10 @@ describe('LLM Filtering Integration', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.success).toBe(true);
-      expect(data.llmAnalysis.fallback).toBe(true);
-      expect(data.llmAnalysis.allowed).toBe(true);
+      expect(data.llmAnalysis!.fallback).toBe(true);
+      expect(data.llmAnalysis!.allowed).toBe(true);
     });
 
     it('should skip LLM analysis when disabled for API key', async () => {
@@ -320,7 +340,7 @@ describe('LLM Filtering Integration', () => {
       );
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.success).toBe(true);
       expect(data.llmAnalysis).toBeUndefined(); // No LLM analysis
       expect(fetchMock).toHaveBeenCalledTimes(1); // Only Resend API called
@@ -380,7 +400,7 @@ describe('LLM Filtering Integration', () => {
 
       // Should allow because confidence (0.5) is below threshold (0.7)
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson<LlmSendResponse>(response);
       expect(data.success).toBe(true);
     });
   });

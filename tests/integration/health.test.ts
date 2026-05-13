@@ -9,6 +9,27 @@ import { Hono } from 'hono';
 import health from '../../src/routes/health.js';
 import { authenticate } from '../../src/middleware/auth.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
+import { readJson } from '../helpers/response.js';
+
+interface PublicHealthResponse {
+  status: string;
+  timestamp?: string;
+  version?: string;
+  channels?: unknown;
+}
+
+interface DetailedHealthResponse {
+  status: string;
+  timestamp: string;
+  version: string;
+  channels: {
+    email: { status: string; provider: string; configured: boolean };
+  };
+  checks: {
+    memory: { used: number; total: number };
+    uptime: number;
+  };
+}
 
 describe('Health Endpoints', () => {
   describe('Public health endpoint', () => {
@@ -24,7 +45,7 @@ describe('Health Endpoints', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await readJson<PublicHealthResponse>(res);
       expect(body.status).toBe('healthy');
     });
 
@@ -39,7 +60,7 @@ describe('Health Endpoints', () => {
     it('should have minimal response structure', async () => {
       const req = new Request('http://localhost:3000/health');
       const res = await app.fetch(req);
-      const body = await res.json();
+      const body = await readJson<PublicHealthResponse>(res);
 
       expect(body).toHaveProperty('status');
       expect(body).not.toHaveProperty('timestamp');
@@ -74,7 +95,7 @@ describe('Health Endpoints', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.status).toBe('healthy');
       expect(body.timestamp).toBeDefined();
@@ -88,7 +109,7 @@ describe('Health Endpoints', () => {
         headers: { 'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1' },
       });
       const res = await app.fetch(req);
-      const body = await res.json();
+      const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.channels.email).toBeDefined();
       expect(body.channels.email.status).toBe('inactive'); // Not implemented yet
@@ -101,7 +122,7 @@ describe('Health Endpoints', () => {
         headers: { 'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1' },
       });
       const res = await app.fetch(req);
-      const body = await res.json();
+      const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.checks.memory).toBeDefined();
       expect(body.checks.memory.used).toBeGreaterThan(0);
@@ -114,7 +135,7 @@ describe('Health Endpoints', () => {
         headers: { 'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1' },
       });
       const res = await app.fetch(req);
-      const body = await res.json();
+      const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.checks.uptime).toBeDefined();
       expect(body.checks.uptime).toBeGreaterThanOrEqual(0);
@@ -125,7 +146,7 @@ describe('Health Endpoints', () => {
         headers: { 'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1' },
       });
       const res = await app.fetch(req);
-      const body = await res.json();
+      const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.timestamp).toBeDefined();
       // Verify it's a valid ISO timestamp
@@ -137,7 +158,7 @@ describe('Health Endpoints', () => {
         headers: { 'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1' },
       });
       const res = await app.fetch(req);
-      const body = await res.json();
+      const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.version).toBeDefined();
       expect(typeof body.version).toBe('string');

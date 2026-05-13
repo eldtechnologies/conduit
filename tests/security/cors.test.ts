@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { corsProtection } from '../../src/middleware/cors.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
+import { readJson, type ErrorResponse } from '../helpers/response.js';
 
 describe('CORS Protection Middleware', () => {
   let app: Hono;
@@ -66,7 +67,7 @@ describe('CORS Protection Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('ORIGIN_NOT_ALLOWED');
     });
 
@@ -227,7 +228,7 @@ describe('CORS Protection Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('ORIGIN_NOT_ALLOWED');
     });
 
