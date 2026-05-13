@@ -176,9 +176,9 @@ describe('Authentication Middleware', () => {
       expect(difference).toBeLessThan(maxDifference);
 
       // Log timing information for debugging
-      console.log(`Valid key avg: ${avgValid.toFixed(3)}ms`);
-      console.log(`Invalid key avg: ${avgInvalid.toFixed(3)}ms`);
-      console.log(
+      console.info(`Valid key avg: ${avgValid.toFixed(3)}ms`);
+      console.info(`Invalid key avg: ${avgInvalid.toFixed(3)}ms`);
+      console.info(
         `Difference: ${difference.toFixed(3)}ms (${((difference / avgValid) * 100).toFixed(1)}%)`
       );
     }, 30000); // 30 second timeout for this test
@@ -227,9 +227,9 @@ describe('Authentication Middleware', () => {
 
       expect(difference).toBeLessThan(maxDifference);
 
-      console.log(`First key avg: ${avgFirst.toFixed(3)}ms`);
-      console.log(`Second key avg: ${avgSecond.toFixed(3)}ms`);
-      console.log(
+      console.info(`First key avg: ${avgFirst.toFixed(3)}ms`);
+      console.info(`Second key avg: ${avgSecond.toFixed(3)}ms`);
+      console.info(
         `Difference: ${difference.toFixed(3)}ms (${((difference / avgFirst) * 100).toFixed(1)}%)`
       );
     }, 30000); // 30 second timeout for this test

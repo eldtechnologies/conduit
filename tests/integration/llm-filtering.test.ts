@@ -59,25 +59,26 @@ describe('LLM Filtering Integration', () => {
       // Mock LLM response indicating spam
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'msg_spam',
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                allowed: false,
-                confidence: 0.95,
-                categories: ['spam', 'promotional'],
-                reasoning: 'Unsolicited marketing content detected',
-              }),
-            },
-          ],
-          model: 'claude-haiku-4-5-20251001',
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 100, output_tokens: 50 },
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 'msg_spam',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  allowed: false,
+                  confidence: 0.95,
+                  categories: ['spam', 'promotional'],
+                  reasoning: 'Unsolicited marketing content detected',
+                }),
+              },
+            ],
+            model: 'claude-haiku-4-5-20251001',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 100, output_tokens: 50 },
+          }),
       });
 
       const response = await app.fetch(
@@ -114,30 +115,31 @@ describe('LLM Filtering Integration', () => {
       fetchMock
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({
-            id: 'msg_safe',
-            type: 'message',
-            role: 'assistant',
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  allowed: true,
-                  confidence: 0.92,
-                  categories: ['safe'],
-                  reasoning: 'Legitimate inquiry',
-                }),
-              },
-            ],
-            model: 'claude-haiku-4-5-20251001',
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 80, output_tokens: 40 },
-          }),
+          json: () =>
+            Promise.resolve({
+              id: 'msg_safe',
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    allowed: true,
+                    confidence: 0.92,
+                    categories: ['safe'],
+                    reasoning: 'Legitimate inquiry',
+                  }),
+                },
+              ],
+              model: 'claude-haiku-4-5-20251001',
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 80, output_tokens: 40 },
+            }),
         })
         // Mock Resend API
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ id: 'email_123' }),
+          json: () => Promise.resolve({ id: 'email_123' }),
         });
 
       const response = await app.fetch(
@@ -174,25 +176,26 @@ describe('LLM Filtering Integration', () => {
       // Mock LLM response indicating abuse
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'msg_abuse',
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                allowed: false,
-                confidence: 0.88,
-                categories: ['abuse', 'threats'],
-                reasoning: 'Threatening language detected',
-              }),
-            },
-          ],
-          model: 'claude-haiku-4-5-20251001',
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 90, output_tokens: 45 },
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 'msg_abuse',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  allowed: false,
+                  confidence: 0.88,
+                  categories: ['abuse', 'threats'],
+                  reasoning: 'Threatening language detected',
+                }),
+              },
+            ],
+            model: 'claude-haiku-4-5-20251001',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 90, output_tokens: 45 },
+          }),
       });
 
       const response = await app.fetch(
@@ -225,25 +228,26 @@ describe('LLM Filtering Integration', () => {
       // Mock LLM response detecting prompt injection
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'msg_injection',
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                allowed: false,
-                confidence: 0.85,
-                categories: ['promptInjection'],
-                reasoning: 'Attempt to manipulate moderation system',
-              }),
-            },
-          ],
-          model: 'claude-haiku-4-5-20251001',
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 110, output_tokens: 55 },
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 'msg_injection',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  allowed: false,
+                  confidence: 0.85,
+                  categories: ['promptInjection'],
+                  reasoning: 'Attempt to manipulate moderation system',
+                }),
+              },
+            ],
+            model: 'claude-haiku-4-5-20251001',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 110, output_tokens: 55 },
+          }),
       });
 
       const response = await app.fetch(
@@ -280,7 +284,7 @@ describe('LLM Filtering Integration', () => {
         // Mock Resend API success
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ id: 'email_fallback' }),
+          json: () => Promise.resolve({ id: 'email_fallback' }),
         });
 
       const response = await app.fetch(
@@ -315,7 +319,7 @@ describe('LLM Filtering Integration', () => {
       // Mock Resend API only (LLM should not be called)
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'email_no_llm' }),
+        json: () => Promise.resolve({ id: 'email_no_llm' }),
       });
 
       const response = await app.fetch(
@@ -351,30 +355,31 @@ describe('LLM Filtering Integration', () => {
       fetchMock
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({
-            id: 'msg_lowconf',
-            type: 'message',
-            role: 'assistant',
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  allowed: false,
-                  confidence: 0.5, // Below 0.7 threshold
-                  categories: ['spam'],
-                  reasoning: 'Possibly promotional',
-                }),
-              },
-            ],
-            model: 'claude-haiku-4-5-20251001',
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 70, output_tokens: 35 },
-          }),
+          json: () =>
+            Promise.resolve({
+              id: 'msg_lowconf',
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    allowed: false,
+                    confidence: 0.5, // Below 0.7 threshold
+                    categories: ['spam'],
+                    reasoning: 'Possibly promotional',
+                  }),
+                },
+              ],
+              model: 'claude-haiku-4-5-20251001',
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 70, output_tokens: 35 },
+            }),
         })
         // Mock Resend API
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ id: 'email_lowconf' }),
+          json: () => Promise.resolve({ id: 'email_lowconf' }),
         });
 
       const response = await app.fetch(
@@ -421,27 +426,36 @@ describe('LLM Filtering Integration', () => {
           fetchMock
             .mockResolvedValueOnce({
               ok: true,
-              json: async () => ({
-                id: `msg_${i}`,
-                type: 'message',
-                role: 'assistant',
-                content: [
-                  { type: 'text', text: JSON.stringify({ allowed: true, confidence: 0.9, categories: ['safe'], reasoning: 'OK' }) },
-                ],
-                model: 'claude-haiku-4-5-20251001',
-                stop_reason: 'end_turn',
-                usage: { input_tokens: 50, output_tokens: 25 },
-              }),
+              json: () =>
+                Promise.resolve({
+                  id: `msg_${i}`,
+                  type: 'message',
+                  role: 'assistant',
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify({
+                        allowed: true,
+                        confidence: 0.9,
+                        categories: ['safe'],
+                        reasoning: 'OK',
+                      }),
+                    },
+                  ],
+                  model: 'claude-haiku-4-5-20251001',
+                  stop_reason: 'end_turn',
+                  usage: { input_tokens: 50, output_tokens: 25 },
+                }),
             })
             .mockResolvedValueOnce({
               ok: true,
-              json: async () => ({ id: `email_${i}` }),
+              json: () => Promise.resolve({ id: `email_${i}` }),
             });
         } else {
           // 3rd request: only Resend (LLM budget exceeded, fail-open)
           fetchMock.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ id: `email_${i}` }),
+            json: () => Promise.resolve({ id: `email_${i}` }),
           });
         }
 
@@ -450,7 +464,7 @@ describe('LLM Filtering Integration', () => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-API-Key': process.env.API_KEY_LOW_BUDGET!,
+              'X-API-Key': process.env.API_KEY_LOW_BUDGET,
               Origin: 'http://localhost:8080',
             },
             body: JSON.stringify({

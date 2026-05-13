@@ -435,25 +435,27 @@ describe('Recipient Validation (v1.1.0)', () => {
     it('should respect rate limiting after whitelist check', async () => {
       // Make multiple rapid requests to trigger rate limit
       const requests = Array.from({ length: 15 }, () =>
-        app.fetch(
-          new Request('http://localhost/api/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-Key': WHITELISTED_KEY,
-              Origin: 'https://test.com',
-            },
-            body: JSON.stringify({
-              channel: 'email',
-              templateId: 'contact-form',
-              to: 'allowed@example.com',
-              data: {
-                name: 'Test User',
-                email: 'test@example.com',
-                message: 'Test message',
+        Promise.resolve(
+          app.fetch(
+            new Request('http://localhost/api/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': WHITELISTED_KEY,
+                Origin: 'https://test.com',
               },
-            }),
-          })
+              body: JSON.stringify({
+                channel: 'email',
+                templateId: 'contact-form',
+                to: 'allowed@example.com',
+                data: {
+                  name: 'Test User',
+                  email: 'test@example.com',
+                  message: 'Test message',
+                },
+              }),
+            })
+          )
         )
       );
 

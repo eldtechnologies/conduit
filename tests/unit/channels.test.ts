@@ -7,7 +7,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   getChannelHandler,
-  routeToChannel,
   getRegisteredChannels,
   isChannelRegistered,
 } from '../../src/channels/index.js';
@@ -76,7 +75,7 @@ describe('Email Channel Handler', () => {
 
   describe('send', () => {
     it('should have send method', () => {
-      expect(emailHandler.send).toBeDefined();
+      expect('send' in emailHandler).toBe(true);
       expect(typeof emailHandler.send).toBe('function');
     });
 

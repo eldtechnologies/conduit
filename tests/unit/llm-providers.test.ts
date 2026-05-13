@@ -47,25 +47,26 @@ describe('AnthropicProvider', () => {
       // Mock successful spam detection response
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'msg_123',
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                allowed: false,
-                confidence: 0.95,
-                categories: ['spam', 'promotional'],
-                reasoning: 'Unsolicited marketing content',
-              }),
-            },
-          ],
-          model: 'claude-haiku-4-5-20251001',
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 100, output_tokens: 50 },
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 'msg_123',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  allowed: false,
+                  confidence: 0.95,
+                  categories: ['spam', 'promotional'],
+                  reasoning: 'Unsolicited marketing content',
+                }),
+              },
+            ],
+            model: 'claude-haiku-4-5-20251001',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 100, output_tokens: 50 },
+          }),
       });
 
       const result = await provider.analyze('BUY CHEAP VIAGRA NOW!!!', defaultRules);
@@ -81,25 +82,26 @@ describe('AnthropicProvider', () => {
       // Mock successful legitimate content response
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'msg_124',
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                allowed: true,
-                confidence: 0.92,
-                categories: ['safe'],
-                reasoning: 'Legitimate inquiry',
-              }),
-            },
-          ],
-          model: 'claude-haiku-4-5-20251001',
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 80, output_tokens: 40 },
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 'msg_124',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  allowed: true,
+                  confidence: 0.92,
+                  categories: ['safe'],
+                  reasoning: 'Legitimate inquiry',
+                }),
+              },
+            ],
+            model: 'claude-haiku-4-5-20251001',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 80, output_tokens: 40 },
+          }),
       });
 
       const result = await provider.analyze('Hi, I have a question about your product', defaultRules);
@@ -112,20 +114,21 @@ describe('AnthropicProvider', () => {
       // Mock response with markdown code block
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'msg_125',
-          type: 'message',
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: '```json\n{"allowed": false, "confidence": 0.85, "categories": ["abuse"], "reasoning": "Threatening language"}\n```',
-            },
-          ],
-          model: 'claude-haiku-4-5-20251001',
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 90, output_tokens: 45 },
-        }),
+        json: () =>
+          Promise.resolve({
+            id: 'msg_125',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: '```json\n{"allowed": false, "confidence": 0.85, "categories": ["abuse"], "reasoning": "Threatening language"}\n```',
+              },
+            ],
+            model: 'claude-haiku-4-5-20251001',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 90, output_tokens: 45 },
+          }),
       });
 
       const result = await provider.analyze('Test message', defaultRules);
@@ -164,7 +167,7 @@ describe('AnthropicProvider', () => {
       fetchMock.mockResolvedValueOnce({
         ok: false,
         status: 500,
-        text: async () => 'Internal Server Error',
+        text: () => Promise.resolve('Internal Server Error'),
       });
 
       const result = await provider.analyze('Test message', {
@@ -181,7 +184,7 @@ describe('AnthropicProvider', () => {
       fetchMock.mockResolvedValueOnce({
         ok: false,
         status: 500,
-        text: async () => 'Internal Server Error',
+        text: () => Promise.resolve('Internal Server Error'),
       });
 
       const result = await provider.analyze('Test message', {
@@ -198,7 +201,7 @@ describe('AnthropicProvider', () => {
     it('should return true when API is healthy', async () => {
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'msg_test' }),
+        json: () => Promise.resolve({ id: 'msg_test' }),
       });
 
       const isHealthy = await provider.healthCheck();
@@ -238,28 +241,29 @@ describe('OpenAIProvider', () => {
       // Mock successful spam detection response
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'chatcmpl-123',
-          object: 'chat.completion',
-          created: 1234567890,
-          model: 'gpt-3.5-turbo',
-          choices: [
-            {
-              index: 0,
-              message: {
-                role: 'assistant',
-                content: JSON.stringify({
-                  allowed: false,
-                  confidence: 0.93,
-                  categories: ['spam'],
-                  reasoning: 'Marketing spam detected',
-                }),
+        json: () =>
+          Promise.resolve({
+            id: 'chatcmpl-123',
+            object: 'chat.completion',
+            created: 1234567890,
+            model: 'gpt-3.5-turbo',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({
+                    allowed: false,
+                    confidence: 0.93,
+                    categories: ['spam'],
+                    reasoning: 'Marketing spam detected',
+                  }),
+                },
+                finish_reason: 'stop',
               },
-              finish_reason: 'stop',
-            },
-          ],
-          usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
-        }),
+            ],
+            usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+          }),
       });
 
       const result = await provider.analyze('BUY NOW LIMITED TIME OFFER!!!', defaultRules);
@@ -274,28 +278,29 @@ describe('OpenAIProvider', () => {
       // Mock successful legitimate content response
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          id: 'chatcmpl-124',
-          object: 'chat.completion',
-          created: 1234567891,
-          model: 'gpt-3.5-turbo',
-          choices: [
-            {
-              index: 0,
-              message: {
-                role: 'assistant',
-                content: JSON.stringify({
-                  allowed: true,
-                  confidence: 0.88,
-                  categories: ['safe'],
-                  reasoning: 'Normal message',
-                }),
+        json: () =>
+          Promise.resolve({
+            id: 'chatcmpl-124',
+            object: 'chat.completion',
+            created: 1234567891,
+            model: 'gpt-3.5-turbo',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({
+                    allowed: true,
+                    confidence: 0.88,
+                    categories: ['safe'],
+                    reasoning: 'Normal message',
+                  }),
+                },
+                finish_reason: 'stop',
               },
-              finish_reason: 'stop',
-            },
-          ],
-          usage: { prompt_tokens: 80, completion_tokens: 40, total_tokens: 120 },
-        }),
+            ],
+            usage: { prompt_tokens: 80, completion_tokens: 40, total_tokens: 120 },
+          }),
       });
 
       const result = await provider.analyze('Hello, how are you?', defaultRules);
@@ -333,7 +338,7 @@ describe('OpenAIProvider', () => {
     it('should return true when API is healthy', async () => {
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'chatcmpl-test' }),
+        json: () => Promise.resolve({ id: 'chatcmpl-test' }),
       });
 
       const isHealthy = await provider.healthCheck();
