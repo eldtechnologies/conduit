@@ -85,6 +85,23 @@ export interface SendMessageRequest {
 }
 
 /**
+ * Raw send request body shape as parsed from JSON.
+ *
+ * Used for typing the result of `c.req.json()` BEFORE Zod validation.
+ * All fields are marked optional and use loose types because the body is
+ * untrusted user input - actual validation happens via `sendRequestSchema`
+ * in routes/send.ts.
+ */
+export interface SendRequestBody {
+  channel?: unknown;
+  templateId?: unknown;
+  to?: unknown;
+  data?: unknown;
+  from?: unknown;
+  replyTo?: unknown;
+}
+
+/**
  * LLM analysis metadata (v1.2.0)
  */
 export interface LLMAnalysis {
