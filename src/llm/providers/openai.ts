@@ -181,7 +181,7 @@ Respond with JSON only.`;
       // GPT might wrap JSON in markdown code blocks, so extract it
       let jsonText = content.trim();
       const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-      if (jsonMatch) {
+      if (jsonMatch && jsonMatch[1]) {
         jsonText = jsonMatch[1];
       }
 

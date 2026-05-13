@@ -173,7 +173,7 @@ Respond with JSON only.`;
       // Claude might wrap JSON in markdown code blocks, so extract it
       let jsonText = text.trim();
       const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-      if (jsonMatch) {
+      if (jsonMatch && jsonMatch[1]) {
         jsonText = jsonMatch[1];
       }
 
