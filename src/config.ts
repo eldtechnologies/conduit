@@ -122,10 +122,7 @@ const envSchema = z.object({
     .transform((val) => (val ? val.split(',').map((key) => key.trim()) : [])),
 
   // LLM spam filtering configuration (optional, v1.2.0)
-  LLM_PROVIDER: z
-    .enum(['anthropic', 'openai', 'gemini', 'ollama'])
-    .optional()
-    .or(z.literal('')),
+  LLM_PROVIDER: z.enum(['anthropic', 'openai', 'gemini', 'ollama']).optional().or(z.literal('')),
 
   LLM_API_KEY: z.string().optional().or(z.literal('')),
 
@@ -148,14 +145,28 @@ const envSchema = z.object({
  * Load API keys from environment variables
  * API keys are defined as API_KEY_* environment variables
  */
+// Suffixes that identify per-API-key configuration variables (NOT API keys themselves).
+// All of these share the API_KEY_* prefix but configure behaviour for the key.
+const API_KEY_CONFIG_SUFFIXES = [
+  '_RECIPIENTS',
+  '_RECIPIENT_DOMAINS',
+  '_LLM_ENABLED',
+  '_LLM_RULES',
+  '_LLM_THRESHOLD',
+  '_LLM_FAIL_MODE',
+  '_LLM_MAX_CALLS_PER_DAY',
+  '_LLM_WHITELIST_SENDERS',
+];
+
 function loadApiKeys(): string[] {
   const keys: string[] = [];
 
   // Find all environment variables starting with API_KEY_
   for (const [key, value] of Object.entries(process.env)) {
     if (key.startsWith('API_KEY_') && value) {
-      // Skip if it's a recipient/domain whitelist variable
-      if (!key.includes('_RECIPIENTS') && !key.includes('_RECIPIENT_DOMAINS')) {
+      // Skip per-key configuration variables (recipient whitelists, LLM rules)
+      const isConfigVar = API_KEY_CONFIG_SUFFIXES.some((suffix) => key.endsWith(suffix));
+      if (!isConfigVar) {
         keys.push(value);
       }
     }
@@ -186,10 +197,7 @@ function loadRecipientWhitelists(apiKeys: string[]): Map<string, RecipientWhitel
     if (envKey.endsWith('_RECIPIENTS')) {
       apiKeyName = envKey.substring('API_KEY_'.length, envKey.length - '_RECIPIENTS'.length);
     } else if (envKey.endsWith('_RECIPIENT_DOMAINS')) {
-      apiKeyName = envKey.substring(
-        'API_KEY_'.length,
-        envKey.length - '_RECIPIENT_DOMAINS'.length
-      );
+      apiKeyName = envKey.substring('API_KEY_'.length, envKey.length - '_RECIPIENT_DOMAINS'.length);
     }
 
     if (!apiKeyName) continue;
@@ -264,11 +272,16 @@ function loadLLMFilterRules(apiKeys: string[]): Map<string, FilterRules> {
     if (!envKey.includes('_LLM_')) continue;
 
     // Extract the API key name (e.g., "MYSITE" from "API_KEY_MYSITE_LLM_ENABLED")
+    // Format is API_KEY_<NAME>_LLM_<SETTING>, so parts[0]='API', parts[1]='KEY',
+    // parts[2..apiKeyIndex-1]=<NAME>, parts[apiKeyIndex]='LLM', rest is setting.
+    //
+    // Use lastIndexOf so API key names containing 'LLM' (e.g. 'MY_LLM_APP') still parse
+    // correctly — the trailing 'LLM' is always the separator before the setting name.
     const parts = envKey.split('_');
-    const apiKeyIndex = parts.indexOf('LLM');
-    if (apiKeyIndex < 2) continue;
+    const apiKeyIndex = parts.lastIndexOf('LLM');
+    if (apiKeyIndex < 3) continue;
 
-    const apiKeyName = parts.slice(1, apiKeyIndex).join('_');
+    const apiKeyName = parts.slice(2, apiKeyIndex).join('_');
     const actualApiKey = process.env[`API_KEY_${apiKeyName}`];
 
     if (!actualApiKey || !apiKeys.includes(actualApiKey)) continue;

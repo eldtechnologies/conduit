@@ -46,6 +46,16 @@ process.env.API_KEY_LLM_TEST_LLM_MAX_CALLS_PER_DAY = '1000';
 // API key with LLM disabled
 process.env.API_KEY_NO_LLM = 'KEY_NO_LLM_abc123def456ghi789jkl012mno345pqr567';
 
+// API key with very low LLM budget (for budget enforcement test).
+// IMPORTANT: This must be set at module scope (not inside the test body) so that
+// src/config.ts picks it up when it loads. config.ts evaluates process.env once
+// at module load — env mutations inside `it()` blocks are too late.
+process.env.API_KEY_LOW_BUDGET = 'KEY_LOW_BUDGET_test123test456test789';
+process.env.API_KEY_LOW_BUDGET_LLM_ENABLED = 'true';
+process.env.API_KEY_LOW_BUDGET_LLM_RULES = 'spam';
+process.env.API_KEY_LOW_BUDGET_LLM_MAX_CALLS_PER_DAY = '2';
+process.env.API_KEY_LOW_BUDGET_LLM_FAIL_MODE = 'allow';
+
 describe('LLM Filtering Integration', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -412,13 +422,7 @@ describe('LLM Filtering Integration', () => {
 
   describe('LLM Budget Limits', () => {
     it('should enforce daily budget limit', async () => {
-      // Configure API key with very low budget
-      process.env.API_KEY_LOW_BUDGET = 'KEY_LOW_BUDGET_test123test456test789';
-      process.env.API_KEY_LOW_BUDGET_LLM_ENABLED = 'true';
-      process.env.API_KEY_LOW_BUDGET_LLM_RULES = 'spam';
-      process.env.API_KEY_LOW_BUDGET_LLM_MAX_CALLS_PER_DAY = '2';
-      process.env.API_KEY_LOW_BUDGET_LLM_FAIL_MODE = 'allow';
-
+      // API key + LLM rules are configured at module scope above.
       // Make 3 requests (budget is 2)
       for (let i = 0; i < 3; i++) {
         if (i < 2) {

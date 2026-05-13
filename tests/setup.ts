@@ -19,8 +19,7 @@ process.env.API_KEY_TEST_WHITELIST = 'KEY_TEST_WHITELIST_abc123def456ghi789jkl01
 process.env.API_KEY_TEST_WHITELIST_RECIPIENTS = 'allowed@example.com,admin@example.com';
 process.env.API_KEY_TEST_WHITELIST_RECIPIENT_DOMAINS = 'trusted.com';
 
-process.env.API_KEY_TEST_NO_WHITELIST =
-  'KEY_TEST_NO_WHITELIST_xyz789abc012def345ghi678jkl901mno';
+process.env.API_KEY_TEST_NO_WHITELIST = 'KEY_TEST_NO_WHITELIST_xyz789abc012def345ghi678jkl901mno';
 
 // LLM spam filtering test keys (v1.2.0)
 process.env.LLM_PROVIDER = 'anthropic';
@@ -39,6 +38,14 @@ process.env.API_KEY_LLM_TEST_LLM_MAX_CALLS_PER_DAY = '1000';
 
 // API key without LLM
 process.env.API_KEY_NO_LLM = 'KEY_NO_LLM_abc123def456ghi789jkl012mno345pqr567';
+
+// API key with very low LLM budget (for budget enforcement test).
+// Must be set here in setup.ts so src/config.ts picks it up at module-load time.
+process.env.API_KEY_LOW_BUDGET = 'KEY_LOW_BUDGET_test123test456test789';
+process.env.API_KEY_LOW_BUDGET_LLM_ENABLED = 'true';
+process.env.API_KEY_LOW_BUDGET_LLM_RULES = 'spam';
+process.env.API_KEY_LOW_BUDGET_LLM_MAX_CALLS_PER_DAY = '2';
+process.env.API_KEY_LOW_BUDGET_LLM_FAIL_MODE = 'allow';
 
 process.env.ALLOWED_ORIGINS = 'http://localhost:8080,http://localhost:3001,https://test.com';
 process.env.RATE_LIMIT_PER_MINUTE = '10';

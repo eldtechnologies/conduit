@@ -75,7 +75,9 @@ describe('AnthropicProvider', () => {
       expect(result.confidence).toBeGreaterThan(0.8);
       expect(result.categories).toContain('spam');
       expect(result.provider).toBe('anthropic');
-      expect(result.latency).toBeGreaterThan(0);
+      // Latency can be 0 when the mocked fetch resolves synchronously within
+      // the same Date.now() tick — assert the field exists and is non-negative.
+      expect(result.latency).toBeGreaterThanOrEqual(0);
     });
 
     it('should allow legitimate messages', async () => {
@@ -104,7 +106,10 @@ describe('AnthropicProvider', () => {
           }),
       });
 
-      const result = await provider.analyze('Hi, I have a question about your product', defaultRules);
+      const result = await provider.analyze(
+        'Hi, I have a question about your product',
+        defaultRules
+      );
 
       expect(result.allowed).toBe(true);
       expect(result.categories).not.toContain('spam');
