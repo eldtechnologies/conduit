@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![Version: 1.3.0](https://img.shields.io/badge/Version-1.3.0-blue.svg)]()
+[![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-blue.svg)]()
 [![Security Scan](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -242,7 +242,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current version**: v1.3.0 — production-ready
+**Current version**: v1.3.1 — production-ready
 
 ### What's in the box
 - **Email pipeline**: POST `/api/send`, Resend integration, contact-form template, Zod-validated request bodies, header-injection prevention.

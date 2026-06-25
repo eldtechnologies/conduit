@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] — 2026-06-25
+
+### Security
+
+- **29 dependency advisories resolved** (1 Critical, 5 High, 17 Medium, 5 Low, 1 Unknown) reported by `osv-scanner`, fixed via `npm update` within existing semver ranges:
+  - `hono` 4.12.18 → 4.12.25 (9 advisories incl. high-severity GHSA-88fw-hqm2-52qc)
+  - `isomorphic-dompurify` / `dompurify` 3.4.3 → patched (8 advisories)
+  - `undici` 7.25.0 → 7.28.0 (7 advisories)
+  - Dev-only: `vitest` (critical GHSA-5xrq-8626-4rwp), `vite`, `esbuild`, `js-yaml`
+  - **`overrides.esbuild` `^0.28.1`** added to force the nested `vite → esbuild@0.27.7` transitive dep to the patched version, which was not reachable via the normal version range (dev-only, low severity GHSA-g7r4-m6w7-qqqr). This is a temporary workaround tracked in [#87](https://github.com/eldtechnologies/conduit/issues/87); it can be removed once `vite` ships an esbuild range that includes ≥0.28.1.
+  - Post-release: `osv-scanner scan .` → No issues found; CI OSV Scanner, `npm audit`, CodeQL, and Dependency Review all green.
+
+### Changed
+
+- No source-code or runtime-behavior changes. This is a dependency-maintenance release; the full test suite (263/263) remains green and `npm run build` exits 0.
+
 ## [1.3.0] — 2026-05-14
 
 ### Security
