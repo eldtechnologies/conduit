@@ -45,7 +45,7 @@ jobs:
       scan-args: |-
         --lockfile=package-lock.json
       upload-sarif: true
-      fail-on-vuln: false
+      fail-on-vuln: true
 
   dependency-review:
     name: Dependency Review
