@@ -23,10 +23,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -40,7 +40,7 @@ jobs:
 
   osv-scanner:
     name: OSV Scanner
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.3
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.5.0
     with:
       scan-args: |-
         --lockfile=package-lock.json
@@ -55,10 +55,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # Fail on high or critical vulnerabilities
           fail-on-severity: moderate
