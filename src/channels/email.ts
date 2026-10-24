@@ -6,11 +6,12 @@
  */
 
 import { Resend } from 'resend';
+import { ZodError } from 'zod';
 import type { SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
 import type { EmailTemplate } from '../types/templates.js';
 import { config, TIMEOUTS } from '../config.js';
-import { ProviderError, InternalError, ConduitError } from '../utils/errors.js';
+import { ProviderError, InternalError, ConduitError, fromZodError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 import { getTemplate } from '../templates/index.js';
 
@@ -129,6 +130,11 @@ export const emailHandler: ChannelHandler = {
       // Re-throw all Conduit errors (ValidationError, ProviderError, etc.)
       if (error instanceof ConduitError) {
         throw error;
+      }
+
+      // Template validation failures are client errors, not internal ones
+      if (error instanceof ZodError) {
+        throw fromZodError(error, 'Invalid template data');
       }
 
       // Wrap unknown errors
