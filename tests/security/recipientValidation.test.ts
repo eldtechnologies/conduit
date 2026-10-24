@@ -24,7 +24,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       json: () => Promise.resolve({ id: 'mock-msg-id' }),
       text: () => Promise.resolve(JSON.stringify({ id: 'mock-msg-id' })),
     });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
   });
 
   afterAll(() => {
