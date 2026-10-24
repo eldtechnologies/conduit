@@ -8,6 +8,8 @@
 
 import { Hono } from 'hono';
 import type { HealthResponse, DetailedHealthResponse } from '../types/api.js';
+import { emailHandler } from '../channels/email.js';
+import { APP_VERSION } from '../utils/version.js';
 
 const health = new Hono();
 
@@ -41,7 +43,7 @@ health.get('/', (c) => {
  * Requires authentication (API key).
  * Use this for internal monitoring and debugging.
  */
-health.get('/detailed', (c) => {
+health.get('/detailed', async (c) => {
   // Calculate memory usage
   const memUsage = process.memoryUsage();
   const memoryMB = {
@@ -52,15 +54,17 @@ health.get('/detailed', (c) => {
   // Calculate uptime
   const uptime = Math.floor((Date.now() - startTime) / 1000); // seconds
 
+  const emailAvailable = await emailHandler.isAvailable();
+
   const response: DetailedHealthResponse = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '0.1.0',
+    version: APP_VERSION,
     channels: {
       email: {
-        status: 'inactive', // Will be 'active' once email channel is implemented
-        provider: 'resend',
-        configured: !!process.env.RESEND_API_KEY,
+        status: emailAvailable ? 'active' : 'inactive',
+        provider: emailHandler.getProviderName(),
+        configured: emailAvailable,
       },
       // Future channels (Phase 2+)
       // sms: { status: 'inactive', provider: 'twilio', configured: false },

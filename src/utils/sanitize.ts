@@ -29,6 +29,60 @@ export function sanitizeHtml(dirty: string): string {
 }
 
 /**
+ * Convert untrusted input to plain text
+ *
+ * Strips all HTML tags (dropping the contents of dangerous elements such as
+ * <script> and <style>) and returns the decoded text content, so characters
+ * like `&`, `<` and `>` come out as typed rather than as HTML entities.
+ *
+ * The result is NOT safe to embed in HTML. Use it only for non-HTML outputs
+ * such as the text/plain email part; use `escapeHtml()` for HTML bodies.
+ *
+ * @param dirty - Untrusted user input
+ * @returns Plain text with tags removed and entities decoded
+ *
+ * @example
+ * toPlainText('R&D <b>team</b>') // Returns: 'R&D team'
+ * toPlainText('a < b &amp; c') // Returns: 'a < b & c'
+ */
+export function toPlainText(dirty: string): string {
+  // Parse into a DOM fragment and read its text, which decodes every entity. The string
+  // form is not usable here: it is HTML-serialised (re-escaping &, < and >) whenever the
+  // input contains a '<'. The DOM type is declared locally because the project's lib
+  // settings exclude the DOM typings.
+  const fragment = DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+    KEEP_CONTENT: true,
+    RETURN_DOM_FRAGMENT: true,
+  }) as unknown as TextNodeContainer;
+  return fragment.textContent ?? '';
+}
+
+/** The part of DocumentFragment that toPlainText reads */
+interface TextNodeContainer {
+  textContent: string | null;
+}
+
+/**
+ * Convert untrusted input to a single-line plain-text header value
+ *
+ * Like `toPlainText()`, but also replaces CR/LF with spaces so the value
+ * cannot break onto a new header line (e.g. an email subject).
+ *
+ * @param dirty - Untrusted user input
+ * @returns Single-line plain text, trimmed
+ *
+ * @example
+ * toHeaderText('Q&A\r\nBcc: x@y.z') // Returns: 'Q&A Bcc: x@y.z'
+ */
+export function toHeaderText(dirty: string): string {
+  return toPlainText(dirty)
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+}
+
+/**
  * Sanitize rich text content
  *
  * Allows only safe formatting tags (b, i, em, strong, p, br, ul, ol, li, a).

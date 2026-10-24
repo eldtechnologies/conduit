@@ -85,6 +85,12 @@ export interface SendMessageRequest {
   replyTo?: string;
 
   /**
+   * Provider idempotency key, derived from the client's Idempotency-Key header.
+   * Retries with the same key within the provider's window are not re-sent.
+   */
+  idempotencyKey?: string;
+
+  /**
    * The authenticated API key, set server-side by the send route (never taken from the
    * client body: the request schema strips unknown fields). Channels use it to apply
    * per-key policy such as the sender allowlist; when absent, the most restrictive

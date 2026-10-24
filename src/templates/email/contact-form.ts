@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import type { EmailTemplate } from '../../types/templates.js';
-import { sanitizeHtml, escapeHtml } from '../../utils/sanitize.js';
+import { escapeHtml, toHeaderText, toPlainText } from '../../utils/sanitize.js';
 
 /**
  * Contact form data schema
@@ -55,14 +55,17 @@ export const contactFormTemplate: EmailTemplate<ContactFormData> = {
   /**
    * Generate email subject
    *
+   * The subject is a plain-text header, not HTML: tags are stripped, entities are
+   * decoded (so 'Q&A' stays 'Q&A') and CR/LF are removed to keep it on one line.
+   *
    * @param data - Validated contact form data
    * @returns Email subject line
    */
   subject(data: ContactFormData): string {
     if (data.subject) {
-      return sanitizeHtml(data.subject);
+      return toHeaderText(data.subject);
     }
-    return `Contact Form: ${sanitizeHtml(data.name)}`;
+    return `Contact Form: ${toHeaderText(data.name)}`;
   },
 
   /**
@@ -135,10 +138,10 @@ export const contactFormTemplate: EmailTemplate<ContactFormData> = {
    * @returns Plain text email body
    */
   text(data: ContactFormData): string {
-    // Sanitize user input (remove HTML if any)
-    const name = sanitizeHtml(data.name);
-    const email = sanitizeHtml(data.email);
-    const message = sanitizeHtml(data.message);
+    // text/plain is not HTML: strip tags but keep '&', '<' and '>' as typed
+    const name = toPlainText(data.name);
+    const email = toPlainText(data.email);
+    const message = toPlainText(data.message);
 
     return `
 New Contact Form Submission

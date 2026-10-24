@@ -64,7 +64,10 @@ export async function corsProtection(c: Context, next: Next) {
   c.header('Access-Control-Allow-Origin', origin);
   c.header('Access-Control-Allow-Credentials', 'true');
   c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  c.header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, X-Source-Origin');
+  c.header(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-API-Key, X-Source-Origin, Idempotency-Key'
+  );
   c.header('Access-Control-Max-Age', '86400'); // 24 hours
 
   // Handle preflight requests

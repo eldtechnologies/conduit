@@ -5,7 +5,12 @@
  * Handles timeouts, error mapping, and provider availability checks.
  */
 
-import { Resend, type CreateEmailOptions } from 'resend';
+import {
+  Resend,
+  type CreateEmailOptions,
+  type CreateEmailRequestOptions,
+  type CreateEmailResponse,
+} from 'resend';
 import { ZodError } from 'zod';
 import type { EmailFrom, SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
@@ -90,6 +95,16 @@ export function resolveSender(
 }
 
 /**
+ * Build the error for a Resend call aborted by the provider timeout
+ */
+function providerTimeoutError(): ProviderError {
+  return new ProviderError('Email send timeout', ErrorCode.PROVIDER_TIMEOUT, {
+    provider: 'resend',
+    timeout: TIMEOUTS.provider,
+  });
+}
+
+/**
  * Email channel handler
  *
  * Implements the ChannelHandler interface for email delivery via Resend.
@@ -137,23 +152,28 @@ export const emailHandler: ChannelHandler = {
         replyTo: request.replyTo,
       };
 
-      // Send with timeout
-      const sendPromise = resend.emails.send(emailParams);
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(
-            new ProviderError('Email send timeout', ErrorCode.PROVIDER_TIMEOUT, {
-              provider: 'resend',
-              timeout: TIMEOUTS.provider,
-            })
-          );
-        }, TIMEOUTS.provider);
-      });
+      // Abort the HTTP request itself on timeout (not just stop waiting for it), so a
+      // timed-out send is not delivered later. AbortSignal.timeout needs no cleanup.
+      // The idempotency key lets a client retry after a timeout without duplicating mail.
+      const signal = AbortSignal.timeout(TIMEOUTS.provider);
+      const requestOptions: CreateEmailRequestOptions = { signal };
+      if (request.idempotencyKey) {
+        requestOptions.idempotencyKey = request.idempotencyKey;
+      }
 
-      const response = await Promise.race([sendPromise, timeoutPromise]);
+      let response: CreateEmailResponse;
+      try {
+        response = await resend.emails.send(emailParams, requestOptions);
+      } catch (error) {
+        if (signal.aborted) throw providerTimeoutError();
+        throw error;
+      }
 
       // Check for errors in response
       if (response.error) {
+        // The SDK turns an aborted fetch into a generic "Unable to fetch data" error
+        if (signal.aborted) throw providerTimeoutError();
+
         const errorMsg = response.error.message;
 
         // Detect common domain verification errors and provide helpful guidance

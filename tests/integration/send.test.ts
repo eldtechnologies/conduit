@@ -109,8 +109,52 @@ describe('Send Endpoint', () => {
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
       const body = await readJson<ErrorResponse>(res);
-      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.code).toBe('INVALID_CHANNEL');
       expect(body.error).toContain('Invalid channel');
+    });
+
+    const postSend = (payload: Record<string, unknown>) =>
+      app.fetch(
+        new Request('http://localhost:3000/api/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+          },
+          body: JSON.stringify(payload),
+        })
+      );
+
+    it('should return INVALID_CHANNEL for an unknown channel even if other fields are invalid', async () => {
+      const res = await postSend({ channel: 'fax', templateId: '', to: 'not-an-email' });
+
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('INVALID_CHANNEL');
+    });
+
+    it('should return INVALID_CHANNEL for a planned but unregistered channel', async () => {
+      const res = await postSend({
+        channel: 'sms',
+        templateId: 'contact-form',
+        to: 'test@example.com',
+        data: {},
+      });
+
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('INVALID_CHANNEL');
+    });
+
+    it('should return VALIDATION_ERROR for a missing or non-string channel', async () => {
+      const base = { templateId: 'contact-form', to: 'test@example.com', data: {} };
+
+      const missing = await readJson<ErrorResponse>(await postSend(base));
+      expect(missing.code).toBe('VALIDATION_ERROR');
+      expect(missing.error).toContain('channel');
+
+      const numeric = await readJson<ErrorResponse>(await postSend({ ...base, channel: 42 }));
+      expect(numeric.code).toBe('VALIDATION_ERROR');
     });
 
     it('should reject missing templateId', async () => {
@@ -401,6 +445,84 @@ describe('Send Endpoint', () => {
         expect(fetchMock).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('Idempotency-Key header', () => {
+    const originalFetch = global.fetch;
+    let fetchMock: FetchMock;
+
+    beforeEach(() => {
+      fetchMock = installFetchMock();
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    const sendWithKey = (apiKey: string, idempotencyKey?: string) =>
+      app.fetch(
+        new Request('http://localhost:3000/api/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+            ...(idempotencyKey !== undefined && { 'Idempotency-Key': idempotencyKey }),
+          },
+          body: JSON.stringify({
+            channel: 'email',
+            templateId: 'contact-form',
+            to: 'test@example.com',
+            data: { name: 'Test', email: 'test@example.com', message: 'Hello' },
+          }),
+        })
+      );
+
+    const sentIdempotencyKey = (call: number): string | null => {
+      const init = fetchMock.mock.calls[call]?.[1];
+      return new Headers(init?.headers).get('Idempotency-Key');
+    };
+
+    it('should forward a valid key to Resend, scoped to the API key', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_1'));
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_2'));
+
+      const first = await sendWithKey('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1', 'order-123');
+      const second = await sendWithKey('KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3', 'order-123');
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      const firstKey = sentIdempotencyKey(0);
+      const secondKey = sentIdempotencyKey(1);
+      // Scoped by the public app name only; the secret part of the API key is not sent
+      expect(firstKey).toBe('KEY_TEST:order-123');
+      expect(secondKey).toBe('KEY_APP2:order-123');
+      // Two apps using the same client key must not collide at Resend
+      expect(firstKey).not.toBe(secondKey);
+    });
+
+    it('should send no Idempotency-Key when the header is absent', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_1'));
+
+      const res = await sendWithKey('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
+
+      expect(res.status).toBe(200);
+      expect(sentIdempotencyKey(0)).toBeNull();
+    });
+
+    it.each([
+      ['empty', ''],
+      ['too long', 'a'.repeat(201)],
+      ['disallowed characters', 'key with spaces'],
+      ['non-ASCII', 'clé'],
+    ])('should reject a %s key with 400 and not call Resend', async (_label, key) => {
+      const res = await sendWithKey('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1', key);
+
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.error).toContain('Idempotency-Key');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('successful send', () => {

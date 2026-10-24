@@ -53,7 +53,7 @@ describe('CORS Protection Middleware', () => {
       expect(res.headers.get('access-control-allow-credentials')).toBe('true');
       expect(res.headers.get('access-control-allow-methods')).toBe('GET, POST, OPTIONS');
       expect(res.headers.get('access-control-allow-headers')).toBe(
-        'Content-Type, X-API-Key, X-Source-Origin'
+        'Content-Type, X-API-Key, X-Source-Origin, Idempotency-Key'
       );
       expect(res.headers.get('access-control-max-age')).toBe('86400');
     });

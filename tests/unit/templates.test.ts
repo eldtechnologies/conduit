@@ -194,6 +194,52 @@ describe('Contact Form Template', () => {
       expect(subject).not.toContain('<script>');
       expect(subject).toContain('Question');
     });
+
+    it('should keep ampersands and angle brackets as typed (no HTML entities)', () => {
+      const base = { email: 'john@example.com', message: 'Hello' };
+
+      expect(contactFormTemplate.subject({ ...base, name: 'John', subject: 'Q&A' })).toBe('Q&A');
+      expect(contactFormTemplate.subject({ ...base, name: 'R&D Team' })).toBe(
+        'Contact Form: R&D Team'
+      );
+      expect(
+        contactFormTemplate.subject({ ...base, name: 'John', subject: 'Is a < b & 5 > 4?' })
+      ).toBe('Is a < b & 5 > 4?');
+    });
+
+    it('should decode entities typed by the user', () => {
+      const data = {
+        name: 'John',
+        email: 'john@example.com',
+        message: 'Hello',
+        subject: 'Tom &amp; Jerry',
+      };
+
+      expect(contactFormTemplate.subject(data)).toBe('Tom & Jerry');
+    });
+
+    it('should strip CR/LF so the subject stays on one line', () => {
+      const data = {
+        name: 'John',
+        email: 'john@example.com',
+        message: 'Hello',
+        subject: 'Hello\r\nBcc: victim@example.com',
+      };
+
+      const subject = contactFormTemplate.subject(data);
+      expect(subject).not.toMatch(/[\r\n]/);
+      expect(subject).toBe('Hello Bcc: victim@example.com');
+    });
+
+    it('should strip CR/LF from a name-derived subject', () => {
+      const subject = contactFormTemplate.subject({
+        name: 'John\nDoe',
+        email: 'john@example.com',
+        message: 'Hello',
+      });
+
+      expect(subject).toBe('Contact Form: John Doe');
+    });
   });
 
   describe('html', () => {
@@ -237,6 +283,32 @@ describe('Contact Form Template', () => {
 
       expect(html).toContain('Line 1<br>Line 2<br>Line 3');
     });
+
+    it('should escape attribute injection attempts', () => {
+      const html = contactFormTemplate.html({
+        name: '"><svg onload=alert(1)>',
+        email: 'test@example.com',
+        message: "' onmouseover='alert(1)",
+      });
+
+      expect(html).not.toContain('"><svg');
+      expect(html).not.toContain('<svg');
+      expect(html).not.toContain("' onmouseover='");
+      expect(html).toContain('&quot;&gt;&lt;svg onload=alert(1)&gt;');
+      expect(html).toContain('&#x27; onmouseover=&#x27;alert(1)');
+    });
+
+    it('should escape ampersands and entities in the HTML body', () => {
+      const html = contactFormTemplate.html({
+        name: 'R&D',
+        email: 'test@example.com',
+        message: 'a < b &amp; c',
+      });
+
+      expect(html).toContain('R&amp;D');
+      expect(html).toContain('a &lt; b &amp;amp; c');
+      expect(html).not.toContain('a < b');
+    });
   });
 
   describe('text', () => {
@@ -268,6 +340,30 @@ describe('Contact Form Template', () => {
       expect(text).not.toContain('<script>');
       expect(text).toContain('John');
       expect(text).toContain('Hello');
+    });
+
+    it('should preserve special characters verbatim (no HTML entities)', () => {
+      const text = contactFormTemplate.text({
+        name: 'R&D Team',
+        email: 'test@example.com',
+        message: 'a < b & c\nTom & Jerry <3 "quotes" 5 > 4',
+      });
+
+      expect(text).toContain('From: R&D Team');
+      expect(text).toContain('a < b & c\nTom & Jerry <3 "quotes" 5 > 4');
+      expect(text).not.toMatch(/&(amp|lt|gt|quot);/);
+    });
+
+    it('should drop script and event-handler markup from plain text', () => {
+      const text = contactFormTemplate.text({
+        name: 'Jane',
+        email: 'test@example.com',
+        message: '<img src=x onerror=alert(1)>Hi<script>steal()</script>',
+      });
+
+      expect(text).toContain('Hi');
+      expect(text).not.toContain('onerror');
+      expect(text).not.toContain('steal()');
     });
   });
 
