@@ -14,6 +14,8 @@ process.env.LOG_LEVEL = 'silent';
 process.env.RESEND_API_KEY = 're_test_key_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 process.env.API_KEY_TEST = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 process.env.API_KEY_APP2 = 'KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3';
+// A configured key that is also revoked: auth must reject it as revoked, not as unknown
+process.env.API_KEY_REVOKED = 'KEY_REVOKED_1234567890abcdef1234567890abcdef';
 process.env.REVOKED_KEYS = 'KEY_REVOKED_1234567890abcdef1234567890abcdef';
 
 // Recipient whitelisting test keys (v1.1.0)
