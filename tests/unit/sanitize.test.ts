@@ -13,9 +13,44 @@ import {
   sanitizeUrl,
   escapeHtml,
   truncate,
+  toPlainText,
+  toHeaderText,
 } from '../../src/utils/sanitize.js';
 
 describe('Sanitization', () => {
+  describe('toPlainText', () => {
+    it('should strip tags and drop script contents', () => {
+      expect(toPlainText('John <b>Doe</b>')).toBe('John Doe');
+      expect(toPlainText('<script>alert("XSS")</script>Hi')).toBe('Hi');
+      expect(toPlainText('<img src=x onerror=alert(1)>x')).toBe('x');
+    });
+
+    it('should return special characters as typed, not as entities', () => {
+      expect(toPlainText('R&D')).toBe('R&D');
+      expect(toPlainText('Q&A')).toBe('Q&A');
+      expect(toPlainText('a < b & c')).toBe('a < b & c');
+      expect(toPlainText('Tom & Jerry <3 "quotes" 5 > 4')).toBe('Tom & Jerry <3 "quotes" 5 > 4');
+    });
+
+    it('should decode entities', () => {
+      expect(toPlainText('&lt;b&gt; &amp; &quot;x&quot;')).toBe('<b> & "x"');
+    });
+
+    it('should keep newlines', () => {
+      expect(toPlainText('line1\nline2')).toBe('line1\nline2');
+    });
+  });
+
+  describe('toHeaderText', () => {
+    it('should replace CR/LF with a space and trim', () => {
+      expect(toHeaderText(' Q&A\r\nBcc: x@y.z\n')).toBe('Q&A Bcc: x@y.z');
+    });
+
+    it('should strip tags and decode entities', () => {
+      expect(toHeaderText('<b>R&amp;D</b>')).toBe('R&D');
+    });
+  });
+
   describe('sanitizeHtml', () => {
     it('should strip all HTML tags', () => {
       expect(sanitizeHtml('<b>Hello</b>')).toBe('Hello');
