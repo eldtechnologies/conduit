@@ -136,7 +136,12 @@ const envSchema = z.object({
       message: 'LLM_TIMEOUT must be a positive number',
     }),
 
-  LLM_FALLBACK_MODE: z.enum(['allow', 'block']).default('allow'),
+  // Case-insensitive like per-key API_KEY_*_LLM_FAIL_MODE
+  LLM_FALLBACK_MODE: z
+    .string()
+    .default('allow')
+    .transform((val) => val.trim().toLowerCase())
+    .pipe(z.enum(['allow', 'block'], { error: 'LLM_FALLBACK_MODE must be "allow" or "block"' })),
 
   LLM_ENDPOINT: z.string().optional().or(z.literal('')),
 });

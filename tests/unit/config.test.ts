@@ -289,6 +289,23 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       expect(cfg.llmFilterRules.get(MYSITE_KEY)?.failMode).toBe('allow');
     });
 
+    it.each(['BLOCK', ' Block ', 'block'])(
+      'parses LLM_FALLBACK_MODE %j case-insensitively',
+      (mode) => {
+        const cfg = loadConfig(
+          baseEnv({ LLM_FALLBACK_MODE: mode, API_KEY_MYSITE_LLM_ENABLED: 'true' })
+        );
+        expect(cfg.llm).toBeUndefined();
+        expect(cfg.llmFilterRules.get(MYSITE_KEY)?.failMode).toBe('block');
+      }
+    );
+
+    it('fails startup on an invalid LLM_FALLBACK_MODE', () => {
+      expect(() => loadConfig(baseEnv({ LLM_FALLBACK_MODE: 'blok' }))).toThrow(
+        /LLM_FALLBACK_MODE must be .*allow.* or .*block/
+      );
+    });
+
     it('fails startup when the removed LLM sender whitelist is configured', () => {
       let message = '';
       try {
