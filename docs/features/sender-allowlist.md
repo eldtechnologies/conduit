@@ -1,6 +1,6 @@
 # Sender Allowlist
 
-**Status:** ✅ Implemented (unreleased, on `main` after v1.3.1)
+**Status:** ✅ Implemented (v2.0.0-rc.1)
 **Priority:** 🔴 CRITICAL
 **Security Value:** Stops a leaked frontend key from sending mail as arbitrary addresses on your verified domain
 

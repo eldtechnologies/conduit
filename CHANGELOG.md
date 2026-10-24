@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0-rc.1] — 2026-10-24
+
+**Security hardening release.** A full security review of Conduit found ways to send mail as any configured frontend, or with spoofed senders, and to bypass content filtering. This release closes them:
+
+- Misconfigured or undocumented `API_KEY_*` env vars could become valid API keys. The getting-started guide's own LLM example created the key `true`.
+- Clients could send mail from any address on the verified domain.
+- The LLM content filter failed open when the provider failed, even for keys set to `block`, and could be bypassed with a spoofable sender whitelist.
+- Rate limiting ran after paid LLM calls.
+- Chunked request bodies skipped the 50KB body limit.
+
+Most fixes reject input or configuration that used to be accepted, which is why this is a major version. **Operators must review their environment before upgrading:** startup now fails on invalid configuration rather than running in an unsafe state. See [docs/upgrading-to-2.0.md](docs/upgrading-to-2.0.md) for a checklist.
+
+This is a release candidate. It has been verified with the test suite (540 tests), CI and Docker smoke tests using fake provider keys, but not yet against live Resend or LLM providers. Deploy it to staging before 2.0.0.
+
 ### Security
 
 - **Strict API key loading** ([#130](https://github.com/eldtechnologies/conduit/pull/130)). An `API_KEY_*` env var is now either an API key `API_KEY_<NAME>` whose value matches `KEY_<NAME>_<12+ alphanumeric chars>`, or a recognised per-key config var (`_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`) for a configured key. Anything else fails startup. Before, any unrecognised `API_KEY_*` value (e.g. `API_KEY_MYSITE_SPAM_FILTER_ENABLED=true`) was accepted as a valid key with no recipient whitelist or LLM rules, so `X-API-Key: true` worked. Error messages name the variable and never print its value.
@@ -251,6 +265,9 @@ Updated Hono 4.10.3 → 4.12.2, resolving 6 known CVEs (JWT/JWK algorithm confus
 
 Initial release. (No release notes published; superseded by v1.0.1.)
 
+[Unreleased]: https://github.com/eldtechnologies/conduit/compare/v2.0.0-rc.1...HEAD
+[2.0.0-rc.1]: https://github.com/eldtechnologies/conduit/compare/v1.3.1...v2.0.0-rc.1
+[1.3.1]: https://github.com/eldtechnologies/conduit/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/eldtechnologies/conduit/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/eldtechnologies/conduit/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/eldtechnologies/conduit/compare/v1.2.0...v1.2.1

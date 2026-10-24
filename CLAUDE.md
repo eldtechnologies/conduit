@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Conduit** is a lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.
 
-**Current Status**: Phase 1 (email) complete and production ready - v1.3.1 (package.json) plus unreleased changes on `main`. Implemented: email via Resend, recipient whitelisting (v1.1.0), optional LLM spam filtering (v1.2.0), per-key sender allowlist. SMS, push and webhook channels are planned and not implemented.
+**Current Status**: Phase 1 (email) complete and production ready - v2.0.0-rc.1 (security hardening release candidate). Implemented: email via Resend, recipient whitelisting (v1.1.0), optional LLM spam filtering (v1.2.0), per-key sender allowlist. SMS, push and webhook channels are planned and not implemented.
 
 **Tech Stack**:
 - Runtime: Node.js 20.19+ (Docker image and CI use Node 22)
