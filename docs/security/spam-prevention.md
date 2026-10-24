@@ -8,6 +8,8 @@
 > using Anthropic Claude or OpenAI GPT to detect spam, abuse, phishing, and prompt injection.
 > See Tier 3 below for configuration details.
 
+> **What Conduit implements today**: recipient whitelisting (`API_KEY_*_RECIPIENTS`, `_RECIPIENT_DOMAINS`), the sender allowlist (`API_KEY_*_FROM_ADDRESSES`), per-API-key rate limiting (`RATE_LIMIT_*`) and LLM filtering (`LLM_*`, `API_KEY_*_LLM_*`). Honeypot fields, form timing checks, keyword filters, CAPTCHA, IP/domain rate limiting and behavioral analysis are **not implemented in Conduit**: do them in your frontend, or treat the server-side designs in [advanced-protections.md](./advanced-protections.md) as proposals. `CAPTCHA_ENABLED`, `TURNSTILE_SECRET_KEY`, `CONTENT_MODERATION_*` and `OLLAMA_*` are not read by Conduit.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -123,7 +125,7 @@ export function ContactForm() {
 
 #### Backend (Conduit)
 
-Send honeypot value to Conduit:
+Conduit does not check honeypot fields yet. The `contact-form` template schema drops unknown `data` fields, so a `honeypot` value is accepted but ignored. Until server-side support exists, check the honeypot in your frontend and do not send the request when it is filled. The request below shows what a future server-side check would receive:
 
 ```typescript
 await fetch('https://conduit.yourdomain.com/api/send', {
@@ -146,7 +148,7 @@ await fetch('https://conduit.yourdomain.com/api/send', {
 });
 ```
 
-**Conduit Configuration**: See [advanced-protections.md](./advanced-protections.md#2-honeypot-fields) for backend middleware.
+**Conduit Configuration**: See [advanced-protections.md](./advanced-protections.md#2-honeypot-fields) for a proposed backend middleware (not implemented).
 
 ---
 
@@ -233,7 +235,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 };
 ```
 
-**Backend**: See [advanced-protections.md](./advanced-protections.md#6-content-filtering) for server-side implementation.
+**Backend**: See [advanced-protections.md](./advanced-protections.md#6-content-filtering) for a proposed server-side implementation (not implemented). For server-side content checks today, use [LLM filtering](#setup-llm-content-filtering-2-3-hours).
 
 ---
 
@@ -282,10 +284,11 @@ Choose your protection tier based on spam volume and risk tolerance.
 
 **Includes**:
 - Everything in Tier 1, plus:
-- CAPTCHA (Cloudflare Turnstile)
-- Recipient whitelisting
-- IP-based rate limiting
-- Behavioral analysis
+- CAPTCHA (Cloudflare Turnstile) (not implemented in Conduit)
+- Recipient whitelisting (implemented)
+- Sender allowlist (implemented)
+- IP-based rate limiting (not implemented)
+- Behavioral analysis (not implemented)
 
 #### Setup: Add CAPTCHA (30 min)
 
@@ -364,9 +367,9 @@ export function ContactForm() {
 
 **3. Backend Configuration** (15 min):
 
-See [advanced-protections.md](./advanced-protections.md#5-captcha-integration) for Conduit middleware setup.
+Conduit does not verify CAPTCHA tokens yet. See [advanced-protections.md](./advanced-protections.md#5-captcha-integration) for a proposed middleware. Note that Conduit's CORS policy only allows the `Content-Type`, `X-API-Key`, `X-Source-Origin` and `Idempotency-Key` request headers, so a browser request with an `X-Turnstile-Token` header fails the CORS preflight until that header is added in `src/middleware/cors.ts`.
 
-**Environment variables**:
+**Environment variables** (proposed, not read by Conduit):
 
 ```bash
 CAPTCHA_ENABLED=true
@@ -380,6 +383,10 @@ TURNSTILE_SECRET_KEY=0x...
 **Configuration**:
 
 ```bash
+# The keys these settings belong to must be configured, otherwise startup fails
+API_KEY_WEBSITE=KEY_WEBSITE_657582934edbf009f73afb38c38111f6
+API_KEY_NEWSLETTER=KEY_NEWSLETTER_d2b7ebd82532a2b55fe86144055edf8d
+
 # Allow only specific recipients
 API_KEY_WEBSITE_RECIPIENTS=support@company.com,admin@company.com
 
@@ -391,7 +398,7 @@ API_KEY_NEWSLETTER_RECIPIENTS=newsletter@company.com
 API_KEY_NEWSLETTER_RECIPIENT_DOMAINS=company.com,subsidiary.com
 ```
 
-See [recipient-whitelisting.md](../features/recipient-whitelisting.md) for complete setup guide.
+Non-whitelisted recipients get 403 `RECIPIENT_NOT_ALLOWED` before rate limiting, so they do not use up the key's rate limit. See [recipient-whitelisting.md](../features/recipient-whitelisting.md) for complete setup guide, and [sender-allowlist.md](../features/sender-allowlist.md) to restrict which `from` addresses a key may use.
 
 ---
 
@@ -414,7 +421,7 @@ See [recipient-whitelisting.md](../features/recipient-whitelisting.md) for compl
 
 **Status**: ✅ **Available in v1.2.0**
 
-**How it works**: Conduit analyzes message content using LLM APIs (Claude, OpenAI) as middleware, before sending emails. Frontend apps get spam protection without exposing LLM API keys.
+**How it works**: Conduit analyzes message content using an LLM API (Anthropic Claude or OpenAI; no other providers) before sending emails. It runs after rate limiting and request validation, and only the validated template fields are sent to the LLM. Frontend apps get spam protection without exposing LLM API keys. Full reference: [llm-spam-filtering.md](../features/llm-spam-filtering.md#current-behaviour).
 
 **Configuration**:
 
@@ -424,16 +431,26 @@ See [recipient-whitelisting.md](../features/recipient-whitelisting.md) for compl
 # .env - Conduit server configuration (v1.2.0)
 LLM_PROVIDER=anthropic
 LLM_API_KEY=sk-ant-api...  # Kept secure on Conduit server
-LLM_MODEL=claude-haiku-4-5-20251001  # Fast, cheap, accurate
+# Fast, cheap, accurate
+LLM_MODEL=claude-haiku-4-5-20251001
 LLM_TIMEOUT=5000
-LLM_FALLBACK_MODE=allow  # allow | block - what to do if LLM fails
+# allow | block (case-insensitive) - default for keys without _LLM_FAIL_MODE
+LLM_FALLBACK_MODE=allow
+
+# The key the rules belong to (must be configured)
+API_KEY_MYSITE=KEY_MYSITE_50c1c716a72d6637bb4bfa4e0d0c2269
 
 # Per-API-key LLM rules
 API_KEY_MYSITE_LLM_ENABLED=true
 API_KEY_MYSITE_LLM_RULES=spam,abuse,profanity,promptInjection
+# block if the LLM rejects with confidence >= 0.7
 API_KEY_MYSITE_LLM_THRESHOLD=0.7
+# fail closed: 503 if the LLM fails or returns bad output
+API_KEY_MYSITE_LLM_FAIL_MODE=block
 API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000
 ```
+
+If a key sets `_LLM_ENABLED=true` but `LLM_PROVIDER`, `LLM_API_KEY` or `LLM_MODEL` is missing, Conduit refuses to start.
 
 **Option B: OpenAI GPT - ~$5/month**
 
@@ -446,12 +463,13 @@ LLM_TIMEOUT=5000
 LLM_FALLBACK_MODE=allow
 
 # Per-API-key configuration
+API_KEY_MYSITE=KEY_MYSITE_50c1c716a72d6637bb4bfa4e0d0c2269
 API_KEY_MYSITE_LLM_ENABLED=true
 API_KEY_MYSITE_LLM_RULES=spam,abuse,phishing
 API_KEY_MYSITE_LLM_THRESHOLD=0.7
 ```
 
-> **No frontend changes needed**: Conduit handles LLM analysis transparently. Frontend apps send the same requests as before, Conduit analyzes content before forwarding to email provider.
+> **No frontend changes needed**: Conduit handles LLM analysis transparently. Frontend apps send the same requests as before, Conduit analyzes content before forwarding to email provider. Blocked messages get 403 `CONTENT_BLOCKED_*`; in fail-closed mode, LLM failures get 503 `LLM_PROVIDER_ERROR` and an exhausted daily budget gets 503 `LLM_BUDGET_EXCEEDED` with a `Retry-After` header.
 
 ---
 
@@ -520,10 +538,12 @@ API_KEY_MYSITE_LLM_THRESHOLD=0.7
 
 ```bash
 # Backend (.env)
+# CAPTCHA (proposed, not read by Conduit)
 CAPTCHA_ENABLED=true
 TURNSTILE_SECRET_KEY=0x...
 
 # Recipient whitelisting (support team only)
+API_KEY_SUPPORT=KEY_SUPPORT_0d1191f66ec5dd8ff295b866dfdd1eee
 API_KEY_SUPPORT_RECIPIENTS=support@company.com,team@company.com
 API_KEY_SUPPORT_RECIPIENT_DOMAINS=company.com
 
@@ -549,13 +569,15 @@ RATE_LIMIT_PER_DAY=1000
 
 ```bash
 # Backend (.env)
+API_KEY_NEWSLETTER=KEY_NEWSLETTER_d2b7ebd82532a2b55fe86144055edf8d
+
 # Allow newsletter service email only
 API_KEY_NEWSLETTER_RECIPIENTS=newsletter@company.com
 
 # Allow multiple company domains
 API_KEY_NEWSLETTER_RECIPIENT_DOMAINS=company.com,subsidiary.com
 
-# Strict rate limits (prevent abuse)
+# Strict rate limits (prevent abuse) - these apply to every key on this instance
 RATE_LIMIT_PER_MINUTE=5
 RATE_LIMIT_PER_HOUR=50
 RATE_LIMIT_PER_DAY=200
@@ -577,17 +599,24 @@ RATE_LIMIT_PER_DAY=200
 
 ```bash
 # Backend (.env)
+API_KEY_ECOMMERCE=KEY_ECOMMERCE_78fc9f537e3c4a12009205792fedfb55
+
 # LLM content filtering (detect phishing attempts)
-CONTENT_MODERATION_ENABLED=true
-CONTENT_MODERATION_THRESHOLD=0.9  # Very strict
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-api...
+LLM_MODEL=claude-haiku-4-5-20251001
+API_KEY_ECOMMERCE_LLM_ENABLED=true
+API_KEY_ECOMMERCE_LLM_RULES=phishing,scam,spam
+# Strict: a lower threshold blocks more
+API_KEY_ECOMMERCE_LLM_THRESHOLD=0.5
+# Never send unfiltered
+API_KEY_ECOMMERCE_LLM_FAIL_MODE=block
 
 # Strict recipient whitelisting (customers only)
 API_KEY_ECOMMERCE_RECIPIENT_DOMAINS=customerdomain.com
 
 # Behavioral analysis (prevent rapid-fire abuse)
-# (Enabled by default in Tier 3)
+# (Not implemented in Conduit; per-key rate limiting is the only built-in protection)
 
 # High rate limits (legitimate e-commerce traffic)
 RATE_LIMIT_PER_MINUTE=50
@@ -595,7 +624,7 @@ RATE_LIMIT_PER_HOUR=500
 RATE_LIMIT_PER_DAY=5000
 ```
 
-**Cost**: $0/month (local LLM)
+**Cost**: LLM API usage (local LLMs such as Ollama are not supported yet)
 **Setup Time**: 2-4 hours
 **Spam Reduction**: 99.5%+
 
@@ -612,24 +641,26 @@ RATE_LIMIT_PER_DAY=5000
 ```bash
 # Backend (.env)
 # Customer 1 (startup)
-API_KEY_CUSTOMER1=KEY_CUSTOMER1_abc123
+API_KEY_CUSTOMER1=KEY_CUSTOMER1_5fa41634895d3934ade2522cdeacf52d
 API_KEY_CUSTOMER1_RECIPIENTS=support@customer1.com
 API_KEY_CUSTOMER1_RECIPIENT_DOMAINS=customer1.com
+API_KEY_CUSTOMER1_FROM_ADDRESSES=noreply@customer1.com
 
 # Customer 2 (enterprise)
-API_KEY_CUSTOMER2=KEY_CUSTOMER2_def456
+API_KEY_CUSTOMER2=KEY_CUSTOMER2_5f24bd274025397ab9399380441496b4
 API_KEY_CUSTOMER2_RECIPIENTS=admin@customer2.com,support@customer2.com
 API_KEY_CUSTOMER2_RECIPIENT_DOMAINS=customer2.com,subsidiary.customer2.com
+API_KEY_CUSTOMER2_FROM_ADDRESSES=noreply@customer2.com
 
-# Per-customer rate limits
-RATE_LIMIT_PER_MINUTE=10  # Default for all customers
+# Rate limits: the same limits apply to every key, each key has its own buckets
+RATE_LIMIT_PER_MINUTE=10
 RATE_LIMIT_PER_HOUR=100
 RATE_LIMIT_PER_DAY=500
 ```
 
 **Cost**: $0/month
 **Setup Time**: 15 minutes per customer
-**Protection**: Complete customer isolation, per-customer rate limits
+**Protection**: Per-customer recipients and senders, and separate rate-limit buckets per key (different limits per customer are not supported)
 
 ---
 
@@ -639,31 +670,41 @@ RATE_LIMIT_PER_DAY=500
 
 ```bash
 # .env - Maximum security configuration
+NODE_ENV=production
 
-# CAPTCHA (required for all submissions)
-CAPTCHA_ENABLED=true
-TURNSTILE_SECRET_KEY=0x...
+# CAPTCHA (proposed, not read by Conduit; verify in your frontend/backend)
+# CAPTCHA_ENABLED=true
+# TURNSTILE_SECRET_KEY=0x...
+
+API_KEY_MAIN=KEY_MAIN_b0c3e7c218c8548a5b0243b0cb8e2a4e
 
 # Content moderation (LLM filtering)
-CONTENT_MODERATION_ENABLED=true
-CONTENT_MODERATION_THRESHOLD=0.7  # Lower threshold = stricter
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-api...
+LLM_MODEL=claude-haiku-4-5-20251001
+# Fail closed by default
+LLM_FALLBACK_MODE=block
+API_KEY_MAIN_LLM_ENABLED=true
+# Lower threshold = stricter
+API_KEY_MAIN_LLM_THRESHOLD=0.5
 
 # Recipient whitelisting (REQUIRED)
 API_KEY_MAIN_RECIPIENTS=admin@company.com
 API_KEY_MAIN_RECIPIENT_DOMAINS=company.com
+
+# Sender allowlist (client `from` must be one of these)
+API_KEY_MAIN_FROM_ADDRESSES=noreply@company.com
 
 # Strict rate limits
 RATE_LIMIT_PER_MINUTE=5
 RATE_LIMIT_PER_HOUR=30
 RATE_LIMIT_PER_DAY=100
 
-# Security headers
+# HTTPS is always enforced with NODE_ENV=production; ENFORCE_HTTPS=true also enforces it elsewhere
 ENFORCE_HTTPS=true
 
 # Revoked keys (if API key compromised)
-REVOKED_KEYS=KEY_OLD_abc123,KEY_LEAKED_def456
+REVOKED_KEYS=KEY_OLD_647cfb9ac0dc1629d3075f5bf69816d1,KEY_LEAKED_1d61d3e7bd549055447da066db9e3c4d
 ```
 
 ---
@@ -672,21 +713,24 @@ REVOKED_KEYS=KEY_OLD_abc123,KEY_LEAKED_def456
 
 ```bash
 # .env - Balanced security and usability
+NODE_ENV=production
 
-# CAPTCHA (enabled)
-CAPTCHA_ENABLED=true
-TURNSTILE_SECRET_KEY=0x...
+# CAPTCHA (proposed, not read by Conduit)
+# CAPTCHA_ENABLED=true
+# TURNSTILE_SECRET_KEY=0x...
+
+API_KEY_WEBSITE=KEY_WEBSITE_657582934edbf009f73afb38c38111f6
 
 # Recipient whitelisting (recommended)
 API_KEY_WEBSITE_RECIPIENTS=support@company.com,sales@company.com
 API_KEY_WEBSITE_RECIPIENT_DOMAINS=company.com
 
-# Standard rate limits
+# Standard rate limits (these are the defaults)
 RATE_LIMIT_PER_MINUTE=10
 RATE_LIMIT_PER_HOUR=100
 RATE_LIMIT_PER_DAY=500
 
-# Security headers
+# HTTPS is always enforced with NODE_ENV=production
 ENFORCE_HTTPS=true
 ```
 
@@ -696,9 +740,9 @@ ENFORCE_HTTPS=true
 
 ```bash
 # .env - Development environment only
+NODE_ENV=development
 
-# No CAPTCHA (for testing)
-CAPTCHA_ENABLED=false
+API_KEY_DEV=KEY_DEV_55512356ef43d883be8d94dd80a9b69e
 
 # No recipient whitelisting (allow any email)
 # (Omit API_KEY_*_RECIPIENTS variables)
@@ -708,11 +752,11 @@ RATE_LIMIT_PER_MINUTE=100
 RATE_LIMIT_PER_HOUR=1000
 RATE_LIMIT_PER_DAY=10000
 
-# Disable HTTPS enforcement (localhost)
+# No HTTPS enforcement (localhost). Only works when NODE_ENV is not production
 ENFORCE_HTTPS=false
 
-# Low log level for debugging
-LOG_LEVEL=debug
+# LOG_LEVEL is read but does not change logging output yet
+# LOG_LEVEL=debug
 ```
 
 **⚠️ WARNING**: Never use this configuration in production!
@@ -722,6 +766,8 @@ LOG_LEVEL=debug
 ## Monitoring and Alerts
 
 ### Metrics to Track
+
+Conduit does not export metrics. Derive these from its logs (see [Logging Setup](#logging-setup)) in your log platform. CAPTCHA and honeypot metrics only exist if you implement those checks yourself.
 
 **1. Spam Detection Rate**:
 ```
@@ -753,62 +799,24 @@ rate_limit_exceeded / total_requests
 
 ### Logging Setup
 
-**Conduit** logs structured JSON by default. Example log entries:
+**Conduit** logs to stdout/stderr (outside `NODE_ENV=test`). Every request produces two structured JSON lines from the request logger; the API key is masked, and cookies and client IP headers are logged as `****`. Request bodies are not logged:
 
 ```json
-// Successful request
-{
-  "level": "info",
-  "timestamp": "2025-10-14T12:34:56.789Z",
-  "message": "Message sent successfully",
-  "apiKey": "KEY_WEBSITE_***",
-  "channel": "email",
-  "templateId": "contact-form",
-  "recipient": "support@company.com",
-  "captchaVerified": true,
-  "moderationScore": 0.15,
-  "processingTimeMs": 245
-}
+{"type":"request","requestId":"0f8c...","timestamp":"2025-10-14T12:34:56.544Z","method":"POST","path":"/api/send","headers":{"content-type":"application/json","x-api-key":"KEY_WEBSITE_****"}}
+{"type":"response","requestId":"0f8c...","timestamp":"2025-10-14T12:34:56.789Z","method":"POST","path":"/api/send","status":200,"duration":245,"apiKey":"KEY_WEBSITE_****"}
+```
 
-// Spam detected
-{
-  "level": "warn",
-  "timestamp": "2025-10-14T12:35:01.234Z",
-  "message": "Spam detected via content moderation",
-  "apiKey": "KEY_WEBSITE_***",
-  "templateId": "contact-form",
-  "moderationResult": {
-    "isSpam": true,
-    "confidence": 0.92,
-    "reason": "Spam keywords detected: viagra, casino",
-    "categories": ["spam", "keyword-match"]
-  }
-}
+Error codes are not logged; use the `status` of the response line (401 auth, 403 recipient or LLM block, 413 body too large, 429 rate limited, 502 email provider error, 503 LLM unavailable or over budget). CORS and HTTPS rejections (403) happen before the request logger and are not logged. Some rejections also log a plain-text warning:
 
-// Honeypot triggered
-{
-  "level": "warn",
-  "timestamp": "2025-10-14T12:35:15.567Z",
-  "message": "Honeypot triggered - bot detected",
-  "apiKey": "KEY_WEBSITE_***",
-  "templateId": "contact-form",
-  "honeypotField": "website",
-  "ip": "203.0.113.45",
-  "userAgent": "Mozilla/5.0 (compatible; Bot/1.0)"
-}
-
-// Rate limit exceeded
-{
-  "level": "warn",
-  "timestamp": "2025-10-14T12:35:30.890Z",
-  "message": "Rate limit exceeded",
-  "apiKey": "KEY_WEBSITE_***",
-  "limit": "per_minute",
-  "retryAfter": 45
-}
+```
+Content blocked by LLM filter: { categories: [ 'spam' ], confidence: 0.92, reasoning: '...' }
+Recipient not in whitelist: { recipient: 'user@***', whitelistEmails: 2, whitelistDomains: 1 }
+LLM filter error: { failMode: 'block', error: 'LLM request timed out after 5000ms' }
 ```
 
 ### Alert Rules
+
+The rules below assume you have built metrics from the logs above; Conduit does not provide them.
 
 **Critical Alerts** (immediate action):
 
@@ -868,21 +876,21 @@ rate_limit_exceeded / total_requests
 # Simple monitoring script for Conduit logs
 # Run with: ./scripts/monitor.sh
 
-LOG_FILE="/var/log/conduit/conduit.log"
+CONTAINER="conduit"
 ALERT_EMAIL="admin@company.com"
 CHECK_INTERVAL=300  # 5 minutes
 
 while true; do
-  # Count spam attempts in last 5 minutes
-  SPAM_COUNT=$(grep -c '"message":"Spam detected"' "$LOG_FILE" | tail -n 500)
+  # Count LLM-blocked messages in last 5 minutes
+  SPAM_COUNT=$(docker logs --since 5m "$CONTAINER" 2>&1 | grep -c 'Content blocked by LLM filter')
 
   if [ "$SPAM_COUNT" -gt 10 ]; then
     echo "ALERT: Spam spike detected ($SPAM_COUNT attempts in 5 min)" | \
       mail -s "[Conduit] Spam Spike Alert" "$ALERT_EMAIL"
   fi
 
-  # Count rate limit hits
-  RATE_LIMIT_COUNT=$(grep -c '"message":"Rate limit exceeded"' "$LOG_FILE" | tail -n 500)
+  # Count rate limit hits (429 responses)
+  RATE_LIMIT_COUNT=$(docker logs --since 5m "$CONTAINER" 2>&1 | grep '"type":"response"' | grep -c '"status":429')
 
   if [ "$RATE_LIMIT_COUNT" -gt 20 ]; then
     echo "ALERT: Excessive rate limiting ($RATE_LIMIT_COUNT hits in 5 min)" | \
@@ -901,15 +909,16 @@ done
 
 **Symptoms**:
 - Inbox flooded with spam messages
-- Logs show high "spam detected" rate
+- Logs show many `Content blocked by LLM filter` warnings (if LLM filtering is enabled)
 - CAPTCHA pass rate normal (spammers bypassing CAPTCHA)
 
 **Response**:
 
 1. **Immediate** (< 5 min):
    ```bash
-   # Enable stricter content moderation threshold
-   CONTENT_MODERATION_THRESHOLD=0.6  # Was 0.8
+   # Stricter LLM threshold for the affected key (lower = stricter)
+   # Was 0.7
+   API_KEY_WEBSITE_LLM_THRESHOLD=0.5
 
    # Restart Conduit to apply changes
    docker restart conduit
@@ -918,8 +927,10 @@ done
 2. **Short-term** (< 30 min):
    ```bash
    # Enable LLM filtering if not already active
-   CONTENT_MODERATION_ENABLED=true
-   OLLAMA_URL=http://localhost:11434
+   LLM_PROVIDER=anthropic
+   LLM_API_KEY=sk-ant-api...
+   LLM_MODEL=claude-haiku-4-5-20251001
+   API_KEY_WEBSITE_LLM_ENABLED=true
 
    # Reduce rate limits temporarily
    RATE_LIMIT_PER_MINUTE=5  # Was 10
@@ -928,9 +939,9 @@ done
 
 3. **Long-term** (< 1 day):
    - Review logs to identify attack patterns
-   - Update keyword blacklist with new spam terms
-   - Consider enabling IP-based rate limiting
-   - If attack continues, enable domain-based rate limiting
+   - Update your frontend keyword blacklist with new spam terms
+   - Restrict recipients with `API_KEY_*_RECIPIENTS` if not already done
+   - IP-based and domain-based rate limiting are not implemented in Conduit; use your reverse proxy or WAF for these
 
 ---
 
@@ -945,10 +956,10 @@ done
 
 1. **Immediate** (< 1 min):
    ```bash
-   # Revoke compromised key
-   REVOKED_KEYS=KEY_LEAKED_abc123
+   # Revoke compromised key (requests with it get 401 "API key has been revoked")
+   REVOKED_KEYS=KEY_LEAKED_1d61d3e7bd549055447da066db9e3c4d
 
-   # Restart Conduit
+   # Restart Conduit (configuration is loaded at startup)
    docker restart conduit
    ```
 
@@ -957,13 +968,17 @@ done
    # Generate new API key
    npm run generate-key -- WEBSITE
 
-   # Update frontend to use new key
-   NEXT_PUBLIC_CONDUIT_API_KEY=KEY_WEBSITE_xyz789
+   # Configure it in Conduit and update the frontend to use it
+   API_KEY_WEBSITE=KEY_WEBSITE_<new-random-suffix>   # paste the generated key
+   NEXT_PUBLIC_CONDUIT_API_KEY=KEY_WEBSITE_<new-random-suffix>
 
-   # Enable recipient whitelisting (if not already)
+   # Enable recipient whitelisting and a sender allowlist (if not already)
    API_KEY_WEBSITE_RECIPIENTS=support@company.com
    API_KEY_WEBSITE_RECIPIENT_DOMAINS=company.com
+   API_KEY_WEBSITE_FROM_ADDRESSES=noreply@company.com
    ```
+
+   `KEY_WEBSITE_<new-random-suffix>` is a placeholder: left as is, it fails startup.
 
 3. **Long-term** (< 1 day):
    - Investigate how key was leaked (logs, source control, client-side exposure)
@@ -977,7 +992,7 @@ done
 
 **Symptoms**:
 - Resend returns 429 (Too Many Requests)
-- Conduit logs show "Provider error: rate limit"
+- Conduit returns 502 `PROVIDER_ERROR` ("Resend API error: ...") and logs `"status":502` response lines
 - Legitimate users can't send messages
 
 **Response**:
@@ -995,12 +1010,13 @@ done
 2. **Short-term** (< 1 hour):
    ```bash
    # If quota exceeded due to spam, enable stricter protections
-   CAPTCHA_ENABLED=true
-   CONTENT_MODERATION_ENABLED=true
-   CONTENT_MODERATION_THRESHOLD=0.7
+   API_KEY_WEBSITE_RECIPIENTS=support@company.com
+   # needs LLM_PROVIDER, LLM_API_KEY, LLM_MODEL
+   API_KEY_WEBSITE_LLM_ENABLED=true
+   API_KEY_WEBSITE_LLM_THRESHOLD=0.7
 
    # Review logs for spam patterns
-   grep '"isSpam":true' /var/log/conduit/conduit.log | tail -n 100
+   docker logs conduit 2>&1 | grep 'Content blocked by LLM filter' | tail -n 100
    ```
 
 3. **Long-term** (< 1 day):
@@ -1011,6 +1027,8 @@ done
 ---
 
 ### Scenario 4: CAPTCHA Failure Spike
+
+Applies only if you have implemented CAPTCHA yourself; Conduit has no CAPTCHA support or `CAPTCHA_ENABLED` setting.
 
 **Symptoms**:
 - High CAPTCHA failure rate (> 20%)
@@ -1071,7 +1089,7 @@ done
 
 **Tier 3** (Low Cost):
 - Everything in Tier 2: $0
-- Local LLM (Ollama): $0 (requires 4GB RAM)
+- Local LLM (Ollama): $0 (requires 4GB RAM; not supported by Conduit yet)
 - **OR** OpenAI API: ~$4.50/month (30k messages)
 - Domain rate limiting: $0
 - Reputation throttling: $0
@@ -1085,7 +1103,7 @@ done
 - Monitoring setup: 1-2 hours (one-time)
 
 **Infrastructure Costs**:
-- Local LLM (Ollama): Requires 4-8GB RAM (~$10-20/month on cloud VPS)
+- Local LLM (Ollama, not supported yet): Requires 4-8GB RAM (~$10-20/month on cloud VPS)
 - Redis (optional, for distributed rate limiting): ~$5-10/month
 
 **Total Cost of Ownership** (monthly):
@@ -1143,7 +1161,7 @@ For 1,000 messages/day (30k/month), expect $4.50-15/month depending on provider.
 
 ### Q: How do I test honeypot without triggering it?
 
-**A**: Honeypot is checked server-side. For testing:
+**A**: Conduit has no server-side honeypot check yet, so it cannot trigger in Conduit. If you add the [proposed middleware](./advanced-protections.md#2-honeypot-fields), test it like this:
 
 ```bash
 # Disable honeypot check temporarily
@@ -1161,7 +1179,7 @@ data: {
 
 ### Q: What if a legitimate user is rate limited?
 
-**A**: Conduit returns HTTP 429 with `retryAfter` seconds. Frontend should:
+**A**: Conduit returns HTTP 429 `RATE_LIMIT_EXCEEDED` with `retryAfter` seconds in the body and the same value in a `Retry-After` header. Rejected requests do not use up any tokens. Frontend should:
 
 ```typescript
 const response = await fetch('/api/send', { ... });
@@ -1179,11 +1197,11 @@ Consider increasing rate limits if legitimate users frequently hit limits.
 **A**: Check Conduit logs:
 
 ```bash
-# Count spam attempts in last hour
-grep '"isSpam":true' /var/log/conduit/conduit.log | grep $(date -u -d '1 hour ago' +%Y-%m-%dT%H) | wc -l
+# Count LLM-blocked messages in last hour
+SPAM_COUNT=$(docker logs --since 1h conduit 2>&1 | grep -c 'Content blocked by LLM filter')
 
-# Count total requests in last hour
-grep '"message":"Message sent successfully"' /var/log/conduit/conduit.log | grep $(date -u -d '1 hour ago' +%Y-%m-%dT%H) | wc -l
+# Count total send requests in last hour
+TOTAL_REQUESTS=$(docker logs --since 1h conduit 2>&1 | grep '"type":"response"' | grep -c '"path":"/api/send"')
 
 # Calculate spam rate
 echo "scale=2; $SPAM_COUNT / $TOTAL_REQUESTS * 100" | bc
@@ -1222,31 +1240,20 @@ Both are complementary and should be used together.
 
 **A**: This is a **false positive**. Options:
 
-1. **Lower threshold**:
+1. **Raise the threshold** (a message is blocked only if the LLM rejects it with confidence >= threshold):
    ```bash
-   CONTENT_MODERATION_THRESHOLD=0.9  # More lenient (was 0.8)
+   # More lenient (was 0.7)
+   API_KEY_WEBSITE_LLM_THRESHOLD=0.9
    ```
 
 2. **Review logs** to understand why LLM flagged it:
-   ```json
-   {
-     "moderationResult": {
-       "isSpam": true,
-       "confidence": 0.85,
-       "reason": "Contains promotional language",
-       "categories": ["promotional"]
-     }
-   }
+   ```
+   Content blocked by LLM filter: { categories: [ 'spam' ], confidence: 0.85, reasoning: 'Contains promotional language' }
    ```
 
-3. **Whitelist specific templates**:
-   ```typescript
-   // Skip moderation for certain templates
-   if (body.templateId === 'newsletter') {
-     await next();
-     return;
-   }
-   ```
+3. **Narrow the categories** checked for the key, e.g. `API_KEY_WEBSITE_LLM_RULES=abuse,phishing,scam`
+
+4. **Use a separate API key** without LLM filtering for trusted flows. Conduit has no per-template or per-sender bypass (the sender whitelist was removed because sender fields are spoofable).
 
 ### Q: How do I handle multi-language spam?
 
@@ -1267,7 +1274,7 @@ const SPAM_KEYWORDS = [
 ### Q: What's the performance impact of LLM filtering?
 
 **A**:
-- **Local LLM (Ollama)**: ~500ms average latency
+- **Local LLM (Ollama)**: ~500ms average latency (not supported by Conduit yet)
 - **OpenAI API**: ~200ms average latency
 - **Keyword pre-filter**: < 5ms
 
@@ -1278,12 +1285,11 @@ Total request time: ~250-600ms (still under 1 second target).
 **A**: Yes, check Conduit logs:
 
 ```bash
-# View all blocked spam in last 24 hours
-grep '"isSpam":true' /var/log/conduit/conduit.log | grep $(date -u +%Y-%m-%d)
-
-# View with reasons
-grep '"isSpam":true' /var/log/conduit/conduit.log | jq '.moderationResult.reason'
+# View all LLM-blocked messages in last 24 hours (categories, confidence, reasoning)
+docker logs --since 24h conduit 2>&1 | grep 'Content blocked by LLM filter'
 ```
+
+The message content itself is not logged.
 
 ---
 
@@ -1296,7 +1302,7 @@ grep '"isSpam":true' /var/log/conduit/conduit.log | jq '.moderationResult.reason
 - Recipient whitelisting (prevents stolen key abuse)
 
 ✅ **If spam persists**:
-- Tier 2: Add CAPTCHA + IP rate limiting (1-2 hours, $0)
+- Tier 2: Add CAPTCHA + IP rate limiting (1-2 hours, $0) (not implemented in Conduit; use your frontend, reverse proxy or WAF)
 
 ✅ **For high-security needs**:
 - Tier 3: Add LLM filtering (2-4 hours, $0-5/month)
@@ -1318,6 +1324,6 @@ grep '"isSpam":true' /var/log/conduit/conduit.log | jq '.moderationResult.reason
 - [Security Implementation](./implementation.md) - Phase 1 security features
 
 **Need Help?**
-- Review logs: `grep '"level":"warn"' /var/log/conduit/conduit.log`
+- Review logs: `docker logs conduit 2>&1 | grep -v '"type":"re'` (warnings and errors)
 - Test CAPTCHA: https://developers.cloudflare.com/turnstile/troubleshooting/
 - Contact support: support@eldtech.com
