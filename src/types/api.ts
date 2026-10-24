@@ -33,6 +33,9 @@ export enum ErrorCode {
   // Recipient validation (403) - v1.1.0
   RECIPIENT_NOT_ALLOWED = 'RECIPIENT_NOT_ALLOWED',
 
+  // Sender validation (400): client `from` not in the key's sender allowlist
+  SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
+
   // LLM spam filtering (403) - v1.2.0
   CONTENT_BLOCKED_SPAM = 'CONTENT_BLOCKED_SPAM',
   CONTENT_BLOCKED_ABUSE = 'CONTENT_BLOCKED_ABUSE',
@@ -80,6 +83,14 @@ export interface SendMessageRequest {
   // Email-specific fields (Phase 1)
   from?: EmailFrom;
   replyTo?: string;
+
+  /**
+   * The authenticated API key, set server-side by the send route (never taken from the
+   * client body: the request schema strips unknown fields). Channels use it to apply
+   * per-key policy such as the sender allowlist; when absent, the most restrictive
+   * policy applies.
+   */
+  apiKey?: string;
 
   // Future: SMS/Push/Webhook specific fields (Phase 2+)
 }

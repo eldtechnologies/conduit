@@ -13,6 +13,7 @@ import { authenticate } from '../../src/middleware/auth.js';
 import { rateLimit, clearAllRateLimits } from '../../src/middleware/rateLimit.js';
 import send from '../../src/routes/send.js';
 import { readJson, type ErrorResponse } from '../helpers/response.js';
+import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 describe('Send Endpoint', () => {
   let app: Hono;
@@ -301,6 +302,124 @@ describe('Send Endpoint', () => {
       const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
     });
+  });
+
+  describe('sender allowlist (API_KEY_*_FROM_ADDRESSES)', () => {
+    // SENDER key allowlist in tests/setup.ts: noreply@example.com (default), support@example.com
+    const SENDER_KEY = 'KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+    const NO_ALLOWLIST_KEY = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
+    const originalFetch = global.fetch;
+    let fetchMock: FetchMock;
+
+    beforeEach(() => {
+      fetchMock = installFetchMock();
+      fetchMock.mockImplementation(() => Promise.resolve(resendSuccessResponse('email_sender')));
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    function sendRequest(apiKey: string, extra: Record<string, unknown> = {}): Promise<Response> {
+      return Promise.resolve(
+        app.fetch(
+          new Request('http://localhost:3000/api/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+            body: JSON.stringify({
+              channel: 'email',
+              templateId: 'contact-form',
+              to: 'owner@example.com',
+              data: { name: 'Jane', email: 'jane@example.com', message: 'Hello' },
+              ...extra,
+            }),
+          })
+        )
+      );
+    }
+
+    function sentFrom(): unknown {
+      const body = fetchMock.mock.calls[0]?.[1]?.body;
+      if (typeof body !== 'string') throw new Error('Expected a JSON string request body');
+      return (JSON.parse(body) as Record<string, unknown>).from;
+    }
+
+    async function expectSenderNotAllowed(res: Response): Promise<void> {
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('SENDER_NOT_ALLOWED');
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+
+    it('sends from an allowlisted address', async () => {
+      const res = await sendRequest(SENDER_KEY, {
+        from: { email: 'support@example.com', name: 'Support' },
+      });
+
+      expect(res.status).toBe(200);
+      expect(sentFrom()).toBe('Support <support@example.com>');
+    });
+
+    it('matches the allowlist case-insensitively', async () => {
+      const res = await sendRequest(SENDER_KEY, { from: { email: 'NoReply@Example.COM' } });
+
+      expect(res.status).toBe(200);
+      expect(sentFrom()).toBe('Conduit <noreply@example.com>');
+    });
+
+    it('rejects a from address outside the allowlist', async () => {
+      await expectSenderNotAllowed(
+        await sendRequest(SENDER_KEY, { from: { email: 'ceo@example.com', name: 'CEO' } })
+      );
+    });
+
+    it('uses the first allowlisted address when from is omitted', async () => {
+      const res = await sendRequest(SENDER_KEY);
+
+      expect(res.status).toBe(200);
+      expect(sentFrom()).toBe('Conduit <noreply@example.com>');
+    });
+
+    it('rejects any from for a key without an allowlist', async () => {
+      await expectSenderNotAllowed(
+        await sendRequest(NO_ALLOWLIST_KEY, { from: { email: 'noreply@example.com' } })
+      );
+    });
+
+    it('keeps the default sender for a key without an allowlist when from is omitted', async () => {
+      const res = await sendRequest(NO_ALLOWLIST_KEY);
+
+      expect(res.status).toBe(200);
+      expect(sentFrom()).toBe('Conduit <onboarding@resend.dev>');
+    });
+
+    it('ignores an apiKey field in the body (cannot borrow another key allowlist)', async () => {
+      await expectSenderNotAllowed(
+        await sendRequest(NO_ALLOWLIST_KEY, {
+          apiKey: SENDER_KEY,
+          from: { email: 'noreply@example.com' },
+        })
+      );
+    });
+
+    it('still accepts a single replyTo address', async () => {
+      const res = await sendRequest(SENDER_KEY, { replyTo: 'jane@example.com' });
+
+      expect(res.status).toBe(200);
+      const body = fetchMock.mock.calls[0]?.[1]?.body;
+      expect(JSON.parse(body as string)).toMatchObject({ reply_to: 'jane@example.com' });
+    });
+
+    it.each([['a@example.com,b@example.com'], [['a@example.com', 'b@example.com']]])(
+      'rejects a replyTo that is not a single email (%j)',
+      async (replyTo) => {
+        const res = await sendRequest(SENDER_KEY, { replyTo });
+
+        expect(res.status).toBe(400);
+        expect(fetchMock).not.toHaveBeenCalled();
+      }
+    );
   });
 
   // Note: Actual email sending test is skipped to avoid using real API calls

@@ -11,6 +11,8 @@ import app from '../../src/index.js';
 import { readJson, type ErrorResponse } from '../helpers/response.js';
 
 const VALID_API_KEY = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
+// Key with a sender allowlist (a client `from` is rejected for keys without one)
+const SENDER_API_KEY = 'KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0';
 
 describe('Email Header Injection Prevention', () => {
   beforeEach(() => {
@@ -113,14 +115,14 @@ describe('Email Header Injection Prevention', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': VALID_API_KEY,
+          'X-API-Key': SENDER_API_KEY,
         },
         body: JSON.stringify({
           channel: 'email',
           templateId: 'contact-form',
           to: 'recipient@example.com',
           from: {
-            email: 'sender@example.com',
+            email: 'noreply@example.com', // allowlisted for SENDER_API_KEY in tests/setup.ts
             name: 'John Doe',
           },
           data: {
