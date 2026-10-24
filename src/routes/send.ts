@@ -25,14 +25,14 @@ const send = new Hono();
  */
 const sendRequestSchema = z.object({
   channel: z.enum(['email', 'sms', 'push', 'webhook'], {
-    errorMap: () => ({ message: 'Invalid channel. Supported channels: email' }),
+    error: 'Invalid channel. Supported channels: email',
   }),
   templateId: z.string().min(1, 'Template ID is required'),
   to: z
     .string()
     .email('Invalid recipient email address')
     .max(320, 'Email address too long'),
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
   from: z
     .object({
       email: z.string().email('Invalid from email'),
@@ -91,9 +91,9 @@ send.post('/send', async (c) => {
 
   const parseResult = sendRequestSchema.safeParse(body);
   if (!parseResult.success) {
-    const errors = parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
+    const errors = parseResult.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
     throw new ValidationError(`Invalid request: ${errors.join(', ')}`, ErrorCode.VALIDATION_ERROR, {
-      validationErrors: parseResult.error.errors,
+      validationErrors: parseResult.error.issues,
     });
   }
 
