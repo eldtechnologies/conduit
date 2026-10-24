@@ -5,9 +5,10 @@
  * Tests the complete flow from request to LLM analysis to response.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import app from '@/index.js';
 import { readJson } from '../helpers/response.js';
+import { installFetchMock, type FetchMock } from '../helpers/fetch.js';
 
 interface LlmAnalysis {
   allowed: boolean;
@@ -57,11 +58,10 @@ process.env.API_KEY_LOW_BUDGET_LLM_MAX_CALLS_PER_DAY = '2';
 process.env.API_KEY_LOW_BUDGET_LLM_FAIL_MODE = 'allow';
 
 describe('LLM Filtering Integration', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: FetchMock;
 
   beforeEach(() => {
-    fetchMock = vi.fn();
-    global.fetch = fetchMock;
+    fetchMock = installFetchMock();
   });
 
   describe('POST /api/send with LLM enabled', () => {

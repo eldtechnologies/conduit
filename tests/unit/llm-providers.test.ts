@@ -5,10 +5,11 @@
  * Uses mock fetch responses to test provider behavior.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AnthropicProvider } from '@/llm/providers/anthropic.js';
 import { OpenAIProvider } from '@/llm/providers/openai.js';
 import type { FilterRules } from '@/llm/providers/base.js';
+import { installFetchMock, type FetchMock } from '../helpers/fetch.js';
 
 // Default filter rules for testing
 const defaultRules: FilterRules = {
@@ -28,11 +29,10 @@ const defaultRules: FilterRules = {
 
 describe('AnthropicProvider', () => {
   let provider: AnthropicProvider;
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: FetchMock;
 
   beforeEach(() => {
-    fetchMock = vi.fn();
-    global.fetch = fetchMock;
+    fetchMock = installFetchMock();
 
     provider = new AnthropicProvider({
       provider: 'anthropic',
@@ -227,11 +227,10 @@ describe('AnthropicProvider', () => {
 
 describe('OpenAIProvider', () => {
   let provider: OpenAIProvider;
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: FetchMock;
 
   beforeEach(() => {
-    fetchMock = vi.fn();
-    global.fetch = fetchMock;
+    fetchMock = installFetchMock();
 
     provider = new OpenAIProvider({
       provider: 'openai',
