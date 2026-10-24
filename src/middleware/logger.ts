@@ -18,11 +18,14 @@ import { randomUUID } from 'crypto';
 /**
  * Mask an API key for logging
  * KEY_TEST_abcd1234... -> KEY_TEST_****
+ *
+ * Only the `KEY_<APP>` prefix of a well-formed key is kept. Anything else
+ * (other formats, `Bearer ...` values) is fully masked so no secret part leaks.
  */
 function maskApiKey(key: string): string {
   const parts = key.split('_');
-  if (parts.length >= 2) {
-    return `${parts[0]}_${parts[1]}_****`;
+  if (parts.length >= 3 && parts[0] === 'KEY' && parts[1]) {
+    return `KEY_${parts[1]}_****`;
   }
   return '****';
 }
@@ -124,6 +127,19 @@ function maskSensitiveData(obj: unknown): unknown {
 }
 
 /**
+ * Headers whose values are fully masked: session credentials and client IPs (PII)
+ */
+const MASKED_HEADERS = new Set([
+  'cookie',
+  'set-cookie',
+  'x-forwarded-for',
+  'x-real-ip',
+  'cf-connecting-ip',
+  'true-client-ip',
+  'forwarded',
+]);
+
+/**
  * Mask headers for logging
  */
 function maskHeaders(headers: Headers): Record<string, string> {
@@ -134,7 +150,11 @@ function maskHeaders(headers: Headers): Record<string, string> {
 
     if (lowerKey === 'x-api-key' || lowerKey === 'authorization') {
       masked[key] = maskApiKey(value);
-    } else if (lowerKey.includes('token') || lowerKey.includes('secret')) {
+    } else if (
+      MASKED_HEADERS.has(lowerKey) ||
+      lowerKey.includes('token') ||
+      lowerKey.includes('secret')
+    ) {
       masked[key] = '****';
     } else {
       masked[key] = value;
@@ -169,9 +189,9 @@ export async function logger(c: Context, next: Next) {
   const startTime = Date.now();
   const method = c.req.method;
   const path = c.req.path;
-  const apiKey = c.get('apiKey') as string | undefined;
 
-  // Log request start
+  // Log request start. The API key is not known yet (authentication runs
+  // after the logger); the X-API-Key header is masked in `headers`.
   console.info(
     JSON.stringify({
       type: 'request',
@@ -179,13 +199,15 @@ export async function logger(c: Context, next: Next) {
       timestamp: new Date().toISOString(),
       method,
       path,
-      apiKey: apiKey ? maskApiKey(apiKey) : undefined,
       headers: maskHeaders(c.req.raw.headers),
     })
   );
 
   // Execute request
   await next();
+
+  // Read after next(): set by the auth middleware further down the chain
+  const apiKey = c.get('apiKey') as string | undefined;
 
   // Calculate duration
   const duration = Date.now() - startTime;

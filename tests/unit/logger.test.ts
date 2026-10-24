@@ -5,14 +5,17 @@
  * CRITICAL: Verifies GDPR compliance by ensuring sensitive data is masked.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { Hono } from 'hono';
 import {
+  logger,
   maskApiKey,
   maskEmail,
   maskPhone,
   maskSensitiveData,
   maskHeaders,
 } from '../../src/middleware/logger.js';
+import type { AppVariables } from '../helpers/response.js';
 
 describe('Logger Middleware', () => {
   describe('maskApiKey', () => {
@@ -29,9 +32,12 @@ describe('Logger Middleware', () => {
       expect(maskApiKey('KEY_APP2_xyz789')).toBe('KEY_APP2_****');
     });
 
-    it('should handle malformed API keys', () => {
-      expect(maskApiKey('invalid_key')).toBe('invalid_key_****');
+    it('should fully mask malformed API keys', () => {
+      expect(maskApiKey('invalid_key')).toBe('****');
       expect(maskApiKey('short')).toBe('****');
+      expect(maskApiKey('secret_part_of_key')).toBe('****');
+      expect(maskApiKey('KEY_onlysecret')).toBe('****');
+      expect(maskApiKey('Bearer KEY_TEST_abcd1234')).toBe('****');
     });
   });
 
@@ -280,6 +286,31 @@ describe('Logger Middleware', () => {
       expect(masked['x-secret-key']).toBe('****');
     });
 
+    it('should mask cookie headers', () => {
+      const headers = new Headers({
+        Cookie: 'session=abc123',
+        'Set-Cookie': 'session=abc123; HttpOnly',
+      });
+
+      const masked = maskHeaders(headers);
+
+      expect(masked['cookie']).toBe('****');
+      expect(masked['set-cookie']).toBe('****');
+    });
+
+    it('should mask client IP headers', () => {
+      const headers = new Headers({
+        'X-Forwarded-For': '203.0.113.7, 10.0.0.1',
+        'X-Real-IP': '203.0.113.7',
+        'CF-Connecting-IP': '203.0.113.7',
+        Forwarded: 'for=203.0.113.7',
+      });
+
+      const masked = maskHeaders(headers);
+
+      expect(Object.values(masked)).toEqual(['****', '****', '****', '****']);
+    });
+
     it('should not mask safe headers', () => {
       const headers = new Headers({
         'Content-Type': 'application/json',
@@ -294,6 +325,66 @@ describe('Logger Middleware', () => {
       expect(masked['accept']).toBe('application/json');
       expect(masked['user-agent']).toBe('Test');
       expect(masked['origin']).toBe('http://localhost:8080');
+    });
+  });
+
+  describe('logger middleware', () => {
+    const originalLogging = process.env.ENABLE_LOGGING;
+
+    afterEach(() => {
+      process.env.ENABLE_LOGGING = originalLogging;
+      vi.restoreAllMocks();
+    });
+
+    function captureLogs() {
+      process.env.ENABLE_LOGGING = 'true';
+      const lines: Record<string, unknown>[] = [];
+      vi.spyOn(console, 'info').mockImplementation((line: unknown) => {
+        lines.push(JSON.parse(String(line)) as Record<string, unknown>);
+      });
+      return lines;
+    }
+
+    it('should log the masked API key set by later middleware on the response entry', async () => {
+      const lines = captureLogs();
+      const app = new Hono<{ Variables: AppVariables }>();
+      app.use('*', logger);
+      app.use('*', (c, next) => {
+        // Simulates authenticate, which runs after the logger
+        c.set('apiKey', 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
+        return next();
+      });
+      app.get('/test', (c) => c.text('OK'));
+
+      await app.fetch(
+        new Request('http://localhost/test', {
+          headers: {
+            'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+            Cookie: 'session=abc123',
+          },
+        })
+      );
+
+      const request = lines.find((l) => l.type === 'request');
+      const response = lines.find((l) => l.type === 'response');
+      expect(response?.apiKey).toBe('KEY_TEST_****');
+      expect(response?.status).toBe(200);
+      expect(request?.headers).toMatchObject({ 'x-api-key': 'KEY_TEST_****', cookie: '****' });
+      expect(JSON.stringify(lines)).not.toContain('a8f9d2c1');
+      expect(JSON.stringify(lines)).not.toContain('abc123');
+    });
+
+    it('should omit apiKey when no key was authenticated', async () => {
+      const lines = captureLogs();
+      const app = new Hono();
+      app.use('*', logger);
+      app.get('/test', (c) => c.text('OK'));
+
+      await app.fetch(new Request('http://localhost/test'));
+
+      const response = lines.find((l) => l.type === 'response');
+      expect(response).toBeDefined();
+      expect(response?.apiKey).toBeUndefined();
     });
   });
 });
