@@ -6,6 +6,8 @@
 
 > **✅ v1.2.0 UPDATE**: LLM spam filtering is now implemented and available!
 > Most other features in this document are still in planning. See the table below for current status.
+>
+> **Not implemented means not read**: the files (`src/services/`, `src/middleware/honeypot.ts`, `src/middleware/captcha.ts`, ...) and environment variables (`CONTENT_MODERATION_*`, `OLLAMA_*`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `CAPTCHA_ENABLED`, `TURNSTILE_SECRET_KEY`) in the planned sections do not exist in Conduit. Setting those variables has no effect. For the implemented LLM filter, see [llm-spam-filtering.md](../features/llm-spam-filtering.md).
 
 ## Implementation Status
 
@@ -17,13 +19,13 @@
 | CAPTCHA Integration | 📋 Documented | - | Frontend + Conduit | Implementation guide only |
 | **LLM Filtering (Claude)** | ✅ Implemented | v1.2.0 | Conduit middleware | Production ready |
 | **LLM Filtering (OpenAI)** | ✅ Implemented | v1.2.0 | Conduit middleware | Production ready |
-| Behavioral Analysis | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
-| IP Rate Limiting | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
-| Domain Rate Limiting | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
-| Reputation Throttling | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
-| Content Filtering | 🔬 Planned | v1.3.0 | Conduit middleware | Design complete |
-| LLM Filtering (Gemini) | 🔬 Planned | v1.3.0 | Conduit middleware | Not yet implemented |
-| LLM Filtering (Ollama) | 🔬 Planned | v1.3.0 | Conduit middleware | Not yet implemented |
+| Behavioral Analysis | 🔬 Planned | - | Conduit middleware | Design complete, not implemented |
+| IP Rate Limiting | 🔬 Planned | - | Conduit middleware | Design complete, not implemented |
+| Domain Rate Limiting | 🔬 Planned | - | Conduit middleware | Design complete, not implemented |
+| Reputation Throttling | 🔬 Planned | - | Conduit middleware | Design complete, not implemented |
+| Content Filtering | 🔬 Planned | - | Conduit middleware | Design complete, not implemented |
+| LLM Filtering (Gemini) | 🔬 Planned | - | Conduit middleware | Not implemented; `LLM_PROVIDER=gemini` fails startup |
+| LLM Filtering (Ollama) | 🔬 Planned | - | Conduit middleware | Not implemented; `LLM_PROVIDER=ollama` fails startup |
 
 **Legend**: ✅ Implemented | 📋 Documented (not coded) | 🔬 Planned (design only)
 
@@ -39,7 +41,6 @@
   - [4. Advanced Rate Limiting](#4-advanced-rate-limiting)
   - [5. CAPTCHA Integration](#5-captcha-integration)
   - [6. Content Filtering](#6-content-filtering)
-- [Implementation Guides](#implementation-guides)
 - [Testing](#testing)
 - [Performance Considerations](#performance-considerations)
 - [Cost Analysis](#cost-analysis)
@@ -71,6 +72,8 @@ Client Request
     ↓
 Message Sent
 ```
+
+This is the planned layering. In Conduit today only recipient whitelisting, rate limiting, the sender allowlist and LLM filtering exist, in this order: recipient validation → per-key rate limiting → request and sender validation → template validation → LLM filtering → send. Rate limiting runs **before** the LLM so that rate-limited requests never cause paid LLM calls.
 
 ### Risk Reduction Matrix
 
@@ -116,23 +119,26 @@ Message Sent
 - Detects phishing attempts and social engineering
 - Adapts to new spam patterns automatically
 - Works across languages
-- Per-API-key configuration (rules, threshold, budget)
-- Sender whitelisting to bypass analysis for trusted users
+- Per-API-key configuration (rules, threshold, fail mode, budget)
+- Fail-closed mode (`block`): provider errors and malformed model output give 503 instead of sending unfiltered
 - Daily budget limits to control costs
+- No sender whitelist bypass: it was removed because sender fields are client-supplied and spoofable, and `API_KEY_*_LLM_WHITELIST_SENDERS` now fails startup
 
-**Supported Providers** (v1.2.0):
-- ✅ Anthropic Claude (claude-haiku-4-5-20251001)
-- ✅ OpenAI GPT (gpt-4o-mini)
-- 🔬 Google Gemini (planned for v1.3.0)
-- 🔬 Ollama (local, planned for v1.3.0)
+**Supported Providers**:
+- ✅ Anthropic Claude (e.g. claude-haiku-4-5-20251001)
+- ✅ OpenAI GPT (e.g. gpt-4o-mini)
+- 🔬 Google Gemini (planned, not implemented)
+- 🔬 Ollama (local, planned, not implemented)
 
-**Implementation**: See [spam-prevention.md](./spam-prevention.md#tier-3-advanced-protection-low-cost-2-4-hours) for complete setup guide.
+**Implementation**: See [llm-spam-filtering.md](../features/llm-spam-filtering.md#current-behaviour) for the exact configuration and behaviour, and [spam-prevention.md](./spam-prevention.md#tier-3-advanced-protection-low-cost-2-4-hours) for a setup guide.
 
-**Legacy Documentation**: The following sections describe the planned architecture for local LLM support (Ollama). For production use in v1.2.0, see the spam-prevention guide above.
+**Legacy Documentation**: The following sections describe the planned architecture for local LLM support (Ollama). For production use, see the guides above.
 
 ---
 
 ### Legacy Planning Documentation (for reference only)
+
+> **⚠️ HYPOTHETICAL - NOT IMPLEMENTED**: Nothing from here to the end of section 1 exists in Conduit. There is no `src/services/contentModeration.ts` or `src/middleware/contentModeration.ts`, and Conduit does not read `CONTENT_MODERATION_ENABLED`, `CONTENT_MODERATION_THRESHOLD`, `OLLAMA_URL`, `OLLAMA_MODEL`, `OPENAI_API_KEY` or `OPENAI_MODEL`. Use `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` and `API_KEY_*_LLM_*` instead ([llm-spam-filtering.md](../features/llm-spam-filtering.md)).
 
 **Options for Future Enhancement**:
 
@@ -661,9 +667,10 @@ export const config: Config = {
 
 #### Step 5: Environment Configuration
 
-**File**: `.env` (add these lines)
+**File**: `.env` (hypothetical - these variables are not read by Conduit)
 
 ```bash
+# HYPOTHETICAL - not implemented, has no effect
 # Content Moderation (optional)
 CONTENT_MODERATION_ENABLED=true
 CONTENT_MODERATION_THRESHOLD=0.8  # Block if confidence > 80%
@@ -786,6 +793,8 @@ export class CachedModerator {
 ---
 
 ### 2. Honeypot Fields
+
+**Status**: Not implemented in Conduit (design only). Conduit has no honeypot check; a `honeypot` field sent in `data` is silently dropped by the template schema. Check the honeypot in your frontend instead.
 
 **Purpose**: Catch bots that auto-fill all form fields.
 
@@ -976,6 +985,8 @@ export function checkHoneypot(c: Context, next: Next) {
 
 ### 3. Behavioral Analysis
 
+**Status**: Not implemented (design only).
+
 **Purpose**: Detect automated/suspicious submission patterns.
 
 **Signals**:
@@ -1105,6 +1116,8 @@ export function ContactForm() {
 ---
 
 ### 4. Advanced Rate Limiting
+
+**Status**: Not implemented (design only). Conduit currently rate limits per API key only; see [implementation.md](implementation.md#10-ip-based-rate-limiting-secondary).
 
 #### IP-Based Rate Limiting
 
@@ -1353,6 +1366,8 @@ export async function reputationThrottling(c: Context, next: Next) {
 
 ### 5. CAPTCHA Integration
 
+**Status**: Not implemented (design only). Conduit does not read `CAPTCHA_ENABLED` or `TURNSTILE_SECRET_KEY`. Implementing this would also require adding `X-Turnstile-Token` to `Access-Control-Allow-Headers` in `src/middleware/cors.ts`; today browsers would block a request carrying that header at the CORS preflight.
+
 **Purpose**: Verify human users, block automated bots.
 
 **Recommendation**: Cloudflare Turnstile (free, privacy-friendly, invisible)
@@ -1539,6 +1554,8 @@ TURNSTILE_SECRET_KEY=0x...
 
 ### 6. Content Filtering
 
+**Status**: Not implemented (design only).
+
 #### Keyword Blacklist
 
 **File**: `src/utils/contentFilter.ts`
@@ -1721,6 +1738,8 @@ export async function filterContent(c: Context, next: Next) {
 
 ## Testing
 
+The tests below are for the planned features and do not exist. Tests for the implemented LLM filter are in `tests/unit/llm-*.test.ts` and `tests/integration/llm-filtering.test.ts`.
+
 ### Unit Tests
 
 **File**: `tests/security/contentModeration.test.ts`
@@ -1865,7 +1884,7 @@ describe('Advanced Protection Integration', () => {
 | Keyword filter | < 5ms | < 20ms | Regex matching |
 | Behavioral analysis | < 10ms | < 50ms | Timestamp checks |
 | CAPTCHA verify | < 200ms | < 500ms | External API call |
-| LLM (local) | < 500ms | < 2s | Ollama inference |
+| LLM (local) | < 500ms | < 2s | Ollama inference (not supported yet) |
 | LLM (API) | < 200ms | < 1s | OpenAI API |
 
 ### Optimization Strategies
@@ -1916,11 +1935,11 @@ setImmediate(() => {
 | CAPTCHA (Turnstile) | $0 | $0 | 1M free/month |
 | Behavioral Analysis | $0 | $0 | In-memory tracking |
 | Content Filter | $0 | $0 | Keyword matching |
-| **Local LLM (Ollama)** | $0 | $0 | Requires 4GB RAM |
+| **Local LLM (Ollama)** | $0 | $0 | Requires 4GB RAM (not supported yet) |
 | **OpenAI GPT-4o-mini** | $0 | ~$4.50 | $0.15/1000 input tokens |
-| **Hybrid (recommended)** | $0 | ~$0.60 | 90% handled by free tiers |
+| **Hybrid (recommended)** | $0 | ~$0.60 | 90% handled by free tiers (planned; needs Ollama and keyword filtering) |
 
-**Total Recommended Cost**: **$0-1/month** (hybrid approach)
+**Total Recommended Cost**: **$0-1/month** (hybrid approach, once implemented)
 
 ### Cost Reduction Strategies
 
@@ -1946,8 +1965,8 @@ setImmediate(() => {
   - [ ] Implement behavioral analysis
 
 - [ ] **Advanced** (if needed):
-  - [ ] Set up Ollama for local LLM
-  - [ ] Configure OpenAI fallback
+  - [ ] Set up Ollama for local LLM (not supported by Conduit yet)
+  - [ ] Configure OpenAI fallback (not supported by Conduit yet; pick one `LLM_PROVIDER`)
   - [ ] Enable domain-based rate limiting
   - [ ] Implement reputation throttling
 

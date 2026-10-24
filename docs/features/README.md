@@ -20,6 +20,8 @@ The `/docs/features/` directory serves as:
 ```
 docs/features/
 ├── README.md                      # This file
+├── recipient-whitelisting.md      # v1.1.0 - Restrict who a key can send to
+├── sender-allowlist.md            # Restrict which from addresses a key can use
 ├── llm-spam-filtering.md          # v1.2.0 - AI-powered spam detection
 └── [future-feature].md            # Future feature plans
 ```
@@ -49,16 +51,25 @@ Each feature document should include:
 
 **Recipient Whitelisting** - Prevent stolen API keys from spamming arbitrary recipients
 - **Status**: ✅ Implemented
-- **Documentation**: See [getting-started.md](../getting-started.md#step-4-configure-recipient-whitelisting-optional-but-recommended)
+- **Documentation**: [recipient-whitelisting.md](./recipient-whitelisting.md)
+- **Configuration**: `API_KEY_<NAME>_RECIPIENTS`, `API_KEY_<NAME>_RECIPIENT_DOMAINS`
 - **Security Impact**: 95% risk reduction for stolen key abuse
 
-### v1.2.0 (Planned)
+### v1.2.0 (Implemented)
 
-**LLM-Based Spam Filtering** - AI-powered content analysis as optional Conduit middleware
-- **Status**: 📋 Planned
+**LLM-Based Spam Filtering** - AI-powered content analysis, optional per API key
+- **Status**: ✅ Implemented (providers: Anthropic and OpenAI)
 - **Documentation**: [llm-spam-filtering.md](./llm-spam-filtering.md)
+- **Configuration**: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `API_KEY_<NAME>_LLM_*`
 - **Value Proposition**: Spam detection without exposing LLM API keys to frontend
-- **Estimated Timeline**: 2-3 weeks after v1.1.0
+
+### Unreleased (Implemented on `main`)
+
+**Sender Allowlist** - Restrict which `from` addresses each API key may send as
+- **Status**: ✅ Implemented
+- **Documentation**: [sender-allowlist.md](./sender-allowlist.md)
+- **Configuration**: `API_KEY_<NAME>_FROM_ADDRESSES`
+- **Security Impact**: A leaked frontend key cannot send as arbitrary addresses on your verified domain
 
 ---
 
@@ -174,7 +185,7 @@ Proposed → Planned → In Progress → Implemented → Maintained → Deprecat
 - Phased implementation (v1.2.0 → v1.3.0 → v1.4.0)
 - Detailed architecture with code examples
 - Cost/performance analysis
-- Multiple provider options
+- Provider abstraction (Anthropic and OpenAI implemented)
 - Security considerations addressed
 - Testing strategy included
 
@@ -203,3 +214,4 @@ Proposed → Planned → In Progress → Implemented → Maintained → Deprecat
 
 - **2025-10-15**: Created features directory structure
 - **2025-10-15**: Added LLM spam filtering proposal (v1.2.0)
+- **2026-10-24**: Marked LLM spam filtering as implemented, linked recipient whitelisting, added sender allowlist
