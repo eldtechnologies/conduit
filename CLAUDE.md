@@ -451,14 +451,16 @@ export const config: Config = {
 - **Logging**: Always log full error with stack trace, return sanitized version to client
 
 ### Middleware Order (CRITICAL)
-Apply middleware in this exact order:
-1. Security Headers (enforceHttps, securityHeaders)
-2. CORS (validate origin)
-3. Body Limit (for /api/* routes)
-4. Authentication (for /api/* routes)
-5. Recipient Validation (for /api/send route) - v1.1.0
-6. Rate Limiting (for /api/* routes)
-7. Request Logger (structured JSON logging)
+Apply middleware in this exact order (see `src/index.ts`):
+1. HTTPS enforcement (`enforceHttps`)
+2. CORS (validate origin, 403 on disallowed origins)
+3. Security Headers (`securityHeaders`)
+4. Request Logger (structured JSON logging)
+5. Body Limit (for /api/* routes, 413 on oversized bodies)
+6. Authentication (for /api/* routes)
+7. Recipient Validation (for /api/send route) - v1.1.0 - before rate limiting so 403'd recipients don't consume tokens
+8. Rate Limiting (for /api/* routes) - MUST run before LLM filtering so 429'd requests never reach the LLM
+9. LLM Filtering (for /api/send route) - v1.2.0
 
 ### Git Workflow
 - **Commits**: Small, atomic commits with clear messages

@@ -41,8 +41,12 @@ const app = new Hono();
  * 5. Body size limit - prevent DoS attacks via large payloads (/api/* only)
  * 6. Authentication - validate API keys (/api/* only)
  * 7. Recipient validation - check whitelist (/api/send only) - v1.1.0
- * 8. LLM spam filtering - AI-powered content moderation (/api/send only) - v1.2.0
- * 9. Rate limiting - token bucket per API key (/api/* only)
+ *    Runs before rate limiting so non-whitelisted recipients get 403
+ *    without consuming the key's tokens.
+ * 8. Rate limiting - token bucket per API key (/api/* only)
+ *    MUST run before LLM filtering (and any other expensive work) so
+ *    rate-limited requests never trigger paid LLM calls.
+ * 9. LLM spam filtering - AI-powered content moderation (/api/send only) - v1.2.0
  */
 
 // 0. Global error handler
@@ -76,11 +80,11 @@ app.use('/api/*', authenticate);
 // 7. Recipient validation for /api/send route (v1.1.0)
 app.use('/api/send', validateRecipient);
 
-// 8. LLM spam filtering for /api/send route (v1.2.0)
-app.use('/api/send', llmFilter);
-
-// 9. Rate limiting for /api/* routes
+// 8. Rate limiting for /api/* routes (before any LLM call)
 app.use('/api/*', rateLimit);
+
+// 9. LLM spam filtering for /api/send route (v1.2.0)
+app.use('/api/send', llmFilter);
 
 // Auth for /health/detailed (detailed diagnostics)
 app.use('/health/detailed', authenticate);
