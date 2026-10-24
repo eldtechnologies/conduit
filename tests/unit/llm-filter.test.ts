@@ -461,7 +461,7 @@ describe('filterContent', () => {
   });
 
   describe('logging', () => {
-    it('should log blocked content with a masked API key', async () => {
+    it('should log blocked content without the API key', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const apiKey = registerRules();
       fetchMock.mockResolvedValueOnce(
@@ -471,11 +471,12 @@ describe('filterContent', () => {
       await run(apiKey);
 
       const logged = JSON.stringify(warnSpy.mock.calls);
-      expect(logged).toContain('KEY_LLMFILTER_****');
+      expect(logged).toContain('Content blocked by LLM filter');
+      expect(logged).not.toContain('KEY_LLMFILTER');
       expect(logged).not.toContain(apiKey);
     });
 
-    it('should log an exhausted budget with a masked API key', async () => {
+    it('should log an exhausted budget without the API key', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const apiKey = registerRules({ maxCallsPerDay: 1 });
       fetchMock.mockResolvedValue(anthropicReply(safeResult));
@@ -484,7 +485,8 @@ describe('filterContent', () => {
       await run(apiKey);
 
       const logged = JSON.stringify(warnSpy.mock.calls);
-      expect(logged).toContain('KEY_LLMFILTER_****');
+      expect(logged).toContain('LLM budget exceeded');
+      expect(logged).not.toContain('KEY_LLMFILTER');
       expect(logged).not.toContain(apiKey);
     });
   });

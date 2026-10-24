@@ -19,7 +19,6 @@ import { getChannelHandler } from '../channels/index.js';
 import { getTemplate } from '../templates/index.js';
 import { ForbiddenError, ServiceUnavailableError, fromZodError } from '../utils/errors.js';
 import { ErrorCode, type LLMAnalysis, type SendMessageRequest } from '../types/api.js';
-import { maskApiKey } from './logger.js';
 
 /**
  * In-memory budget tracker for LLM API calls per API key
@@ -262,9 +261,9 @@ export async function filterContent(
       );
     }
 
-    // Fail-open: Allow without LLM check
+    // Fail-open: Allow without LLM check.
+    // The request logger's response line (same request) carries the masked API key.
     console.warn('LLM budget exceeded, allowing without check:', {
-      apiKey: maskApiKey(apiKey),
       budget: rules.maxCallsPerDay,
     });
     return undefined;
@@ -276,8 +275,8 @@ export async function filterContent(
   if (!analysis.allowed && analysis.confidence >= rules.threshold) {
     const errorCode = getErrorCodeForCategories(analysis.categories);
 
+    // The request logger's response line (same request) carries the masked API key
     console.warn('Content blocked by LLM filter:', {
-      apiKey: maskApiKey(apiKey),
       categories: analysis.categories,
       confidence: analysis.confidence,
       reasoning,

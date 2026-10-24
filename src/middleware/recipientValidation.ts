@@ -11,7 +11,6 @@ import type { Context, Next } from 'hono';
 import { config, type RecipientWhitelist } from '../config.js';
 import { ForbiddenError, ValidationError } from '../utils/errors.js';
 import { ErrorCode, type SendRequestBody } from '../types/api.js';
-import { maskApiKey } from './logger.js';
 
 /**
  * Check if recipient email is allowed by whitelist
@@ -101,8 +100,8 @@ export async function validateRecipient(c: Context, next: Next) {
 
   // Check if recipient is in whitelist
   if (!isRecipientAllowed(recipient, whitelist)) {
+    // The request logger's response line (same request) carries the masked API key
     console.warn('Recipient not in whitelist:', {
-      apiKey: maskApiKey(apiKey),
       recipient: recipient.split('@')[0] + '@***', // Mask email
       whitelistEmails: whitelist.emails.length,
       whitelistDomains: whitelist.domains.length,

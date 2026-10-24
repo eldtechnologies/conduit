@@ -440,7 +440,7 @@ describe('Recipient Validation (v1.1.0)', () => {
       expect(data.error).not.toContain('example.com');
     });
 
-    it('should log rejected recipients with a masked API key', async () => {
+    it('should log rejected recipients without the API key', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const response = await app.fetch(
@@ -463,9 +463,8 @@ describe('Recipient Validation (v1.1.0)', () => {
         expect(response.status).toBe(403);
         const call = warnSpy.mock.calls.find(([msg]) => msg === 'Recipient not in whitelist:');
         expect(call).toBeDefined();
-        const logged = call![1] as { apiKey: string };
-        expect(logged.apiKey).toBe('KEY_TEST_****');
-        expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(WHITELISTED_KEY.slice(0, 15));
+        expect(call![1]).not.toHaveProperty('apiKey');
+        expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('KEY_TEST');
       } finally {
         warnSpy.mockRestore();
       }
