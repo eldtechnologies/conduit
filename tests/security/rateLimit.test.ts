@@ -110,24 +110,39 @@ describe('Rate Limiting Middleware', () => {
   });
 
   describe('token bucket refill', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should refill tokens over time', async () => {
       // Consume all tokens
       for (let i = 0; i < 10; i++) {
-        await app.fetch(new Request('http://localhost:3000/test'));
+        expect((await app.fetch(new Request('http://localhost:3000/test'))).status).toBe(200);
       }
 
-      // Should be rate limited
+      // Should be rate limited; one token (60s / 10) is 6 seconds away
       let res = await app.fetch(new Request('http://localhost:3000/test'));
       expect(res.status).toBe(429);
+      expect(res.headers.get('retry-after')).toBe('6');
 
-      // Wait for tokens to refill (per-minute limit: 10 tokens/60s = 6s per token)
-      // Wait 7 seconds to be safe
-      await new Promise((resolve) => setTimeout(resolve, 7000));
+      // Not yet refilled just before a full token has accrued
+      vi.advanceTimersByTime(5900);
+      res = await app.fetch(new Request('http://localhost:3000/test'));
+      expect(res.status).toBe(429);
+      expect(res.headers.get('retry-after')).toBe('1');
 
-      // Should now be allowed
+      // Allowed once a full token has accrued, then limited again
+      vi.advanceTimersByTime(200);
       res = await app.fetch(new Request('http://localhost:3000/test'));
       expect(res.status).toBe(200);
-    }, 10000); // 10 second timeout
+      res = await app.fetch(new Request('http://localhost:3000/test'));
+      expect(res.status).toBe(429);
+    });
   });
 
   describe('multiple API keys isolation', () => {
