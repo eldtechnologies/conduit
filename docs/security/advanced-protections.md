@@ -41,7 +41,6 @@
   - [4. Advanced Rate Limiting](#4-advanced-rate-limiting)
   - [5. CAPTCHA Integration](#5-captcha-integration)
   - [6. Content Filtering](#6-content-filtering)
-- [Implementation Guides](#implementation-guides)
 - [Testing](#testing)
 - [Performance Considerations](#performance-considerations)
 - [Cost Analysis](#cost-analysis)

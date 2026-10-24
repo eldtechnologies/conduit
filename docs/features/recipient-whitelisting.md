@@ -16,7 +16,7 @@
 - [Configuration](#configuration)
 - [Implementation](#implementation)
 - [Use Cases](#use-cases)
-- [Testing](#testing)
+- [Testing](#5-tests)
 - [Migration Guide](#migration-guide)
 - [Troubleshooting](#troubleshooting)
 
@@ -314,9 +314,9 @@ app.use('/api/send', validateRecipient); // before rate limiting
 app.use('/api/*', rateLimit);
 ```
 
-### 5. Tests (`tests/security/recipientValidation.test.ts`)
+### 5. Tests
 
-The test suite runs the full app (`app.fetch`) with keys configured in `tests/setup.ts` (`API_KEY_TEST_WHITELIST` with a whitelist, `API_KEY_TEST_NO_WHITELIST` without). It covers:
+The test suite (`tests/security/recipientValidation.test.ts`) runs the full app (`app.fetch`) with keys configured in `tests/setup.ts` (`API_KEY_TEST_WHITELIST` with a whitelist, `API_KEY_TEST_NO_WHITELIST` without). It covers:
 
 - exact email matching and domain matching, both case-insensitive
 - keys without a whitelist accepting any recipient

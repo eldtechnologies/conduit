@@ -129,7 +129,7 @@ Conduit's core security principles:
 - ✅ **Error Sanitization**
   - Hide stack traces in production (`src/middleware/errorHandler.ts`)
   - Generic error messages for users
-  - See: [implementation.md#error-sanitization](implementation.md#12-error-sanitization)
+  - See: [implementation.md#error-sanitization](implementation.md#13-error-sanitization)
 
 ### Phase 2: Hardening (RECOMMENDED)
 
@@ -289,7 +289,7 @@ See [implementation.md#security-testing](implementation.md#security-testing) for
 4. **Recover**: Generate new keys, distribute securely
 5. **Post-Mortem**: Document root cause, update security measures
 
-See [archive/review-pre-v1.0.0.md#incident-response](archive/review-pre-v1.0.0.md#incident-response) for detailed procedures (archived historical document).
+See [archive/review-pre-v1.0.0.md#incident-response](archive/review-pre-v1.0.0.md) for detailed procedures (archived historical document).
 
 ## Security Documentation
 
