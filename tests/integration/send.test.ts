@@ -102,8 +102,52 @@ describe('Send Endpoint', () => {
       const res = await app.fetch(req);
       expect(res.status).toBe(400);
       const body = await readJson<ErrorResponse>(res);
-      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.code).toBe('INVALID_CHANNEL');
       expect(body.error).toContain('Invalid channel');
+    });
+
+    const postSend = (payload: Record<string, unknown>) =>
+      app.fetch(
+        new Request('http://localhost:3000/api/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+          },
+          body: JSON.stringify(payload),
+        })
+      );
+
+    it('should return INVALID_CHANNEL for an unknown channel even if other fields are invalid', async () => {
+      const res = await postSend({ channel: 'fax', templateId: '', to: 'not-an-email' });
+
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('INVALID_CHANNEL');
+    });
+
+    it('should return INVALID_CHANNEL for a planned but unregistered channel', async () => {
+      const res = await postSend({
+        channel: 'sms',
+        templateId: 'contact-form',
+        to: 'test@example.com',
+        data: {},
+      });
+
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('INVALID_CHANNEL');
+    });
+
+    it('should return VALIDATION_ERROR for a missing or non-string channel', async () => {
+      const base = { templateId: 'contact-form', to: 'test@example.com', data: {} };
+
+      const missing = await readJson<ErrorResponse>(await postSend(base));
+      expect(missing.code).toBe('VALIDATION_ERROR');
+      expect(missing.error).toContain('channel');
+
+      const numeric = await readJson<ErrorResponse>(await postSend({ ...base, channel: 42 }));
+      expect(numeric.code).toBe('VALIDATION_ERROR');
     });
 
     it('should reject missing templateId', async () => {

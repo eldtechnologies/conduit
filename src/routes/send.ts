@@ -7,9 +7,14 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { routeToChannel } from '../channels/index.js';
+import { resolveChannel, routeToChannel } from '../channels/index.js';
 import { fromZodError } from '../utils/errors.js';
-import type { LLMAnalysis, SendMessageResponse, SendRequestBody } from '../types/api.js';
+import type {
+  LLMAnalysis,
+  SendMessageRequest,
+  SendMessageResponse,
+  SendRequestBody,
+} from '../types/api.js';
 
 const send = new Hono();
 
@@ -19,9 +24,9 @@ const send = new Hono();
  * Validates the structure of incoming send requests.
  */
 const sendRequestSchema = z.object({
-  channel: z.enum(['email', 'sms', 'push', 'webhook'], {
-    error: 'Invalid channel. Supported channels: email',
-  }),
+  // Only the type is checked here: whether the channel exists is decided by the
+  // channel registry, so unknown channels get INVALID_CHANNEL, not VALIDATION_ERROR.
+  channel: z.string({ error: 'Channel is required' }),
   templateId: z.string().min(1, 'Template ID is required'),
   to: z
     .string()
@@ -84,12 +89,21 @@ send.post('/send', async (c) => {
     body = await c.req.json<SendRequestBody>();
   }
 
+  // Reject an unknown channel before field validation, so the error code does not
+  // depend on whether the rest of the body happens to be valid
+  if (typeof body?.channel === 'string') {
+    resolveChannel(body.channel);
+  }
+
   const parseResult = sendRequestSchema.safeParse(body);
   if (!parseResult.success) {
     throw fromZodError(parseResult.error, 'Invalid request');
   }
 
-  const request = parseResult.data;
+  const request: SendMessageRequest = {
+    ...parseResult.data,
+    channel: resolveChannel(parseResult.data.channel),
+  };
 
   // Route to the appropriate channel
   const result = await routeToChannel(request);

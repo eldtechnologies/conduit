@@ -9,9 +9,10 @@ import {
   getChannelHandler,
   getRegisteredChannels,
   isChannelRegistered,
+  resolveChannel,
 } from '../../src/channels/index.js';
 import { emailHandler } from '../../src/channels/email.js';
-import { ProviderError, InternalError } from '../../src/utils/errors.js';
+import { ProviderError, InternalError, ValidationError } from '../../src/utils/errors.js';
 import type { SendMessageRequest } from '../../src/types/api.js';
 import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
@@ -32,6 +33,25 @@ describe('Channel Infrastructure', () => {
       expect(() => getChannelHandler('sms')).toThrow('Invalid channel');
       expect(() => getChannelHandler('push')).toThrow('Invalid channel');
       expect(() => getChannelHandler('webhook')).toThrow('Invalid channel');
+    });
+  });
+
+  describe('resolveChannel', () => {
+    it('should return a registered channel', () => {
+      expect(resolveChannel('email')).toBe('email');
+    });
+
+    it('should throw INVALID_CHANNEL for an unregistered channel', () => {
+      let error: unknown;
+      try {
+        resolveChannel('fax');
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).code).toBe('INVALID_CHANNEL');
+      expect((error as ValidationError).statusCode).toBe(400);
     });
   });
 
