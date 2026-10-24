@@ -226,9 +226,37 @@ describe('Send Endpoint', () => {
       });
 
       const res = await app.fetch(req);
-      expect(res.status).toBe(500); // Template validation error becomes internal error
+      expect(res.status).toBe(400);
       const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
+      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.error).toContain('Invalid template data');
+      expect(body.error).toContain('email:');
+      expect(body.error).toContain('message:');
+    });
+
+    it('should report each invalid template field', async () => {
+      const req = new Request('http://localhost:3000/api/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+        },
+        body: JSON.stringify({
+          channel: 'email',
+          templateId: 'contact-form',
+          to: 'test@example.com',
+          data: { name: '', email: 'not-an-email', message: '' },
+        }),
+      });
+
+      const res = await app.fetch(req);
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.error).toContain('name: Name is required');
+      expect(body.error).toContain('email: Invalid email address');
+      expect(body.error).toContain('message: Message is required');
     });
   });
 
