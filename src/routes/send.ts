@@ -5,7 +5,6 @@
  * Handles validation, routing to channels, and response formatting.
  */
 
-import { createHash } from 'crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { resolveChannel, routeToChannel } from '../channels/index.js';
@@ -51,15 +50,15 @@ const sendRequestSchema = z.object({
 
 /**
  * Client Idempotency-Key format: 1-200 characters of [A-Za-z0-9._:-].
- * Leaves room for the per-API-key prefix within Resend's 256-character limit.
+ * Leaves room for the app-name prefix (max 50 + ':') within Resend's 256-character limit.
  */
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 
 /**
  * Validate the optional Idempotency-Key header and scope it to the API key
  *
- * All frontends share one Resend account, so the client key is prefixed with a
- * hash of the caller's API key to keep one app's keys from colliding with another's.
+ * All frontends share one Resend account, so the client key is prefixed with the
+ * caller's app name to keep one app's keys from colliding with another's.
  *
  * @param header - Raw Idempotency-Key header value, if any
  * @param apiKey - The authenticated API key
@@ -81,11 +80,25 @@ function toIdempotencyKey(
     );
   }
 
-  const scope = createHash('sha256')
-    .update(apiKey ?? '')
-    .digest('hex')
-    .slice(0, 16);
-  return `${scope}:${header}`;
+  return `${apiKeyScope(apiKey)}:${header}`;
+}
+
+/**
+ * Non-secret identifier for an API key: its `KEY_<NAME>` prefix
+ *
+ * Config loading guarantees keys look like `KEY_<NAME>_<random>` with no underscore in
+ * the random part, so dropping the last segment leaves only the public app name. The
+ * secret part never leaves Conduit.
+ *
+ * @param apiKey - The authenticated API key
+ * @returns The key's `KEY_<NAME>` prefix (at most 50 chars), or 'anonymous'
+ */
+function apiKeyScope(apiKey: string | undefined): string {
+  const separator = apiKey?.lastIndexOf('_') ?? -1;
+  if (!apiKey || separator <= 0) {
+    return 'anonymous';
+  }
+  return apiKey.slice(0, Math.min(separator, 50));
 }
 
 /**

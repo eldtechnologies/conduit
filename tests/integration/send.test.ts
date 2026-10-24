@@ -394,8 +394,9 @@ describe('Send Endpoint', () => {
       expect(second.status).toBe(200);
       const firstKey = sentIdempotencyKey(0);
       const secondKey = sentIdempotencyKey(1);
-      expect(firstKey).toMatch(/^[0-9a-f]{16}:order-123$/);
-      expect(secondKey).toMatch(/^[0-9a-f]{16}:order-123$/);
+      // Scoped by the public app name only; the secret part of the API key is not sent
+      expect(firstKey).toBe('KEY_TEST:order-123');
+      expect(secondKey).toBe('KEY_APP2:order-123');
       // Two apps using the same client key must not collide at Resend
       expect(firstKey).not.toBe(secondKey);
     });
