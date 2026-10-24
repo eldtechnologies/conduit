@@ -185,6 +185,10 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       const key = generateApiKey('my_app');
       const cfg = loadConfig(baseEnv({ API_KEY_MY_APP: key }));
       expect(cfg.apiKeys).toEqual([MYSITE_KEY, key]);
+      expect(cfg.apps).toEqual([
+        { name: 'MYSITE', key: MYSITE_KEY },
+        { name: 'MY_APP', key },
+      ]);
     });
 
     it('accepts documented keys with a 12+ char alphanumeric suffix', () => {

@@ -255,7 +255,7 @@ See [archive/review-pre-v1.0.0.md](archive/review-pre-v1.0.0.md#threat-model) fo
 
 **Implementation:**
 - Log rotation: not handled by Conduit. It logs to stdout/stderr (request and response lines as JSON), so configure 90-day retention in your container or log platform
-- PII masking in logs: API keys (`KEY_<APP>_****`), cookies and client IP headers are masked; request bodies are not logged; rejected recipients are logged as `local-part@***`
+- PII masking in logs: response lines identify the caller by app name only (from `API_KEY_<NAME>`, never derived from the key); `X-API-Key` headers in request lines are masked (`KEY_<APP>_****`); cookies and client IP headers are masked; request bodies are not logged; rejected recipients are logged as `local-part@***`
 - A data deletion mechanism is not implemented in Conduit (it stores no messages)
 
 See [archive/review-pre-v1.0.0.md#compliance-considerations](archive/review-pre-v1.0.0.md#compliance-considerations) for full details.

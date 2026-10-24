@@ -303,7 +303,7 @@ Error response (production):
 
 Outside production the response also contains `details.hint`. The response never echoes the recipient or the whitelist contents.
 
-Rejected recipients are logged with `console.warn('Recipient not in whitelist:', ...)`, including only the masked recipient (`local-part@***`) and the number of whitelisted emails and domains. The masked API key appears on the request logger's response line.
+Rejected recipients are logged with `console.warn('Recipient not in whitelist:', ...)`, including only the masked recipient (`local-part@***`) and the number of whitelisted emails and domains. The app name (`"app"`) appears on the request logger's response line.
 
 ### 4. Middleware Integration (`src/index.ts`)
 

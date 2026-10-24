@@ -75,6 +75,23 @@ describe('Authentication Middleware', () => {
       const body = await readJson<{ apiKey: string }>(res);
       expect(body.apiKey).toBe('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
     });
+
+    it.each([
+      ['KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1', 'TEST'],
+      ['KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3', 'APP2'],
+    ])('should attach the app name of the matched key (%s -> %s)', async (apiKey, appName) => {
+      const testApp = new Hono<{ Variables: AppVariables }>();
+      testApp.onError(errorHandler);
+      testApp.use('*', authenticate);
+      testApp.get('/test', (c) => c.json({ appName: c.get('appName') }));
+
+      const res = await testApp.fetch(
+        new Request('http://localhost:3000/test', { headers: { 'X-API-Key': apiKey } })
+      );
+
+      expect(res.status).toBe(200);
+      expect(await readJson<{ appName: string }>(res)).toEqual({ appName });
+    });
   });
 
   describe('invalid API key', () => {

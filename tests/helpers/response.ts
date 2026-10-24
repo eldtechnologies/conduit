@@ -69,4 +69,6 @@ export interface ErrorResponse {
  */
 export interface AppVariables {
   apiKey: string;
+  /** Frontend app name from API_KEY_<NAME>, set by auth for logging */
+  appName?: string;
 }

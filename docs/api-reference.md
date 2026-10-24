@@ -770,7 +770,7 @@ export async function sendPushNotification(
   "path": "/api/send",
   "status": 200,
   "duration": 245,
-  "apiKey": "KEY_ELDTECH_****"
+  "app": "ELDTECH"
 }
 ```
 

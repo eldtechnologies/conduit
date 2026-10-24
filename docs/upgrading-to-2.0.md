@@ -13,6 +13,7 @@ Since 2.0, Conduit **fails at startup** when its configuration is unsafe or inva
 - [ ] **Thresholds:** `API_KEY_*_LLM_THRESHOLD` is a number from 0 to 1 (e.g. `0.7`). Values on the old 0-100 scale are ignored and the default `0.7` is used.
 - [ ] **Fail modes:** `API_KEY_*_LLM_FAIL_MODE` and `LLM_FALLBACK_MODE` must be `allow` or `block`. `LLM_FALLBACK_MODE` is now the default for keys without their own fail mode, so `LLM_FALLBACK_MODE=block` makes those keys fail closed.
 - [ ] **Sender addresses:** if a frontend sends a `from` address, add it to `API_KEY_<NAME>_FROM_ADDRESSES` (comma-separated). Otherwise those requests get 400 `SENDER_NOT_ALLOWED`. Without `from`, mail goes out from the first allowlisted address (or `onboarding@resend.dev` when there is no list).
+- [ ] **Log queries / alerts:** response log lines now carry `"app": "<NAME>"` (from `API_KEY_<NAME>`) instead of `"apiKey": "KEY_<NAME>_****"`. Update any log filters or dashboards that use `apiKey`.
 - [ ] **`NODE_ENV=production`** is set in production (the code default is `development`). The Docker image and `docker-compose.yml` default to production.
 
 To check a config before deploying, start the new image with your env file and watch it boot:

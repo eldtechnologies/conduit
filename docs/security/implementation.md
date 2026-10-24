@@ -1118,7 +1118,7 @@ jobs:
 - Review recent logs for unauthorized access patterns
 
 **2. Investigation** (within hours):
-- Check structured logs for anomalies. Conduit logs to stdout/stderr; error codes are not logged, but every response line has the status and the masked key:
+- Check structured logs for anomalies. Conduit logs to stdout/stderr; error codes are not logged, but every response line has the status and the app name (`"app"`, from `API_KEY_<NAME>`):
   ```bash
   docker logs conduit 2>&1 | grep '"type":"response"' | grep '"status":401'
   docker logs conduit 2>&1 | grep '"type":"response"' | grep '"status":429'

@@ -345,13 +345,14 @@ describe('Logger Middleware', () => {
       return lines;
     }
 
-    it('should log the masked API key set by later middleware on the response entry', async () => {
+    it('should log the app name set by later middleware on the response entry', async () => {
       const lines = captureLogs();
       const app = new Hono<{ Variables: AppVariables }>();
       app.use('*', logger);
       app.use('*', (c, next) => {
         // Simulates authenticate, which runs after the logger
         c.set('apiKey', 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
+        c.set('appName', 'TEST');
         return next();
       });
       app.get('/test', (c) => c.text('OK'));
@@ -367,14 +368,15 @@ describe('Logger Middleware', () => {
 
       const request = lines.find((l) => l.type === 'request');
       const response = lines.find((l) => l.type === 'response');
-      expect(response?.apiKey).toBe('KEY_TEST_****');
+      expect(response?.app).toBe('TEST');
+      expect(response).not.toHaveProperty('apiKey');
       expect(response?.status).toBe(200);
       expect(request?.headers).toMatchObject({ 'x-api-key': 'KEY_TEST_****', cookie: '****' });
       expect(JSON.stringify(lines)).not.toContain('a8f9d2c1');
       expect(JSON.stringify(lines)).not.toContain('abc123');
     });
 
-    it('should omit apiKey when no key was authenticated', async () => {
+    it('should omit the app when no key was authenticated', async () => {
       const lines = captureLogs();
       const app = new Hono();
       app.use('*', logger);
@@ -384,7 +386,8 @@ describe('Logger Middleware', () => {
 
       const response = lines.find((l) => l.type === 'response');
       expect(response).toBeDefined();
-      expect(response?.apiKey).toBeUndefined();
+      expect(response?.app).toBeUndefined();
+      expect(response).not.toHaveProperty('apiKey');
     });
   });
 });

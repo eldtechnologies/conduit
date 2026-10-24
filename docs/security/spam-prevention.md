@@ -803,7 +803,7 @@ rate_limit_exceeded / total_requests
 
 ```json
 {"type":"request","requestId":"0f8c...","timestamp":"2025-10-14T12:34:56.544Z","method":"POST","path":"/api/send","headers":{"content-type":"application/json","x-api-key":"KEY_WEBSITE_****"}}
-{"type":"response","requestId":"0f8c...","timestamp":"2025-10-14T12:34:56.789Z","method":"POST","path":"/api/send","status":200,"duration":245,"apiKey":"KEY_WEBSITE_****"}
+{"type":"response","requestId":"0f8c...","timestamp":"2025-10-14T12:34:56.789Z","method":"POST","path":"/api/send","status":200,"duration":245,"app":"WEBSITE"}
 ```
 
 Error codes are not logged; use the `status` of the response line (401 auth, 403 recipient or LLM block, 413 body too large, 429 rate limited, 502 email provider error, 503 LLM unavailable or over budget). CORS and HTTPS rejections (403) happen before the request logger and are not logged. Some rejections also log a plain-text warning:

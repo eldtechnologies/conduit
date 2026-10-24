@@ -58,17 +58,19 @@ export async function authenticate(c: Context, next: Next) {
   // Validate API key using constant-time comparison
   // SECURITY: Always check ALL keys to prevent timing attacks
   let isValid = false;
+  let appName: string | undefined;
 
-  for (const validKey of config.apiKeys) {
+  for (const app of config.apps) {
     // Only compare if lengths match (timingSafeEqual requires same length)
-    if (apiKey.length === validKey.length) {
+    if (apiKey.length === app.key.length) {
       const keyBuffer = Buffer.from(apiKey);
-      const validBuffer = Buffer.from(validKey);
+      const validBuffer = Buffer.from(app.key);
 
       // Use constant-time comparison to prevent timing attacks
       // Don't break early - continue checking all keys
       if (timingSafeEqual(keyBuffer, validBuffer)) {
         isValid = true;
+        appName = app.name;
       }
     }
   }
@@ -77,8 +79,9 @@ export async function authenticate(c: Context, next: Next) {
     throw new AuthError('Invalid API key', ErrorCode.UNAUTHORIZED);
   }
 
-  // Attach API key to context for logging (will be masked by logger)
+  // The key is used for per-key policy lookups; logs only ever see the app name
   c.set('apiKey', apiKey);
+  c.set('appName', appName);
 
   await next();
 }

@@ -206,8 +206,9 @@ export async function logger(c: Context, next: Next) {
   // Execute request
   await next();
 
-  // Read after next(): set by the auth middleware further down the chain
-  const apiKey = c.get('apiKey') as string | undefined;
+  // Read after next(): set by the auth middleware further down the chain. This is the
+  // app name from API_KEY_<NAME>, so no value derived from the API key reaches the log.
+  const app = c.get('appName') as string | undefined;
 
   // Calculate duration
   const duration = Date.now() - startTime;
@@ -222,7 +223,7 @@ export async function logger(c: Context, next: Next) {
       path,
       status: c.res.status,
       duration,
-      apiKey: apiKey ? maskApiKey(apiKey) : undefined,
+      app,
     })
   );
 }

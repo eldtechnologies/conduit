@@ -36,6 +36,12 @@ export interface Config {
   // API keys (multiple frontends)
   apiKeys: string[];
 
+  /**
+   * Frontend apps: the name from API_KEY_<NAME> paired with its key. Logs use the name,
+   * never anything derived from the key value.
+   */
+  apps: { name: string; key: string }[];
+
   // CORS
   allowedOrigins: string[];
 
@@ -507,6 +513,7 @@ export function loadConfig(processEnv: NodeJS.ProcessEnv): Config {
     logLevel: env.LOG_LEVEL,
     resendApiKey: env.RESEND_API_KEY,
     apiKeys: [...apiKeyEnv.keys.values()],
+    apps: [...apiKeyEnv.keys].map(([name, key]) => ({ name, key })),
     allowedOrigins: env.ALLOWED_ORIGINS,
     rateLimits: {
       perMinute: env.RATE_LIMIT_PER_MINUTE,

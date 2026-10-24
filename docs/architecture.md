@@ -608,7 +608,7 @@ middleware/logger.ts (response line):
     "path": "/api/send",
     "status": 200,
     "duration": 245,
-    "apiKey": "KEY_SITEA_****"
+    "app": "SITEA"
   }
 
 Client receives response and displays success message to user.
@@ -1019,7 +1019,7 @@ Request
   ├─→ [4] Request Logger
   │     • Runs on ALL routes (*)
   │     • Logs structured JSON request line (method, path, masked headers)
-  │     • Logs response line after next() (status, duration, masked API key)
+  │     • Logs response line after next() (status, duration, app name from API_KEY_<NAME>)
   │
   ├─→ [5] Body Size Limit
   │     • Runs on /api/* routes only

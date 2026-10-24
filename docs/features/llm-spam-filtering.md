@@ -136,7 +136,7 @@ The budget is counted in memory per API key and per process. It resets at midnig
 
 - **Success (200)**: `llmAnalysis` is included only when `NODE_ENV` is not `production`. Moderation details help attackers tune their content, so production responses never contain them
 - **Blocked (403)**: the message is always `Content blocked by content filter`. `details` (provider, confidence, categories, reasoning, hint) is included only outside production
-- **Logs**: a block is logged with `console.warn('Content blocked by LLM filter:', { categories, confidence, reasoning })`; a provider failure with `console.error('LLM filter error:', { failMode, error })`. The masked API key appears on the request logger's response line for the same request
+- **Logs**: a block is logged with `console.warn('Content blocked by LLM filter:', { categories, confidence, reasoning })`; a provider failure with `console.error('LLM filter error:', { failMode, error })`. The app name (`"app"`) appears on the request logger's response line for the same request
 
 ---
 
