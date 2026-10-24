@@ -12,7 +12,7 @@
  * - Configurable limit (default 50KB)
  */
 
-import type { Context, Next } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import { bodyLimit as honoBodyLimit } from 'hono/body-limit';
 import { PayloadTooLargeError, ValidationError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
@@ -55,7 +55,7 @@ const enforceBodyLimit = honoBodyLimit({
  * @throws ValidationError if Content-Length is not a number
  * @throws PayloadTooLargeError if the payload exceeds the limit
  */
-export async function bodyLimit(c: Context, next: Next) {
+export const bodyLimit: MiddlewareHandler = async (c, next) => {
   const contentLength = c.req.header('Content-Length');
 
   if (contentLength !== undefined && !/^\d+$/.test(contentLength.trim())) {
@@ -63,4 +63,4 @@ export async function bodyLimit(c: Context, next: Next) {
   }
 
   await enforceBodyLimit(c, next);
-}
+};

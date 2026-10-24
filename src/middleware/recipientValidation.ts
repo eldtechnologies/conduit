@@ -56,7 +56,7 @@ async function parseJsonObjectBody(c: Context): Promise<SendRequestBody> {
     throw new ValidationError('Request body must be a JSON object', ErrorCode.VALIDATION_ERROR);
   }
 
-  return body as SendRequestBody;
+  return body;
 }
 
 /**

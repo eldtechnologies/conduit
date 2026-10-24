@@ -169,7 +169,7 @@ describe('Body Size Limit Middleware', () => {
         },
         body: stream,
         duplex: 'half',
-      } as RequestInit);
+      });
       expect(req.headers.get('content-length')).toBeNull();
 
       const res = await app.fetch(req);

@@ -17,6 +17,11 @@ import { clearAllRateLimits } from '@/middleware/rateLimit.js';
 
 const LLM_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
+function isLlmCall(input: Parameters<typeof fetch>[0]): boolean {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  return url.startsWith(LLM_ENDPOINT);
+}
+
 function llmAllowResponse(): Response {
   return new Response(
     JSON.stringify({
@@ -69,18 +74,13 @@ describe('Middleware order', () => {
   const originalFetch = global.fetch;
   let fetchMock: FetchMock;
 
-  const llmCalls = () =>
-    fetchMock.mock.calls.filter(([input]) => String(input).startsWith(LLM_ENDPOINT)).length;
+  const llmCalls = () => fetchMock.mock.calls.filter(([input]) => isLlmCall(input)).length;
 
   beforeEach(() => {
     clearAllRateLimits();
     fetchMock = installFetchMock();
     fetchMock.mockImplementation((input) =>
-      Promise.resolve(
-        String(input).startsWith(LLM_ENDPOINT)
-          ? llmAllowResponse()
-          : resendSuccessResponse('mock-msg-id')
-      )
+      Promise.resolve(isLlmCall(input) ? llmAllowResponse() : resendSuccessResponse('mock-msg-id'))
     );
   });
 
