@@ -12,11 +12,11 @@ services:
     container_name: conduit
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
-    # Local runs are plain HTTP, so default to development: NODE_ENV=production enforces
-    # HTTPS (X-Forwarded-Proto) and would reject every /api request with 403.
-    # Set NODE_ENV=production in .env when running behind a TLS-terminating proxy.
+    # Defaults to production (fail-safe: HTTPS enforcement and error sanitization on).
+    # For local plain-HTTP runs, set NODE_ENV=development in .env; otherwise every
+    # /api request without X-Forwarded-Proto: https is rejected with 403.
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=${PORT:-3000}
     env_file:
       - .env
