@@ -1,6 +1,6 @@
 # Security Implementation Guide
 
-This document provides step-by-step implementation guidance for hardening Conduit's security. All code examples are production-ready and should be implemented as-is.
+This document provides step-by-step implementation guidance for hardening Conduit's security. Sections 1-9, 12 (environment-based revocation) and 13 are implemented in `src/`; sections 10, 11 and the Redis option in 12 are **not implemented**. Code examples are simplified; the source in `src/` is authoritative, and each section states what the code actually does.
 
 ## Critical Security Requirements
 
@@ -18,17 +18,28 @@ The following security measures are **MANDATORY** for production deployment.
 
 ```typescript
 // src/middleware/securityHeaders.ts
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
+import { config } from '../config.js';
 
 export async function enforceHttps(c: Context, next: Next) {
-  // Check if request came over HTTP in production
-  if (c.env.NODE_ENV === 'production' && c.req.header('x-forwarded-proto') !== 'https') {
-    return c.text('HTTPS Required', 403);
+  // Only the public health check is exempt (container health checks).
+  // Exact match: /health/detailed and other /health* paths still require HTTPS.
+  if (c.req.path === '/health') {
+    await next();
+    return;
   }
 
-  // Add HTTP Strict Transport Security (HSTS) header
-  // Tells browsers to only use HTTPS for 1 year
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  if (process.env.NODE_ENV === 'production' || config.enforceHttps) {
+    // HTTPS is detected via X-Forwarded-Proto: run behind a trusted reverse
+    // proxy that sets or overwrites this header
+    const proto = c.req.header('x-forwarded-proto') || 'http';
+    if (proto !== 'https') {
+      return c.text('HTTPS Required', 403);
+    }
+
+    // HTTP Strict Transport Security: only use HTTPS for 1 year
+    c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
 
   await next();
 }
@@ -37,8 +48,10 @@ export async function enforceHttps(c: Context, next: Next) {
 **Environment Configuration**:
 ```bash
 # .env
-ENFORCE_HTTPS=true  # Set to false only for local development
+ENFORCE_HTTPS=true  # Default false. Enforces HTTPS even when NODE_ENV is not production
 ```
+
+With `NODE_ENV=production`, HTTPS is always enforced; `ENFORCE_HTTPS=false` does not turn it off. `NODE_ENV` defaults to `development`, so set `NODE_ENV=production` in production.
 
 **Testing**:
 ```typescript
@@ -62,24 +75,39 @@ it('rejects HTTP requests in production', async () => {
 **Implementation**:
 
 ```typescript
-// src/middleware/bodyLimit.ts
-import { bodyLimit } from 'hono/body-limit';
-import { Hono } from 'hono';
+// src/middleware/bodyLimit.ts (simplified)
+import type { MiddlewareHandler } from 'hono';
+import { bodyLimit as honoBodyLimit } from 'hono/body-limit';
+import { PayloadTooLargeError, ValidationError } from '../utils/errors.js';
+import { ErrorCode } from '../types/api.js';
 
-const app = new Hono();
+const MAX_BODY_SIZE = 50 * 1024; // 50KB
 
-// Apply to /api/send endpoint
-app.use('/api/send', bodyLimit({
-  maxSize: 50 * 1024, // 50 KB
-  onError: (c) => {
-    return c.json({
-      success: false,
-      error: 'Request payload too large (max 50KB)',
-      code: 'PAYLOAD_TOO_LARGE'
-    }, 413);
+// hono/body-limit trusts Content-Length when present (and no Transfer-Encoding);
+// otherwise it counts the bytes actually read and aborts once the limit is passed,
+// so chunked/streamed bodies without Content-Length cannot bypass it
+const enforceBodyLimit = honoBodyLimit({
+  maxSize: MAX_BODY_SIZE,
+  onError: () => {
+    throw new PayloadTooLargeError('Request body too large. Maximum size: 50KB', {
+      maxSize: MAX_BODY_SIZE,
+    });
+  },
+});
+
+export const bodyLimit: MiddlewareHandler = async (c, next) => {
+  const contentLength = c.req.header('Content-Length');
+  if (contentLength !== undefined && !/^\d+$/.test(contentLength.trim())) {
+    throw new ValidationError('Invalid Content-Length header', ErrorCode.VALIDATION_ERROR);
   }
-}));
+  await enforceBodyLimit(c, next);
+};
+
+// src/index.ts
+app.use('/api/*', bodyLimit);
 ```
+
+Oversized bodies get 413 `PAYLOAD_TOO_LARGE` (`details.maxSize`, plus `details.actualSize` when a trusted `Content-Length` was sent, outside production only). A non-numeric `Content-Length` gets 400 `VALIDATION_ERROR`. `/health` is not covered by the limit.
 
 **Template Field Limits**:
 
@@ -89,11 +117,13 @@ import { z } from 'zod';
 
 const contactFormSchema = z.object({
   name: z.string().min(1).max(100),          // Max 100 characters
-  email: z.string().email().max(255),        // Max 255 characters
-  message: z.string().min(1).max(5000),      // Max 5000 characters (~5KB)
-  phone: z.string().max(20).optional()       // Max 20 characters
+  email: z.string().email(),                 // Valid email address
+  message: z.string().min(1).max(5000),      // Max 5000 characters
+  subject: z.string().max(200).optional(),   // Max 200 characters
 });
 ```
+
+The request schema in `src/routes/send.ts` also limits `to` to 320 characters and `from.name` to 100. Unknown `data` fields are dropped by the template schema.
 
 **Testing**:
 ```typescript
@@ -161,6 +191,17 @@ npm run generate-key -- mysite
 # Output: KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
 ```
 
+The real script (`scripts/generate-api-key.ts`) also uppercases the name and replaces non-alphanumeric characters with `_`.
+
+**Startup validation** (`src/config.ts`): every `API_KEY_*` environment variable is classified when Conduit starts.
+
+- `API_KEY_<NAME>_<SUFFIX>` with a known suffix (`_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`) is a per-key config variable. `API_KEY_<NAME>` must be configured, otherwise startup fails
+- Any other `API_KEY_<NAME>` is an API key. Its value must match `KEY_<NAME>_<12+ alphanumeric chars>` (the generator produces 32 hex chars), otherwise startup fails
+- The removed `API_KEY_<NAME>_LLM_WHITELIST_SENDERS` fails startup with an explanation
+- At least one API key must be configured
+
+So a typo (`API_KEY_SITE_RECIPIENT`) or a config value (`true`, `70`, an email address) can never become an accepted API key. Error messages name the variable but not its value.
+
 ---
 
 ## 4. Constant-Time API Key Comparison
@@ -172,63 +213,51 @@ npm run generate-key -- mysite
 **Implementation**:
 
 ```typescript
-// src/middleware/auth.ts
+// src/middleware/auth.ts (simplified)
 import { timingSafeEqual } from 'crypto';
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
+import { config } from '../config.js';
+import { AuthError } from '../utils/errors.js';
+import { ErrorCode } from '../types/api.js';
 
-function constantTimeCompare(a: string, b: string): boolean {
-  // Ensure same length to prevent length leakage
-  if (a.length !== b.length) {
-    // Compare against dummy value to maintain constant time
-    // (prevents early return timing difference)
-    timingSafeEqual(Buffer.from(a), Buffer.from(a));
-    return false;
+/** Constant-time check of `key` against every same-length entry (no early exit) */
+function matchesAny(key: string, candidates: string[]): boolean {
+  let found = false;
+  for (const candidate of candidates) {
+    if (key.length === candidate.length && timingSafeEqual(Buffer.from(key), Buffer.from(candidate))) {
+      found = true;
+    }
   }
-
-  try {
-    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
-  } catch {
-    return false;
-  }
+  return found;
 }
 
-export async function auth(c: Context, next: Next) {
-  const providedKey = c.req.header('X-API-Key');
+export async function authenticate(c: Context, next: Next) {
+  const apiKey = c.req.header('X-API-Key');
 
-  if (!providedKey) {
-    return c.json({
-      success: false,
-      error: 'Missing X-API-Key header',
-      code: 'UNAUTHORIZED'
-    }, 401);
+  if (!apiKey) {
+    throw new AuthError('Missing API key', ErrorCode.UNAUTHORIZED);
   }
 
-  // Load valid keys from environment
-  const validKeys = Object.entries(process.env)
-    .filter(([key]) => key.startsWith('API_KEY_'))
-    .map(([, value]) => value as string);
-
-  // Constant-time comparison against all valid keys
-  const isValid = validKeys.some(validKey =>
-    constantTimeCompare(providedKey, validKey)
-  );
-
-  if (!isValid) {
-    return c.json({
-      success: false,
-      error: 'Invalid API key',
-      code: 'UNAUTHORIZED'
-    }, 401);
+  if (matchesAny(apiKey, config.revokedKeys)) {
+    throw new AuthError('API key has been revoked', ErrorCode.UNAUTHORIZED);
   }
 
-  // Attach API key to context for logging
-  c.set('apiKey', providedKey);
+  // config.apiKeys holds only the values that passed startup validation,
+  // never per-key config values such as API_KEY_<NAME>_LLM_ENABLED
+  if (!matchesAny(apiKey, config.apiKeys)) {
+    throw new AuthError('Invalid API key', ErrorCode.UNAUTHORIZED);
+  }
+
+  // Attach API key to context (the logger masks it)
+  c.set('apiKey', apiKey);
 
   await next();
 }
 ```
 
-**Testing**:
+Never build the key list from `Object.entries(process.env)` filtered on `API_KEY_`: that turns every per-key config value into an accepted API key. All three failures return 401 `UNAUTHORIZED`.
+
+**Testing** (illustrative; `tests/security/auth.test.ts` instead checks that every same-length key is compared, with no early exit):
 ```typescript
 it('uses constant-time comparison for API keys', async () => {
   // Statistical timing test
@@ -291,38 +320,38 @@ export function sanitizeRichText(dirty: string): string {
 }
 ```
 
-**Template Usage**:
+The real `sanitizeRichText()` also allows `<a>` with `href`/`title` and only `http(s)` links. It is not used by any current template.
+
+**Template Usage** (as in `src/templates/email/contact-form.ts`, simplified):
 
 ```typescript
-// src/templates/email/contact-form.ts
-import { sanitizeHtml } from '../../utils/sanitize';
+import { escapeHtml, toHeaderText, toPlainText } from '../../utils/sanitize.js';
 
 export const contactFormTemplate = {
   id: 'contact-form',
   channel: 'email',
 
+  // Subject is a header: tags stripped, entities decoded, CR/LF removed
+  subject: (data: ContactFormData) =>
+    data.subject ? toHeaderText(data.subject) : `Contact Form: ${toHeaderText(data.name)}`,
+
+  // HTML body: ALWAYS entity-escape user input before rendering
   html: (data: ContactFormData) => {
-    // ALWAYS sanitize user input before rendering
-    const safeName = sanitizeHtml(data.name);
-    const safeEmail = sanitizeHtml(data.email);
-    const safeMessage = sanitizeHtml(data.message);
-    const safePhone = data.phone ? sanitizeHtml(data.phone) : null;
+    const name = escapeHtml(data.name);
+    const email = escapeHtml(data.email);
+    const message = escapeHtml(data.message).replace(/\n/g, '<br>');
 
     return `
-      <!DOCTYPE html>
-      <html>
-        <body>
-          <h2>New Contact Form Submission</h2>
-          <p><strong>Name:</strong> ${safeName}</p>
-          <p><strong>Email:</strong> ${safeEmail}</p>
-          ${safePhone ? `<p><strong>Phone:</strong> ${safePhone}</p>` : ''}
-          <hr>
-          <p><strong>Message:</strong></p>
-          <p>${safeMessage.replace(/\n/g, '<br>')}</p>
-        </body>
-      </html>
+      <p><strong>From:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Message:</strong></p>
+      <div>${message}</div>
     `;
-  }
+  },
+
+  // Plain-text body: tags stripped, '&', '<' and '>' kept as typed
+  text: (data: ContactFormData) =>
+    `From: ${toPlainText(data.name)}\nEmail: ${toPlainText(data.email)}\n\n${toPlainText(data.message)}`,
 };
 ```
 
@@ -373,8 +402,8 @@ export async function securityHeaders(c: Context, next: Next) {
   // Content Security Policy (for JSON API, deny everything)
   c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
 
-  // HSTS (only in production with HTTPS)
-  if (c.env.NODE_ENV === 'production') {
+  // HSTS (in production, or when ENFORCE_HTTPS=true)
+  if (process.env.NODE_ENV === 'production' || config.enforceHttps) {
     c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
 
@@ -415,41 +444,29 @@ export const TIMEOUTS = {
 ```
 
 ```typescript
-// src/channels/email.ts
-import { TIMEOUTS } from '../config';
+// src/channels/email.ts (simplified)
+import { TIMEOUTS } from '../config.js';
 
-export async function sendEmail(data: EmailRequest) {
-  try {
-    const response = await resend.emails.send({
-      from: data.from,
-      to: data.to,
-      subject: data.subject,
-      html: data.html
-    }, {
-      // Abort after 10 seconds
-      signal: AbortSignal.timeout(TIMEOUTS.provider)
-    });
-
-    return response;
-  } catch (error) {
-    if (error.name === 'TimeoutError') {
-      throw new Error('Provider request timed out');
-    }
-    throw error;
-  }
+// Abort the HTTP request itself on timeout (not just stop waiting for it),
+// so a timed-out send is not delivered later
+const signal = AbortSignal.timeout(TIMEOUTS.provider);
+const requestOptions: CreateEmailRequestOptions = { signal };
+if (request.idempotencyKey) {
+  requestOptions.idempotencyKey = request.idempotencyKey;
 }
+
+let response: CreateEmailResponse;
+try {
+  response = await resend.emails.send(emailParams, requestOptions);
+} catch (error) {
+  if (signal.aborted) throw providerTimeoutError(); // 502 PROVIDER_TIMEOUT
+  throw error;
+}
+// The SDK can also report an aborted fetch as response.error
+if (response.error && signal.aborted) throw providerTimeoutError();
 ```
 
-**Note**: For Resend SDK v2+, check if timeout support is built-in. Otherwise, wrap in Promise.race:
-
-```typescript
-const response = await Promise.race([
-  resend.emails.send(data),
-  new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Timeout')), TIMEOUTS.provider)
-  )
-]);
-```
+Do not use `Promise.race` for this: it stops waiting but lets the request continue, so the email may still be sent after the client was told it failed. After a `PROVIDER_TIMEOUT`, clients can retry with the same `Idempotency-Key` header (1-200 characters of `A-Z a-z 0-9 . _ : -`) without sending the email twice.
 
 ---
 
@@ -462,9 +479,10 @@ const response = await Promise.race([
 **Implementation**:
 
 ```typescript
-// src/routes/health.ts
+// src/routes/health.ts (simplified)
 import { Hono } from 'hono';
-import { auth } from '../middleware/auth';
+import { emailHandler } from '../channels/email.js';
+import { APP_VERSION } from '../utils/version.js'; // read from package.json at startup
 
 const health = new Hono();
 
@@ -473,28 +491,24 @@ health.get('/', (c) => {
   return c.json({ status: 'healthy' });
 });
 
-// Detailed health check (requires authentication)
-health.get('/detailed', auth, (c) => {
+// Detailed health check (authentication applied in src/index.ts:
+// app.use('/health/detailed', authenticate))
+health.get('/detailed', async (c) => {
+  const emailAvailable = await emailHandler.isAvailable();
   return c.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: APP_VERSION,
     channels: {
       email: {
-        status: 'active',
-        provider: 'Resend',
-        configured: !!process.env.RESEND_API_KEY
-      },
-      sms: {
-        status: 'coming_soon'
+        status: emailAvailable ? 'active' : 'inactive',
+        provider: emailHandler.getProviderName(), // 'resend'
+        configured: emailAvailable
       }
     },
     checks: {
-      memory: {
-        used: process.memoryUsage().heapUsed / 1024 / 1024,
-        total: process.memoryUsage().heapTotal / 1024 / 1024
-      },
-      uptime: process.uptime()
+      memory: { used: heapUsedMB, total: heapTotalMB }, // rounded MB
+      uptime: secondsSinceStart
     }
   });
 });
@@ -512,12 +526,15 @@ export default health;
 
 **Implementation**:
 
-Recipient whitelisting is configured via environment variables and enforced by middleware. No code changes needed in application logic.
+Recipient whitelisting is configured via environment variables and enforced by middleware (`src/middleware/recipientValidation.ts`). No code changes needed in application logic.
 
 **Environment Configuration**:
 
+Every `API_KEY_<NAME>_RECIPIENTS` / `_RECIPIENT_DOMAINS` variable needs `API_KEY_<NAME>` to be set to a valid key; otherwise startup fails.
+
 ```bash
 # .env
+API_KEY_MYSITE=KEY_MYSITE_50c1c716a72d6637bb4bfa4e0d0c2269
 
 # Option 1: Whitelist specific email addresses
 API_KEY_MYSITE_RECIPIENTS=support@company.com,admin@company.com,contact@company.com
@@ -539,12 +556,12 @@ API_KEY_MARKETING_RECIPIENT_DOMAINS=company.com,partner.com
 
 **How It Works**:
 
-1. Middleware extracts recipient email from request (`to` field)
-2. Looks up API key's whitelist configuration from environment variables
-3. Checks if recipient email matches:
+1. Middleware extracts recipient email from request (`to` field); a missing or non-string `to` gets 400 `VALIDATION_ERROR` for keys with a whitelist
+2. Looks up the API key's whitelist (loaded once at startup)
+3. Checks if recipient email matches (case-insensitive):
    - Exact match in `API_KEY_*_RECIPIENTS` list, OR
-   - Domain matches one in `API_KEY_*_RECIPIENT_DOMAINS` list
-4. Blocks request with 403 if no match
+   - Domain (exact, no subdomains) matches one in `API_KEY_*_RECIPIENT_DOMAINS` list
+4. Blocks request with 403 `RECIPIENT_NOT_ALLOWED` if no match. This runs **before rate limiting**, so blocked requests do not consume rate-limit tokens
 
 **Configuration Examples**:
 
@@ -571,15 +588,17 @@ API_KEY_MULTIBRAND_RECIPIENT_DOMAINS=brand1.com,brand2.com,brand3.com
 ```json
 {
   "success": false,
-  "code": "RECIPIENT_NOT_ALLOWED",
-  "error": "Recipient 'attacker@evil.com' is not whitelisted for this API key"
+  "error": "Recipient not allowed. This recipient is not in the whitelist for this API key.",
+  "code": "RECIPIENT_NOT_ALLOWED"
 }
 ```
 
-**Testing**:
+The response never echoes the recipient or the whitelist. Outside production it also includes `details.hint`.
+
+**Testing** (simplified; see `tests/security/recipientValidation.test.ts`):
 
 ```typescript
-// tests/security/recipientWhitelist.test.ts
+// tests/security/recipientValidation.test.ts
 import { describe, it, expect } from 'vitest';
 
 describe('Recipient Whitelisting', () => {
@@ -587,7 +606,7 @@ describe('Recipient Whitelisting', () => {
     const res = await app.request('/api/send', {
       method: 'POST',
       headers: {
-        'X-API-Key': 'KEY_WEBSITE_abc123',
+        'X-API-Key': 'KEY_WEBSITE_657582934edbf009f73afb38c38111f6',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -605,7 +624,7 @@ describe('Recipient Whitelisting', () => {
     const res = await app.request('/api/send', {
       method: 'POST',
       headers: {
-        'X-API-Key': 'KEY_WEBSITE_abc123',
+        'X-API-Key': 'KEY_WEBSITE_657582934edbf009f73afb38c38111f6',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -625,7 +644,7 @@ describe('Recipient Whitelisting', () => {
     const res = await app.request('/api/send', {
       method: 'POST',
       headers: {
-        'X-API-Key': 'KEY_WEBSITE_abc123',
+        'X-API-Key': 'KEY_WEBSITE_657582934edbf009f73afb38c38111f6',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -669,6 +688,10 @@ The following are **recommended** for production but not critical for MVP.
 
 ## 10. IP-Based Rate Limiting (Secondary)
 
+**Status**: Not implemented. The design below is a proposal.
+
+**What exists today** (`src/middleware/rateLimit.ts`): rate limiting per API key only, with in-memory token buckets for three windows (`RATE_LIMIT_PER_MINUTE`/`_PER_HOUR`/`_PER_DAY`, defaults 10/100/500). All three buckets are refilled and checked before any token is consumed, so a rejected request never drains the hour or day budget. A rejected request gets 429 `RATE_LIMIT_EXCEEDED` with `retryAfter` (the longest wait among the empty buckets) in the body and a `Retry-After` header. Successful requests get `X-RateLimit-Limit-*` and `X-RateLimit-Remaining-*` headers. State is per process and resets on restart.
+
 **Purpose**: Additional protection if API key is compromised
 
 **Implementation**:
@@ -706,6 +729,8 @@ export async function rateLimit(c: Context, next: Next) {
 ---
 
 ## 11. Circuit Breaker for Provider APIs
+
+**Status**: Not implemented. The design below is a proposal.
 
 **Purpose**: Prevent cascading failures when providers are down
 
@@ -778,36 +803,18 @@ export async function sendEmail(data: EmailData) {
 
 ## 12. API Key Revocation Mechanism
 
-**Purpose**: Invalidate compromised keys without redeployment
+**Purpose**: Invalidate compromised keys without a code change
 
-**Option A: Environment-based revocation list (simple)**
+**Option A: Environment-based revocation list (simple)** - implemented
 
 ```bash
 # .env
-REVOKED_KEYS=KEY_OLD_abc123,KEY_COMPROMISED_xyz789
+REVOKED_KEYS=KEY_OLD_647cfb9ac0dc1629d3075f5bf69816d1,KEY_COMPROMISED_0677f6aa823dff288eaf42dc9333e03d
 ```
 
-```typescript
-// src/middleware/auth.ts
-const revokedKeys = (process.env.REVOKED_KEYS || '').split(',').filter(Boolean);
+`src/middleware/auth.ts` checks the header against `config.revokedKeys` with the same constant-time comparison as for valid keys (see [section 4](#4-constant-time-api-key-comparison)) and rejects a match with 401 `UNAUTHORIZED` ("API key has been revoked"), even if the key is still configured. Configuration is loaded at startup, so **restart Conduit** after changing `REVOKED_KEYS`. Removing the `API_KEY_<NAME>` variable (and its per-key config variables, which otherwise fail startup) and restarting also disables a key.
 
-export async function auth(c: Context, next: Next) {
-  const providedKey = c.req.header('X-API-Key');
-
-  // Check revocation list first
-  if (revokedKeys.includes(providedKey || '')) {
-    return c.json({
-      success: false,
-      error: 'API key has been revoked',
-      code: 'UNAUTHORIZED'
-    }, 401);
-  }
-
-  // Continue with normal validation...
-}
-```
-
-**Option B: Redis-based key store (advanced, Phase 2+)**
+**Option B: Redis-based key store (advanced, Phase 2+)** - not implemented
 
 ```typescript
 // Allows runtime revocation without restart
@@ -851,7 +858,14 @@ app.post('/admin/revoke-key', adminAuth, async (c) => {
 
 **Requirement**: Hide internal errors in production
 
-**Implementation**:
+**What the code does** (`src/middleware/errorHandler.ts`, `src/utils/errors.ts`):
+
+- All errors go through `app.onError(errorHandler)` in `src/index.ts`; routes do not catch and format errors themselves
+- Conduit errors (`ConduitError` subclasses) keep their message and code. `details` is removed when `NODE_ENV=production`; `retryAfter` is kept for 429 and 503 responses
+- Unknown errors are logged with `console.error` and return 500 `INTERNAL_ERROR` with `Internal server error` in production (the raw message otherwise)
+- Stack traces are never included in responses
+
+**Original design** (simplified, not the current code):
 
 ```typescript
 // src/utils/errors.ts
@@ -912,12 +926,12 @@ try {
 - Legitimate interest (transactional communications)
 
 **Requirements**:
-- ✅ Auto-delete logs after 90 days
-- ✅ PII masking in logs
-- ✅ Right to erasure mechanism
-- ✅ Data processing agreement with providers
+- Auto-delete logs after 90 days (operator responsibility: Conduit logs to stdout/stderr and does not manage log files)
+- ✅ PII masking in logs (implemented in `src/middleware/logger.ts`)
+- Right to erasure mechanism (not implemented; Conduit stores no messages)
+- Data processing agreement with providers (operator responsibility)
 
-**Log Retention Policy**:
+**Log Retention Policy** (only if you redirect Conduit's output to files):
 
 ```bash
 # /etc/logrotate.d/conduit
@@ -935,34 +949,43 @@ try {
 }
 ```
 
-**PII Masking**:
+**PII Masking** (`src/middleware/logger.ts`, simplified):
 
 ```typescript
-// src/middleware/logger.ts
-function maskEmail(email: string): string {
-  const [local, domain] = email.split('@');
-  return `***@${domain}`;
+// KEY_TEST_abcd1234... -> KEY_TEST_****; anything else -> ****
+function maskApiKey(key: string): string {
+  const parts = key.split('_');
+  if (parts.length >= 3 && parts[0] === 'KEY' && parts[1]) {
+    return `KEY_${parts[1]}_****`;
+  }
+  return '****';
 }
 
-function maskApiKey(key: string): string {
-  return key.substring(0, key.lastIndexOf('_') + 4) + '***';
-}
+// user@example.com -> u***@***.com
+function maskEmail(email: string): string { /* ... */ }
 
 export async function logger(c: Context, next: Next) {
-  const log = {
-    timestamp: new Date().toISOString(),
-    method: c.req.method,
-    path: c.req.path,
-    apiKey: maskApiKey(c.get('apiKey') || ''),
-    origin: c.req.header('origin'),
-    // Mask PII in request body
-    // ...
-  };
+  const requestId = randomUUID();
 
-  console.log(JSON.stringify(log));
+  // Request line: X-API-Key/Authorization masked with maskApiKey; cookies,
+  // client IP headers and headers containing "token"/"secret" logged as ****
+  console.info(JSON.stringify({
+    type: 'request', requestId, timestamp, method, path,
+    headers: maskHeaders(c.req.raw.headers),
+  }));
+
   await next();
+
+  // Response line: the authenticated key (set by auth, which runs later) is masked
+  console.info(JSON.stringify({
+    type: 'response', requestId, timestamp, method, path,
+    status: c.res.status, duration,
+    apiKey: apiKey ? maskApiKey(apiKey) : undefined,
+  }));
 }
 ```
+
+Request bodies are not logged. For a key such as `KEY_MY_SITE_...` only the first name segment is kept (`KEY_MY_****`).
 
 ---
 
@@ -970,8 +993,10 @@ export async function logger(c: Context, next: Next) {
 
 ### Unit Tests
 
+The real tests live in `tests/security/` (auth, body limit, CORS, injection, rate limit, recipient validation, security headers), `tests/unit/` and `tests/integration/`. The snippet below is illustrative.
+
 ```typescript
-// tests/security.test.ts
+// tests/security.test.ts (illustrative)
 import { describe, it, expect } from 'vitest';
 
 describe('Security', () => {
@@ -1025,46 +1050,27 @@ describe('Security', () => {
 
   it('masks sensitive data in logs', () => {
     const masked = maskEmail('user@example.com');
-    expect(masked).toBe('***@example.com');
+    expect(masked).toBe('u***@***.com');
 
-    const maskedKey = maskApiKey('KEY_APP_abc123xyz');
-    expect(maskedKey).toBe('KEY_APP_***');
+    const maskedKey = maskApiKey('KEY_APP_588a0a9ee07f219a9e615f7a18eb155f');
+    expect(maskedKey).toBe('KEY_APP_****');
   });
 });
 ```
 
 ### Dependency Scanning
 
-```json
-// package.json
-{
-  "scripts": {
-    "audit": "npm audit",
-    "audit:fix": "npm audit fix --audit-level=moderate",
-    "audit:ci": "npm audit --audit-level=moderate"
-  }
-}
-```
+Implemented in `.github/workflows/security.yml` (on pushes and PRs to `main`, daily at 2 AM UTC, and on manual dispatch):
 
-```yaml
-# .github/workflows/security.yml
-name: Security Audit
+- `npm audit --audit-level=moderate`
+- OSV Scanner on `package-lock.json` with `fail-on-vuln: true`
+- Dependency Review on pull requests (`fail-on-severity: moderate`)
 
-on: [push, pull_request]
-
-jobs:
-  audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '22'
-      - run: npm ci
-      - run: npm run audit:ci
-```
+There are no `audit` scripts in `package.json`; run `npm audit` directly. See [automated-security.md](automated-security.md).
 
 ### Container Scanning
+
+**Status**: Not implemented in CI. The commands and workflow below are a proposal.
 
 ```bash
 # Run before deployment
@@ -1111,10 +1117,10 @@ jobs:
 - Review recent logs for unauthorized access patterns
 
 **2. Investigation** (within hours):
-- Check structured logs for anomalies:
+- Check structured logs for anomalies. Conduit logs to stdout/stderr; error codes are not logged, but every response line has the status and the masked key:
   ```bash
-  grep "UNAUTHORIZED" /app/logs/*.log
-  grep -A 5 "RATE_LIMIT_EXCEEDED" /app/logs/*.log
+  docker logs conduit 2>&1 | grep '"type":"response"' | grep '"status":401'
+  docker logs conduit 2>&1 | grep '"type":"response"' | grep '"status":429'
   ```
 - Identify scope: which API keys, how many requests, what data accessed
 - Document timeline of events
@@ -1148,4 +1154,4 @@ jobs:
 
 ---
 
-**Next**: See [review.md](review.md) for detailed security analysis and threat modeling.
+**Next**: See [archive/review-pre-v1.0.0.md](archive/review-pre-v1.0.0.md) for the original (pre-v1.0.0) security analysis and threat modeling.
