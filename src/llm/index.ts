@@ -24,12 +24,6 @@ export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
     case 'openai':
       return new OpenAIProvider(config);
 
-    case 'gemini':
-      throw new Error('Gemini provider not yet implemented (Phase 2)');
-
-    case 'ollama':
-      throw new Error('Ollama provider not yet implemented (Phase 2)');
-
     default: {
       const exhaustiveCheck: never = config.provider;
       throw new Error(`Unsupported LLM provider: ${String(exhaustiveCheck)}`);
@@ -52,8 +46,4 @@ export type {
   FilterResult,
 } from './providers/base.js';
 
-export {
-  LLMProviderError,
-  LLMTimeoutError,
-  LLMInvalidResponseError,
-} from './providers/base.js';
+export { LLMProviderError, LLMTimeoutError, LLMInvalidResponseError } from './providers/base.js';

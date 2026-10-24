@@ -36,6 +36,11 @@ process.env.API_KEY_LLM_TEST_LLM_THRESHOLD = '0.7';
 process.env.API_KEY_LLM_TEST_LLM_FAIL_MODE = 'allow';
 process.env.API_KEY_LLM_TEST_LLM_MAX_CALLS_PER_DAY = '1000';
 
+// API key with LLM enabled in fail-closed (block) mode
+process.env.API_KEY_LLM_BLOCK = 'KEY_LLM_BLOCK_abc123def456ghi789jkl012mno345';
+process.env.API_KEY_LLM_BLOCK_LLM_ENABLED = 'true';
+process.env.API_KEY_LLM_BLOCK_LLM_FAIL_MODE = 'block';
+
 // API key without LLM
 process.env.API_KEY_NO_LLM = 'KEY_NO_LLM_abc123def456ghi789jkl012mno345pqr567';
 

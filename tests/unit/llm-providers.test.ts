@@ -6,10 +6,22 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { LLMProviderError, LLMTimeoutError } from '@/llm/index.js';
 import { AnthropicProvider } from '@/llm/providers/anthropic.js';
 import { OpenAIProvider } from '@/llm/providers/openai.js';
 import type { FilterRules } from '@/llm/providers/base.js';
 import { installFetchMock, type FetchMock } from '../helpers/fetch.js';
+
+/** fetch mock that never settles on its own and rejects only when aborted */
+function hangUntilAborted(_input: Parameters<typeof fetch>[0], init?: RequestInit) {
+  return new Promise<never>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () =>
+      reject(new DOMException('aborted', 'AbortError'))
+    );
+  });
+}
+
+const content = (message: string) => ({ message });
 
 // Default filter rules for testing
 const defaultRules: FilterRules = {
@@ -69,7 +81,7 @@ describe('AnthropicProvider', () => {
           }),
       });
 
-      const result = await provider.analyze('BUY CHEAP VIAGRA NOW!!!', defaultRules);
+      const result = await provider.analyze(content('BUY CHEAP VIAGRA NOW!!!'), defaultRules);
 
       expect(result.allowed).toBe(false);
       expect(result.confidence).toBeGreaterThan(0.8);
@@ -107,7 +119,7 @@ describe('AnthropicProvider', () => {
       });
 
       const result = await provider.analyze(
-        'Hi, I have a question about your product',
+        content('Hi, I have a question about your product'),
         defaultRules
       );
 
@@ -136,19 +148,14 @@ describe('AnthropicProvider', () => {
           }),
       });
 
-      const result = await provider.analyze('Test message', defaultRules);
+      const result = await provider.analyze(content('Test message'), defaultRules);
 
       expect(result.allowed).toBe(false);
       expect(result.categories).toContain('abuse');
     });
 
-    it('should handle timeout with fallback', async () => {
-      // Mock timeout
-      fetchMock.mockImplementationOnce(() => {
-        return new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('AbortError')), 100);
-        });
-      });
+    it('should throw a timeout error when the request exceeds the timeout', async () => {
+      fetchMock.mockImplementationOnce(hangUntilAborted);
 
       const shortTimeoutProvider = new AnthropicProvider({
         provider: 'anthropic',
@@ -157,48 +164,23 @@ describe('AnthropicProvider', () => {
         timeout: 50,
       });
 
-      const result = await shortTimeoutProvider.analyze('Test message', {
-        ...defaultRules,
-        failMode: 'allow',
-      });
-
-      expect(result.fallback).toBe(true);
-      expect(result.allowed).toBe(true); // fail-open mode
-      expect(result.confidence).toBe(0);
+      await expect(
+        shortTimeoutProvider.analyze(content('Test message'), defaultRules)
+      ).rejects.toBeInstanceOf(LLMTimeoutError);
     });
 
-    it('should handle API errors with fallback', async () => {
-      // Mock API error
-      fetchMock.mockResolvedValueOnce({
+    it('should throw on API errors regardless of failMode', async () => {
+      fetchMock.mockResolvedValue({
         ok: false,
         status: 500,
         text: () => Promise.resolve('Internal Server Error'),
       });
 
-      const result = await provider.analyze('Test message', {
-        ...defaultRules,
-        failMode: 'allow',
-      });
-
-      expect(result.fallback).toBe(true);
-      expect(result.allowed).toBe(true); // fail-open mode
-    });
-
-    it('should block on error with fail-closed mode', async () => {
-      // Mock API error
-      fetchMock.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve('Internal Server Error'),
-      });
-
-      const result = await provider.analyze('Test message', {
-        ...defaultRules,
-        failMode: 'block',
-      });
-
-      expect(result.fallback).toBe(true);
-      expect(result.allowed).toBe(false); // fail-closed mode
+      for (const failMode of ['allow', 'block'] as const) {
+        await expect(
+          provider.analyze(content('Test message'), { ...defaultRules, failMode })
+        ).rejects.toThrow(LLMProviderError);
+      }
     });
   });
 
@@ -270,7 +252,7 @@ describe('OpenAIProvider', () => {
           }),
       });
 
-      const result = await provider.analyze('BUY NOW LIMITED TIME OFFER!!!', defaultRules);
+      const result = await provider.analyze(content('BUY NOW LIMITED TIME OFFER!!!'), defaultRules);
 
       expect(result.allowed).toBe(false);
       expect(result.confidence).toBeGreaterThan(0.8);
@@ -307,19 +289,14 @@ describe('OpenAIProvider', () => {
           }),
       });
 
-      const result = await provider.analyze('Hello, how are you?', defaultRules);
+      const result = await provider.analyze(content('Hello, how are you?'), defaultRules);
 
       expect(result.allowed).toBe(true);
       expect(result.categories).not.toContain('spam');
     });
 
-    it('should handle timeout with fallback', async () => {
-      // Mock timeout
-      fetchMock.mockImplementationOnce(() => {
-        return new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('AbortError')), 100);
-        });
-      });
+    it('should throw a timeout error when the request exceeds the timeout', async () => {
+      fetchMock.mockImplementationOnce(hangUntilAborted);
 
       const shortTimeoutProvider = new OpenAIProvider({
         provider: 'openai',
@@ -328,13 +305,9 @@ describe('OpenAIProvider', () => {
         timeout: 50,
       });
 
-      const result = await shortTimeoutProvider.analyze('Test message', {
-        ...defaultRules,
-        failMode: 'allow',
-      });
-
-      expect(result.fallback).toBe(true);
-      expect(result.allowed).toBe(true); // fail-open mode
+      await expect(
+        shortTimeoutProvider.analyze(content('Test message'), defaultRules)
+      ).rejects.toBeInstanceOf(LLMTimeoutError);
     });
   });
 

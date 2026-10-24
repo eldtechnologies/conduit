@@ -288,6 +288,25 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       const cfg = loadConfig(baseEnv({ API_KEY_MYSITE_LLM_ENABLED: 'true' }));
       expect(cfg.llmFilterRules.get(MYSITE_KEY)?.failMode).toBe('allow');
     });
+
+    it('fails startup when the removed LLM sender whitelist is configured', () => {
+      let message = '';
+      try {
+        loadConfig(baseEnv({ API_KEY_MYSITE_LLM_WHITELIST_SENDERS: 'owner@example.com' }));
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain('API_KEY_MYSITE_LLM_WHITELIST_SENDERS');
+      expect(message).toContain('removed for security reasons');
+      expect(message).toContain('spoofable');
+      expect(message).not.toContain('owner@example.com');
+    });
+
+    it('fails startup for the removed sender whitelist even for an unknown key name', () => {
+      expect(() =>
+        loadConfig(baseEnv({ API_KEY_OTHER_LLM_WHITELIST_SENDERS: 'a@example.com' }))
+      ).toThrow('API_KEY_OTHER_LLM_WHITELIST_SENDERS: the LLM sender whitelist was removed');
+    });
   });
 
   describe('LLM_PROVIDER', () => {

@@ -1,17 +1,25 @@
 /**
- * LLM Content Filter Middleware
+ * LLM Content Filter
  *
  * Analyzes message content using LLM providers to detect spam, abuse, and other violations.
  * Optional feature (v1.2.0) that can be enabled per API key.
  *
- * Must be applied AFTER authentication and recipient validation middleware.
+ * Not mounted as middleware: the send route calls filterContent() AFTER validating
+ * the request schema, so invalid requests never trigger (paid) LLM calls. Template
+ * data is validated here before the call, and only the validated template fields
+ * are sent to the LLM. It runs after authentication, recipient validation and
+ * rate limiting (see src/index.ts).
  */
 
-import type { Context, Next } from 'hono';
+import type { Context } from 'hono';
+import { ZodError } from 'zod';
 import { config } from '../config.js';
-import { createLLMProvider, type FilterResult } from '../llm/index.js';
-import { ForbiddenError, ServiceUnavailableError } from '../utils/errors.js';
-import { ErrorCode } from '../types/api.js';
+import { createLLMProvider, type FilterRules } from '../llm/index.js';
+import { getChannelHandler } from '../channels/index.js';
+import { getTemplate } from '../templates/index.js';
+import { ForbiddenError, ServiceUnavailableError, fromZodError } from '../utils/errors.js';
+import { ErrorCode, type LLMAnalysis, type SendMessageRequest } from '../types/api.js';
+import { maskApiKey } from './logger.js';
 
 /**
  * In-memory budget tracker for LLM API calls per API key
@@ -65,44 +73,45 @@ function getSecondsUntilReset(apiKey: string): number {
 }
 
 /**
- * Extract content to analyze from request body
- * Concatenates all string fields from the data object
+ * Validate the request's template data with the template's own schema.
+ *
+ * Uses the same lookup and validation as the channel handler, so a request that
+ * would be rejected at send time is rejected here, before any LLM call.
+ *
+ * @returns The validated (schema-stripped) template data
+ * @throws ValidationError for unknown channels/templates or invalid template data
  */
-function extractContentForAnalysis(body: unknown): string {
-  // Type guard to check if body has the expected structure
-  if (
-    !body ||
-    typeof body !== 'object' ||
-    !('data' in body) ||
-    !body.data ||
-    typeof body.data !== 'object'
-  ) {
-    return '';
-  }
+function validateTemplateData(request: SendMessageRequest): unknown {
+  // Resolve the channel first so unsupported channels keep their INVALID_CHANNEL error
+  getChannelHandler(request.channel);
+  const template = getTemplate(request.channel, request.templateId);
 
-  const parts: string[] = [];
-
-  // Extract all string values from data object
-  for (const [key, value] of Object.entries(body.data)) {
-    if (typeof value === 'string' && value.trim().length > 0) {
-      // Include field name for context
-      parts.push(`${key}: ${value}`);
+  try {
+    return template.validate(request.data);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw fromZodError(error, 'Invalid template data');
     }
+    throw error;
   }
-
-  return parts.join('\n\n');
 }
 
 /**
- * Check if sender is whitelisted (skip LLM analysis)
+ * Collect the non-empty string fields of validated template data.
  */
-function isSenderWhitelisted(senderEmail: string | undefined, whitelist?: string[]): boolean {
-  if (!whitelist || whitelist.length === 0 || !senderEmail) {
-    return false;
+function extractContentForAnalysis(validatedData: unknown): Record<string, string> {
+  const content: Record<string, string> = {};
+  if (!validatedData || typeof validatedData !== 'object') {
+    return content;
   }
 
-  const senderLower = senderEmail.toLowerCase().trim();
-  return whitelist.includes(senderLower);
+  for (const [key, value] of Object.entries(validatedData)) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      content[key] = value;
+    }
+  }
+
+  return content;
 }
 
 /**
@@ -121,15 +130,103 @@ function getErrorCodeForCategories(categories: string[]): ErrorCode {
 }
 
 /**
- * LLM filter middleware
- *
- * Analyzes message content for spam, abuse, and other violations.
- * Blocks messages that exceed the confidence threshold.
- *
- * Must be applied AFTER authentication middleware (requires c.get('apiKey')).
- * Must be applied AFTER recipientValidation middleware (requires c.get('parsedBody')).
+ * Analysis outcome: client-facing metadata plus the model's reasoning (logs/dev only)
  */
-export async function llmFilter(c: Context, next: Next) {
+interface AnalysisOutcome {
+  analysis: LLMAnalysis;
+  reasoning?: string;
+}
+
+/**
+ * Run the provider and apply the key's failMode to any failure.
+ *
+ * Providers throw on every failure (timeout, HTTP/network error, malformed or
+ * inconsistent output). 'block' fails closed with 503; 'allow' fails open.
+ */
+async function analyzeWithFailMode(
+  apiKey: string,
+  content: Record<string, string>,
+  rules: FilterRules
+): Promise<AnalysisOutcome> {
+  const llm = config.llm!;
+  const provider = createLLMProvider({
+    provider: llm.provider,
+    apiKey: llm.apiKey,
+    model: llm.model,
+    timeout: llm.timeout,
+    endpoint: llm.endpoint,
+  });
+
+  // Count every attempt (including failures) so maxCallsPerDay caps outbound calls
+  incrementBudget(apiKey);
+
+  try {
+    const result = await provider.analyze(content, rules);
+    return {
+      analysis: {
+        provider: result.provider,
+        model: result.model,
+        allowed: result.allowed,
+        confidence: result.confidence,
+        categories: result.categories,
+        latency: result.latency,
+      },
+      reasoning: result.reasoning,
+    };
+  } catch (error) {
+    // Full provider error (may include upstream response text) is logged only
+    console.error('LLM filter error:', {
+      apiKey: maskApiKey(apiKey),
+      failMode: rules.failMode,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    if (rules.failMode === 'block') {
+      throw new ServiceUnavailableError(
+        'Unable to verify content safety',
+        ErrorCode.LLM_PROVIDER_ERROR,
+        {
+          hint: 'Content moderation service temporarily unavailable. Please try again.',
+        }
+      );
+    }
+
+    console.warn('LLM filter failed, allowing message (fail-open mode):', {
+      apiKey: maskApiKey(apiKey),
+    });
+
+    return {
+      analysis: {
+        provider: llm.provider,
+        allowed: true,
+        confidence: 0,
+        categories: [],
+        latency: 0,
+        fallback: true,
+        fallbackReason: 'LLM analysis failed',
+      },
+    };
+  }
+}
+
+/**
+ * Filter a validated send request with the LLM content filter.
+ *
+ * Skips silently when LLM filtering is not configured or not enabled for the key.
+ * Otherwise validates the template data, enforces the daily budget and analyzes
+ * only the validated template fields.
+ *
+ * @param c - Request context (requires c.get('apiKey') from the auth middleware)
+ * @param request - Request that already passed the send route's schema validation
+ * @returns Analysis metadata, or undefined when no analysis was performed
+ * @throws ValidationError for invalid channel/template/template data
+ * @throws ForbiddenError when content is blocked
+ * @throws ServiceUnavailableError in block mode when the budget is exhausted or the provider fails
+ */
+export async function filterContent(
+  c: Context,
+  request: SendMessageRequest
+): Promise<LLMAnalysis | undefined> {
   const apiKey = c.get('apiKey') as string | undefined;
 
   if (!apiKey) {
@@ -139,189 +236,64 @@ export async function llmFilter(c: Context, next: Next) {
 
   // Check if LLM filtering is globally enabled
   if (!config.llm) {
-    // LLM not configured, skip filtering
-    await next();
-    return;
+    return undefined;
   }
 
-  // Get filter rules for this API key
+  // Get filter rules for this API key; skip if none or not enabled
   const rules = config.llmFilterRules.get(apiKey);
-
-  // If no rules or not enabled for this key, skip filtering
   if (!rules || !rules.enabled) {
-    await next();
-    return;
+    return undefined;
+  }
+
+  // Invalid template data must never reach the LLM
+  const content = extractContentForAnalysis(validateTemplateData(request));
+  if (Object.keys(content).length === 0) {
+    return undefined;
   }
 
   // Check budget limits
   if (isOverBudget(apiKey, rules.maxCallsPerDay)) {
-    // Handle budget exceeded based on fail mode
     if (rules.failMode === 'block') {
       throw new ServiceUnavailableError(
         'LLM budget exceeded for today',
         ErrorCode.LLM_BUDGET_EXCEEDED,
         {
           hint: 'Daily LLM analysis limit reached. Try again tomorrow or contact administrator.',
-          retryAfter: getSecondsUntilReset(apiKey),
-        }
+        },
+        getSecondsUntilReset(apiKey)
       );
     }
 
     // Fail-open: Allow without LLM check
     console.warn('LLM budget exceeded, allowing without check:', {
-      apiKey: apiKey.substring(0, 15) + '***',
+      apiKey: maskApiKey(apiKey),
       budget: rules.maxCallsPerDay,
     });
-    await next();
-    return;
+    return undefined;
   }
 
-  // Get parsed body from context (set by recipientValidation middleware)
-  const body = c.get('parsedBody') as unknown;
-  if (!body) {
-    // Body not parsed yet - should not happen in normal flow
-    console.warn('LLM filter: No parsed body in context, skipping filter');
-    await next();
-    return;
-  }
+  const { analysis, reasoning } = await analyzeWithFailMode(apiKey, content, rules);
 
-  // Check if sender is whitelisted - extract sender email safely
-  let senderEmail: string | undefined;
-  if (
-    body &&
-    typeof body === 'object' &&
-    'data' in body &&
-    body.data &&
-    typeof body.data === 'object'
-  ) {
-    const data = body.data as Record<string, unknown>;
-    senderEmail =
-      (typeof data.email === 'string' ? data.email : undefined) ||
-      (typeof data.from === 'string' ? data.from : undefined);
-  }
+  // Check if content should be blocked
+  if (!analysis.allowed && analysis.confidence >= rules.threshold) {
+    const errorCode = getErrorCodeForCategories(analysis.categories);
 
-  if (
-    body &&
-    typeof body === 'object' &&
-    'from' in body &&
-    body.from &&
-    typeof body.from === 'object' &&
-    'email' in body.from
-  ) {
-    const from = body.from as Record<string, unknown>;
-    if (!senderEmail && typeof from.email === 'string') {
-      senderEmail = from.email;
-    }
-  }
-
-  if (isSenderWhitelisted(senderEmail, rules.whitelistSenders)) {
-    const maskedEmail = senderEmail ? senderEmail.split('@')[0] + '@***' : 'unknown';
-    console.info('Sender whitelisted, skipping LLM analysis:', {
-      sender: maskedEmail,
-    });
-    await next();
-    return;
-  }
-
-  // Extract content for analysis
-  const content = extractContentForAnalysis(body);
-
-  if (!content || content.trim().length === 0) {
-    // No content to analyze, allow
-    await next();
-    return;
-  }
-
-  // Create LLM provider
-  const provider = createLLMProvider({
-    provider: config.llm.provider,
-    apiKey: config.llm.apiKey,
-    model: config.llm.model,
-    timeout: config.llm.timeout,
-    endpoint: config.llm.endpoint,
-  });
-
-  let result: FilterResult;
-
-  try {
-    // Analyze content with LLM
-    result = await provider.analyze(content, rules);
-
-    // Increment budget counter
-    incrementBudget(apiKey);
-
-    // Store result in context for route handler to include in response
-    c.set('llmAnalysis', {
-      provider: result.provider,
-      model: result.model,
-      allowed: result.allowed,
-      confidence: result.confidence,
-      categories: result.categories,
-      latency: result.latency,
-      fallback: result.fallback,
-      fallbackReason: result.fallbackReason,
+    console.warn('Content blocked by LLM filter:', {
+      apiKey: maskApiKey(apiKey),
+      categories: analysis.categories,
+      confidence: analysis.confidence,
+      reasoning,
     });
 
-    // Check if content should be blocked
-    if (!result.allowed && result.confidence >= rules.threshold) {
-      // Content blocked
-      const errorCode = getErrorCodeForCategories(result.categories);
-
-      console.warn('Content blocked by LLM filter:', {
-        apiKey: apiKey.substring(0, 15) + '***',
-        categories: result.categories,
-        confidence: result.confidence,
-        reasoning: result.reasoning,
-      });
-
-      throw new ForbiddenError(`Content blocked: ${result.reasoning}`, errorCode, {
-        provider: result.provider,
-        confidence: result.confidence,
-        categories: result.categories,
-        reasoning: result.reasoning,
-        hint: 'If this is a legitimate message, please contact the site administrator',
-      });
-    }
-
-    // Content allowed, continue
-    await next();
-  } catch (error) {
-    // If error is ForbiddenError (content blocked), rethrow it
-    if (error instanceof ForbiddenError) {
-      throw error;
-    }
-
-    // Handle LLM provider errors based on fail mode
-    console.error('LLM filter error:', error);
-
-    if (rules.failMode === 'block') {
-      // Fail-closed: Block the message
-      throw new ServiceUnavailableError(
-        'Unable to verify content safety',
-        ErrorCode.LLM_PROVIDER_ERROR,
-        {
-          hint: 'Content moderation service temporarily unavailable. Please try again.',
-          reason: error instanceof Error ? error.message : 'Unknown error',
-        }
-      );
-    }
-
-    // Fail-open: Allow the message
-    console.warn('LLM filter failed, allowing message (fail-open mode):', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    // The message is generic; moderation internals are in details (stripped in production)
+    throw new ForbiddenError('Content blocked by content filter', errorCode, {
+      provider: analysis.provider,
+      confidence: analysis.confidence,
+      categories: analysis.categories,
+      reasoning,
+      hint: 'If this is a legitimate message, please contact the site administrator',
     });
-
-    // Store fallback info in context
-    c.set('llmAnalysis', {
-      provider: config.llm.provider,
-      allowed: true,
-      confidence: 0,
-      categories: [],
-      latency: 0,
-      fallback: true,
-      fallbackReason: error instanceof Error ? error.message : 'LLM analysis failed',
-    });
-
-    await next();
   }
+
+  return analysis;
 }

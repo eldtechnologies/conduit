@@ -19,7 +19,6 @@ import { corsProtection } from './middleware/cors.js';
 import { logger } from './middleware/logger.js';
 import { authenticate } from './middleware/auth.js';
 import { validateRecipient } from './middleware/recipientValidation.js';
-import { llmFilter } from './middleware/llmFilter.js';
 import { rateLimit } from './middleware/rateLimit.js';
 import { bodyLimit } from './middleware/bodyLimit.js';
 
@@ -47,6 +46,8 @@ const app = new Hono();
  *    MUST run before LLM filtering (and any other expensive work) so
  *    rate-limited requests never trigger paid LLM calls.
  * 9. LLM spam filtering - AI-powered content moderation (/api/send only) - v1.2.0
+ *    Not mounted here: the send route calls filterContent() after validating the
+ *    request schema and template data, so invalid requests never reach the LLM.
  */
 
 // 0. Global error handler
@@ -83,8 +84,7 @@ app.use('/api/send', validateRecipient);
 // 8. Rate limiting for /api/* routes (before any LLM call)
 app.use('/api/*', rateLimit);
 
-// 9. LLM spam filtering for /api/send route (v1.2.0)
-app.use('/api/send', llmFilter);
+// 9. LLM spam filtering runs inside the send route (routes/send.ts) after validation
 
 // Auth for /health/detailed (detailed diagnostics)
 app.use('/health/detailed', authenticate);

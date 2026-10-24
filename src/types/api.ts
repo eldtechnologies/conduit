@@ -103,6 +103,10 @@ export interface SendRequestBody {
 
 /**
  * LLM analysis metadata (v1.2.0)
+ *
+ * Returned to clients only outside production; it is omitted in production so
+ * moderation internals cannot be used to tune content past the filter.
+ * `fallbackReason` is always a generic string, never provider error text.
  */
 export interface LLMAnalysis {
   provider: string;
@@ -123,7 +127,7 @@ export interface SendMessageResponse {
   messageId: string;
   channel: Channel;
   timestamp: string;
-  llmAnalysis?: LLMAnalysis; // Optional LLM analysis metadata (v1.2.0)
+  llmAnalysis?: LLMAnalysis; // LLM analysis metadata (v1.2.0, non-production only)
 }
 
 /**

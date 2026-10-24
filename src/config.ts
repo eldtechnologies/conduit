@@ -156,8 +156,20 @@ const API_KEY_CONFIG_SUFFIXES = [
   '_LLM_THRESHOLD',
   '_LLM_FAIL_MODE',
   '_LLM_MAX_CALLS_PER_DAY',
-  '_LLM_WHITELIST_SENDERS',
 ] as const;
+
+/**
+ * Per-key config suffixes for features that were removed. Setting one fails startup
+ * with the given reason instead of being silently ignored, so operators notice that
+ * behaviour they relied on is gone.
+ */
+const REMOVED_API_KEY_CONFIG_SUFFIXES: ReadonlyArray<{ suffix: string; reason: string }> = [
+  {
+    suffix: '_LLM_WHITELIST_SENDERS',
+    reason:
+      'the LLM sender whitelist was removed for security reasons: sender fields are supplied by the client and trivially spoofable, so it let anyone skip content filtering. Remove this variable',
+  },
+];
 
 type ApiKeyConfigSuffix = (typeof API_KEY_CONFIG_SUFFIXES)[number];
 
@@ -203,6 +215,12 @@ function loadApiKeyEnv(env: NodeJS.ProcessEnv): ApiKeyEnv {
   for (const [envName, rawValue] of Object.entries(env)) {
     if (!envName.startsWith(API_KEY_PREFIX) || rawValue === undefined) continue;
     const value = rawValue.trim();
+
+    const removed = REMOVED_API_KEY_CONFIG_SUFFIXES.find((r) => envName.endsWith(r.suffix));
+    if (removed) {
+      errors.push(`${envName}: ${removed.reason}`);
+      continue;
+    }
 
     const suffix = API_KEY_CONFIG_SUFFIXES.find((s) => envName.endsWith(s));
     if (suffix) {
@@ -312,7 +330,6 @@ function loadLLMConfig(env: z.infer<typeof envSchema>): LLMConfig | undefined {
  * API_KEY_MYSITE_LLM_THRESHOLD=0.7
  * API_KEY_MYSITE_LLM_FAIL_MODE=allow   (defaults to LLM_FALLBACK_MODE)
  * API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000
- * API_KEY_MYSITE_LLM_WHITELIST_SENDERS=user@domain.com
  */
 function loadLLMFilterRules(
   apiKeyEnv: ApiKeyEnv,
@@ -400,12 +417,6 @@ function loadLLMFilterRules(
           if (!isNaN(maxCalls) && maxCalls > 0) {
             rules.maxCallsPerDay = maxCalls;
           }
-        }
-        break;
-
-      case '_LLM_WHITELIST_SENDERS':
-        if (value) {
-          rules.whitelistSenders = parseList(value);
         }
         break;
     }
