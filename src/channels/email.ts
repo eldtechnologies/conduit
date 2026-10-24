@@ -5,12 +5,13 @@
  * Handles timeouts, error mapping, and provider availability checks.
  */
 
-import { Resend } from 'resend';
+import { Resend, type CreateEmailOptions } from 'resend';
+import { ZodError } from 'zod';
 import type { SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
 import type { EmailTemplate } from '../types/templates.js';
 import { config, TIMEOUTS } from '../config.js';
-import { ProviderError, InternalError, ConduitError } from '../utils/errors.js';
+import { ProviderError, InternalError, ConduitError, fromZodError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 import { getTemplate } from '../templates/index.js';
 
@@ -67,13 +68,15 @@ export const emailHandler: ChannelHandler = {
         ? `${sanitizeSenderName(request.from.name || 'Conduit')} <${request.from.email}>`
         : 'Conduit <onboarding@resend.dev>'; // Default sender (test domain, works without verification)
 
-      const emailParams = {
+      // Typed so the SDK's option names are enforced: the SDK maps `replyTo` to the
+      // API's `reply_to` and silently drops unknown keys.
+      const emailParams: CreateEmailOptions = {
         from,
         to: request.to,
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
-        reply_to: request.replyTo,
+        replyTo: request.replyTo,
       };
 
       // Send with timeout
@@ -129,6 +132,11 @@ export const emailHandler: ChannelHandler = {
       // Re-throw all Conduit errors (ValidationError, ProviderError, etc.)
       if (error instanceof ConduitError) {
         throw error;
+      }
+
+      // Template validation failures are client errors, not internal ones
+      if (error instanceof ZodError) {
+        throw fromZodError(error, 'Invalid template data');
       }
 
       // Wrap unknown errors

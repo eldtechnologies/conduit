@@ -143,8 +143,8 @@ export async function rateLimit(c: Context, next: Next) {
 
   // If any bucket is rate limited, calculate retry-after and throw error
   if (!minuteOk || !hourOk || !dayOk) {
-    let retryAfter = 0;
-    let limitType = '';
+    let retryAfter: number;
+    let limitType: string;
 
     if (!minuteOk) {
       retryAfter = calculateRetryAfter(state.perMinute);

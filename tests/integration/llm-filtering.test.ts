@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '@/index.js';
 import { readJson } from '../helpers/response.js';
-import { installFetchMock, type FetchMock } from '../helpers/fetch.js';
+import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 interface LlmAnalysis {
   allowed: boolean;
@@ -147,10 +147,7 @@ describe('LLM Filtering Integration', () => {
             }),
         })
         // Mock Resend API
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ id: 'email_123' }),
-        });
+        .mockResolvedValueOnce(resendSuccessResponse('email_123'));
 
       const response = await app.fetch(
         new Request('http://localhost/api/send', {
@@ -292,10 +289,7 @@ describe('LLM Filtering Integration', () => {
       fetchMock
         .mockRejectedValueOnce(new Error('Network error'))
         // Mock Resend API success
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ id: 'email_fallback' }),
-        });
+        .mockResolvedValueOnce(resendSuccessResponse('email_fallback'));
 
       const response = await app.fetch(
         new Request('http://localhost/api/send', {
@@ -327,10 +321,7 @@ describe('LLM Filtering Integration', () => {
 
     it('should skip LLM analysis when disabled for API key', async () => {
       // Mock Resend API only (LLM should not be called)
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ id: 'email_no_llm' }),
-      });
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_no_llm'));
 
       const response = await app.fetch(
         new Request('http://localhost/api/send', {
@@ -387,10 +378,7 @@ describe('LLM Filtering Integration', () => {
             }),
         })
         // Mock Resend API
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ id: 'email_lowconf' }),
-        });
+        .mockResolvedValueOnce(resendSuccessResponse('email_lowconf'));
 
       const response = await app.fetch(
         new Request('http://localhost/api/send', {
@@ -451,16 +439,10 @@ describe('LLM Filtering Integration', () => {
                   usage: { input_tokens: 50, output_tokens: 25 },
                 }),
             })
-            .mockResolvedValueOnce({
-              ok: true,
-              json: () => Promise.resolve({ id: `email_${i}` }),
-            });
+            .mockResolvedValueOnce(resendSuccessResponse(`email_${i}`));
         } else {
           // 3rd request: only Resend (LLM budget exceeded, fail-open)
-          fetchMock.mockResolvedValueOnce({
-            ok: true,
-            json: () => Promise.resolve({ id: `email_${i}` }),
-          });
+          fetchMock.mockResolvedValueOnce(resendSuccessResponse(`email_${i}`));
         }
 
         const response = await app.fetch(

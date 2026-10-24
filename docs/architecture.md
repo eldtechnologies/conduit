@@ -568,7 +568,7 @@ channels/email.ts:
      {
        from: 'Company <noreply@company.com>',
        to: 'hello@company.com',
-       reply_to: 'customer@example.com',
+       replyTo: 'customer@example.com',
        subject: 'Contact Form: John Doe',
        html: '<html>...</html>',
        text: 'New Contact Form Submission...'
@@ -1162,7 +1162,7 @@ export const emailHandler: ChannelHandler = {
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
-        reply_to: request.replyTo,
+        replyTo: request.replyTo,
       }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Timeout')), TIMEOUTS.provider)

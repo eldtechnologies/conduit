@@ -8,13 +8,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { routeToChannel } from '../channels/index.js';
-import { ValidationError } from '../utils/errors.js';
-import {
-  ErrorCode,
-  type LLMAnalysis,
-  type SendMessageResponse,
-  type SendRequestBody,
-} from '../types/api.js';
+import { fromZodError } from '../utils/errors.js';
+import type { LLMAnalysis, SendMessageResponse, SendRequestBody } from '../types/api.js';
 
 const send = new Hono();
 
@@ -91,10 +86,7 @@ send.post('/send', async (c) => {
 
   const parseResult = sendRequestSchema.safeParse(body);
   if (!parseResult.success) {
-    const errors = parseResult.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
-    throw new ValidationError(`Invalid request: ${errors.join(', ')}`, ErrorCode.VALIDATION_ERROR, {
-      validationErrors: parseResult.error.issues,
-    });
+    throw fromZodError(parseResult.error, 'Invalid request');
   }
 
   const request = parseResult.data;
