@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (src, tests, scripts)
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # TODO: enable once the 8 known unformatted files are fixed (docs wave).
+      # - name: Check formatting
+      #   run: npm run format:check
+
+      - name: Test with coverage (80% thresholds)
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+
+      - name: Assert build entry point exists
+        run: test -f dist/index.js
+
+      - name: Smoke test built server
+        env:
+          NODE_ENV: production
+          PORT: '3999'
+          RESEND_API_KEY: re_ci_smoke
+          API_KEY_SMOKE: KEY_SMOKE_0123456789abcdef0123456789abcdef
+          ALLOWED_ORIGINS: http://localhost:5173
+        run: |
+          npm start > server.log 2>&1 &
+          SERVER_PID=$!
+          ok=0
+          for _ in $(seq 1 20); do
+            if curl -fsS "http://localhost:${PORT}/health"; then ok=1; break; fi
+            sleep 1
+          done
+          kill "$SERVER_PID" || true
+          if [ "$ok" != 1 ]; then
+            echo "Server did not answer /health"
+            cat server.log
+            exit 1
+          fi
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build -t conduit:ci .
