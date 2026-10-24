@@ -176,3 +176,6 @@ dump.rdb
 !src/**
 !scripts/**
 docs/.DS_Store
+
+# Claude Code agent worktrees
+.claude/worktrees/
