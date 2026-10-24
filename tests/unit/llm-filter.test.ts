@@ -447,7 +447,7 @@ describe('filterContent', () => {
       }
     });
 
-    it('should log provider errors with a masked API key', async () => {
+    it('should log provider errors server-side without the API key', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const apiKey = registerRules({ failMode: 'block' });
       fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
@@ -455,8 +455,36 @@ describe('filterContent', () => {
       await run(apiKey);
 
       const logged = JSON.stringify(errorSpy.mock.calls);
-      expect(logged).toContain('KEY_LLMFILTER_****');
       expect(logged).toContain('ECONNREFUSED');
+      expect(logged).not.toContain(apiKey);
+    });
+  });
+
+  describe('logging', () => {
+    it('should log blocked content with a masked API key', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const apiKey = registerRules();
+      fetchMock.mockResolvedValueOnce(
+        anthropicReply({ allowed: false, confidence: 0.95, categories: ['spam'], reasoning: 'x' })
+      );
+
+      await run(apiKey);
+
+      const logged = JSON.stringify(warnSpy.mock.calls);
+      expect(logged).toContain('KEY_LLMFILTER_****');
+      expect(logged).not.toContain(apiKey);
+    });
+
+    it('should log an exhausted budget with a masked API key', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const apiKey = registerRules({ maxCallsPerDay: 1 });
+      fetchMock.mockResolvedValue(anthropicReply(safeResult));
+
+      await run(apiKey);
+      await run(apiKey);
+
+      const logged = JSON.stringify(warnSpy.mock.calls);
+      expect(logged).toContain('KEY_LLMFILTER_****');
       expect(logged).not.toContain(apiKey);
     });
   });

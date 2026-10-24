@@ -174,9 +174,9 @@ async function analyzeWithFailMode(
       reasoning: result.reasoning,
     };
   } catch (error) {
-    // Full provider error (may include upstream response text) is logged only
+    // Full provider error (may include upstream response text) is logged only.
+    // The request logger's response line (same request) carries the masked API key.
     console.error('LLM filter error:', {
-      apiKey: maskApiKey(apiKey),
       failMode: rules.failMode,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -191,9 +191,7 @@ async function analyzeWithFailMode(
       );
     }
 
-    console.warn('LLM filter failed, allowing message (fail-open mode):', {
-      apiKey: maskApiKey(apiKey),
-    });
+    console.warn('LLM filter failed, allowing message (fail-open mode)');
 
     return {
       analysis: {
