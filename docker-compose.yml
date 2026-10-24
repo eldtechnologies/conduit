@@ -11,15 +11,18 @@ services:
     image: conduit:latest
     container_name: conduit
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
+    # Defaults to production (fail-safe: HTTPS enforcement and error sanitization on).
+    # For local plain-HTTP runs, set NODE_ENV=development in .env; otherwise every
+    # /api request without X-Forwarded-Proto: https is rejected with 403.
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
     env_file:
       - .env
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:' + (process.env.PORT || 3000) + '/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"]
       interval: 30s
       timeout: 3s
       retries: 3

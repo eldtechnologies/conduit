@@ -13,7 +13,7 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.build.json ./
 
 # Install all dependencies (including devDependencies for build)
 RUN npm ci
@@ -35,7 +35,8 @@ FROM node:22-alpine
 # Install curl for health checks
 RUN apk add --no-cache curl
 
-# Set NODE_ENV to production
+# Set NODE_ENV to production (enforces HTTPS via X-Forwarded-Proto on all non-/health routes).
+# For a local plain-HTTP run, override with -e NODE_ENV=development.
 ENV NODE_ENV=production
 
 # Create non-root user
@@ -62,9 +63,9 @@ USER conduit
 # Expose port (default: 3000)
 EXPOSE 3000
 
-# Health check
+# Health check (shell form so PORT is expanded at runtime; defaults to 3000)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f "http://localhost:${PORT:-3000}/health" || exit 1
 
 # Start the application
 CMD ["node", "dist/index.js"]
