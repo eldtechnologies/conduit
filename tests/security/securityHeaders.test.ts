@@ -5,7 +5,7 @@
  * CRITICAL: These tests verify our defense against various web attacks.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import { enforceHttps, securityHeaders } from '../../src/middleware/securityHeaders.js';
 
@@ -84,6 +84,48 @@ describe('Security Headers Middleware', () => {
       expect(res.status).toBe(200);
 
       process.env.ENFORCE_HTTPS = originalEnforceHttps;
+    });
+  });
+
+  describe('enforceHttps health exemption', () => {
+    let app: Hono;
+    const originalEnv = process.env.NODE_ENV;
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'production';
+      app = new Hono();
+      app.use('*', enforceHttps);
+      app.get('/health', (c) => c.text('OK'));
+      app.get('/health/detailed', (c) => c.text('OK'));
+      app.get('/healthz', (c) => c.text('OK'));
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    const overHttp = (path: string) =>
+      app.fetch(
+        new Request(`http://localhost:3000${path}`, { headers: { 'x-forwarded-proto': 'http' } })
+      );
+
+    it('should allow plain HTTP for the public /health endpoint', async () => {
+      const res = await overHttp('/health');
+
+      expect(res.status).toBe(200);
+    });
+
+    it('should require HTTPS for /health/detailed (authenticated)', async () => {
+      const res = await overHttp('/health/detailed');
+
+      expect(res.status).toBe(403);
+      expect(await res.text()).toBe('HTTPS Required');
+    });
+
+    it('should not exempt other paths that merely start with /health', async () => {
+      const res = await overHttp('/healthz');
+
+      expect(res.status).toBe(403);
     });
   });
 
