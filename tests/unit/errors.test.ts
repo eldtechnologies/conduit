@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   ConduitError,
   AuthError,
@@ -14,6 +15,7 @@ import {
   InternalError,
   sanitizeError,
   createErrorResponse,
+  fromZodError,
 } from '../../src/utils/errors.js';
 import { ErrorCode } from '../../src/types/api.js';
 
@@ -59,6 +61,27 @@ describe('Error Classes', () => {
       expect(error.code).toBe(ErrorCode.VALIDATION_ERROR);
       expect(error.details).toEqual({ field: 'email' });
       expect(error.name).toBe('ValidationError');
+    });
+  });
+
+  describe('fromZodError', () => {
+    it('should convert a ZodError into a 400 ValidationError with field paths', () => {
+      const schema = z.object({
+        name: z.string().min(1, 'Name is required'),
+        from: z.object({ email: z.string().email('Invalid from email') }),
+      });
+      const result = schema.safeParse({ name: '', from: { email: 'nope' } });
+      if (result.success) throw new Error('expected parse to fail');
+
+      const error = fromZodError(result.error, 'Invalid request');
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect(error.statusCode).toBe(400);
+      expect(error.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(error.message).toBe(
+        'Invalid request: name: Name is required, from.email: Invalid from email'
+      );
+      expect(error.details).toEqual({ validationErrors: result.error.issues });
     });
   });
 
