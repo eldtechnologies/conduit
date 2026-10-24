@@ -5,6 +5,8 @@
  * Sets up environment variables and global test configuration.
  */
 
+import { afterEach } from 'vitest';
+
 // Set test environment variables BEFORE any application code loads
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3000';
@@ -67,3 +69,44 @@ process.env.RATE_LIMIT_PER_MINUTE = '10';
 process.env.RATE_LIMIT_PER_HOUR = '100';
 process.env.RATE_LIMIT_PER_DAY = '500';
 process.env.ENFORCE_HTTPS = 'false';
+
+/**
+ * Network guard: tests must never reach real external services.
+ *
+ * Any fetch to a non-local host that is not intercepted by a test's own mock
+ * (see tests/helpers/fetch.ts) is rejected and fails the running test, even
+ * when the code under test swallows the error (e.g. a provider failure that
+ * becomes a 502 response).
+ */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+const realFetch = globalThis.fetch;
+const blockedRequests: string[] = [];
+
+function requestUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+globalThis.fetch = (input, init) => {
+  const url = requestUrl(input);
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // Relative or malformed URLs are left to the real fetch to reject
+    return realFetch(input, init);
+  }
+  if (LOCAL_HOSTS.has(hostname)) {
+    return realFetch(input, init);
+  }
+  blockedRequests.push(`${init?.method ?? 'GET'} ${url}`);
+  return Promise.reject(new Error(`Unmocked fetch to external host blocked in tests: ${url}`));
+};
+
+afterEach(() => {
+  if (blockedRequests.length > 0) {
+    const requests = blockedRequests.splice(0).join(', ');
+    throw new Error(`Test made unmocked network request(s): ${requests}. Mock fetch instead.`);
+  }
+});
