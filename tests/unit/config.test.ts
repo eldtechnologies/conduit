@@ -151,9 +151,34 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       RESEND_API_KEY: 're_test',
       ALLOWED_ORIGINS: 'http://localhost:5173',
       API_KEY_MYSITE: MYSITE_KEY,
+      LLM_PROVIDER: 'anthropic',
+      LLM_API_KEY: 'sk-ant-test',
+      LLM_MODEL: 'claude-haiku-4-5-20251001',
       ...extra,
     };
   }
+
+  describe('LLM provider requirement', () => {
+    it('fails startup when a key enables LLM filtering but the provider is not configured', () => {
+      const env = baseEnv({
+        API_KEY_MYSITE_LLM_ENABLED: 'true',
+        API_KEY_MYSITE_LLM_FAIL_MODE: 'block',
+      });
+      delete env.LLM_MODEL;
+      delete env.LLM_API_KEY;
+
+      expect(() => loadConfig(env)).toThrow(
+        'LLM filtering is enabled for 1 API key(s) but the LLM provider is not configured. Missing: LLM_API_KEY, LLM_MODEL'
+      );
+    });
+
+    it('starts without provider config when no key enables LLM filtering', () => {
+      const env = baseEnv();
+      delete env.LLM_PROVIDER;
+
+      expect(loadConfig(env).llm).toBeUndefined();
+    });
+  });
 
   describe('API key detection', () => {
     it('accepts a key produced by the generator script', () => {
@@ -232,6 +257,7 @@ describe('loadConfig (API key and per-key config parsing)', () => {
     it.each([
       'API_KEY_MYSTE_RECIPIENTS',
       'API_KEY_MYSTE_RECIPIENT_DOMAINS',
+      'API_KEY_MYSTE_FROM_ADDRESSES',
       'API_KEY_MYSTE_LLM_ENABLED',
       'API_KEY_MYSTE_LLM_FAIL_MODE',
     ])('fails startup when %s refers to an unconfigured key', (name) => {
@@ -295,7 +321,6 @@ describe('loadConfig (API key and per-key config parsing)', () => {
         const cfg = loadConfig(
           baseEnv({ LLM_FALLBACK_MODE: mode, API_KEY_MYSITE_LLM_ENABLED: 'true' })
         );
-        expect(cfg.llm).toBeUndefined();
         expect(cfg.llmFilterRules.get(MYSITE_KEY)?.failMode).toBe('block');
       }
     );
@@ -323,6 +348,59 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       expect(() =>
         loadConfig(baseEnv({ API_KEY_OTHER_LLM_WHITELIST_SENDERS: 'a@example.com' }))
       ).toThrow('API_KEY_OTHER_LLM_WHITELIST_SENDERS: the LLM sender whitelist was removed');
+    });
+  });
+
+  describe('sender allowlist (FROM_ADDRESSES)', () => {
+    it('parses addresses trimmed, lowercased, deduplicated and in order', () => {
+      const cfg = loadConfig(
+        baseEnv({
+          API_KEY_MYSITE_FROM_ADDRESSES:
+            ' NoReply@MySite.com , support@mysite.com,noreply@mysite.com,',
+        })
+      );
+      expect(cfg.senderAllowlists.get(MYSITE_KEY)).toEqual([
+        'noreply@mysite.com',
+        'support@mysite.com',
+      ]);
+    });
+
+    it('has no allowlist for keys without FROM_ADDRESSES', () => {
+      expect(loadConfig(baseEnv()).senderAllowlists.size).toBe(0);
+    });
+
+    it('is not mistaken for an API key', () => {
+      const cfg = loadConfig(baseEnv({ API_KEY_MYSITE_FROM_ADDRESSES: 'a@mysite.com' }));
+      expect(cfg.apiKeys).toEqual([MYSITE_KEY]);
+    });
+
+    it.each(['Name <a@mysite.com>', 'not-an-email', 'a@mysite.com b@mysite.com'])(
+      'fails startup on an invalid entry %j without echoing it',
+      (entry) => {
+        let message = '';
+        try {
+          loadConfig(baseEnv({ API_KEY_MYSITE_FROM_ADDRESSES: `ok@mysite.com,${entry}` }));
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toContain(
+          'API_KEY_MYSITE_FROM_ADDRESSES: invalid email address at position 2'
+        );
+        expect(message).not.toContain(entry);
+      }
+    );
+
+    it.each(['', ' , '])('fails startup on an empty list %j', (value) => {
+      expect(() => loadConfig(baseEnv({ API_KEY_MYSITE_FROM_ADDRESSES: value }))).toThrow(
+        'API_KEY_MYSITE_FROM_ADDRESSES: must list at least one email address'
+      );
+    });
+
+    it('loads the allowlist from the test environment', () => {
+      expect(config.senderAllowlists.get('KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0')).toEqual([
+        'noreply@example.com',
+        'support@example.com',
+      ]);
     });
   });
 

@@ -5,7 +5,7 @@
  * Routes messages to the appropriate channel handler based on the channel type.
  */
 
-import type { SendMessageRequest } from '../types/api.js';
+import type { Channel, SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
 import { ValidationError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
@@ -43,6 +43,17 @@ export function getChannelHandler(channel: string): ChannelHandler {
   }
 
   return handler;
+}
+
+/**
+ * Resolve a client-supplied channel name to a registered channel
+ *
+ * @param channel - The untrusted channel name from the request
+ * @returns The channel, narrowed to the Channel type
+ * @throws ValidationError (INVALID_CHANNEL) if no handler is registered for it
+ */
+export function resolveChannel(channel: string): Channel {
+  return getChannelHandler(channel).channel;
 }
 
 /**

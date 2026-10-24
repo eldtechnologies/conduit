@@ -31,33 +31,8 @@ interface LlmSendResponse {
   };
 }
 
-// Mock LLM API key for testing
-process.env.LLM_PROVIDER = 'anthropic';
-process.env.LLM_API_KEY = 'sk-ant-test-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-process.env.LLM_MODEL = 'claude-haiku-4-5-20251001';
-process.env.LLM_TIMEOUT = '5000';
-process.env.LLM_FALLBACK_MODE = 'allow';
-
-// Configure API key with LLM filtering enabled
-process.env.API_KEY_LLM_TEST = 'KEY_LLM_TEST_xyz789abc012def345ghi678jkl901mno234';
-process.env.API_KEY_LLM_TEST_LLM_ENABLED = 'true';
-process.env.API_KEY_LLM_TEST_LLM_RULES = 'spam,abuse,profanity,promptInjection';
-process.env.API_KEY_LLM_TEST_LLM_THRESHOLD = '0.7';
-process.env.API_KEY_LLM_TEST_LLM_FAIL_MODE = 'allow';
-process.env.API_KEY_LLM_TEST_LLM_MAX_CALLS_PER_DAY = '1000';
-
-// API key with LLM disabled
-process.env.API_KEY_NO_LLM = 'KEY_NO_LLM_abc123def456ghi789jkl012mno345pqr567';
-
-// API key with very low LLM budget (for budget enforcement test).
-// IMPORTANT: This must be set at module scope (not inside the test body) so that
-// src/config.ts picks it up when it loads. config.ts evaluates process.env once
-// at module load — env mutations inside `it()` blocks are too late.
-process.env.API_KEY_LOW_BUDGET = 'KEY_LOW_BUDGET_test123test456test789';
-process.env.API_KEY_LOW_BUDGET_LLM_ENABLED = 'true';
-process.env.API_KEY_LOW_BUDGET_LLM_RULES = 'spam';
-process.env.API_KEY_LOW_BUDGET_LLM_MAX_CALLS_PER_DAY = '2';
-process.env.API_KEY_LOW_BUDGET_LLM_FAIL_MODE = 'allow';
+// Keys and LLM settings used here (API_KEY_LLM_TEST, API_KEY_NO_LLM, API_KEY_LOW_BUDGET, ...)
+// come from tests/setup.ts: src/config.ts reads process.env once, when it is first imported.
 
 // API key with LLM filtering in fail-closed mode (also set in tests/setup.ts)
 process.env.API_KEY_LLM_BLOCK = 'KEY_LLM_BLOCK_abc123def456ghi789jkl012mno345';
@@ -499,7 +474,12 @@ describe('LLM Filtering Integration', () => {
   describe('validation before LLM analysis', () => {
     it.each<[string, Record<string, unknown>, string]>([
       ['missing recipient', { ...validBody, to: undefined }, 'VALIDATION_ERROR'],
-      ['invalid channel value', { ...validBody, channel: 'fax' }, 'VALIDATION_ERROR'],
+      ['invalid channel value', { ...validBody, channel: 'fax' }, 'INVALID_CHANNEL'],
+      [
+        'disallowed sender',
+        { ...validBody, from: { email: 'ceo@example.com' } },
+        'SENDER_NOT_ALLOWED',
+      ],
       [
         'invalid template data',
         { ...validBody, data: { name: 'X', email: 'nope', message: '' } },
@@ -601,7 +581,7 @@ describe('LLM Filtering Integration', () => {
 
   describe('LLM Budget Limits', () => {
     it('should enforce daily budget limit', async () => {
-      // API key + LLM rules are configured at module scope above.
+      // API_KEY_LOW_BUDGET (max 2 LLM calls/day) is configured in tests/setup.ts.
       // Make 3 requests (budget is 2)
       for (let i = 0; i < 3; i++) {
         if (i < 2) {

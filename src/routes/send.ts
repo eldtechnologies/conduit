@@ -7,11 +7,17 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { routeToChannel } from '../channels/index.js';
+import { resolveChannel, routeToChannel } from '../channels/index.js';
+import { resolveSender } from '../channels/email.js';
 import { config } from '../config.js';
 import { filterContent } from '../middleware/llmFilter.js';
-import { fromZodError } from '../utils/errors.js';
-import type { SendMessageResponse, SendRequestBody } from '../types/api.js';
+import { fromZodError, ValidationError } from '../utils/errors.js';
+import { ErrorCode } from '../types/api.js';
+import type {
+  SendMessageRequest,
+  SendMessageResponse,
+  SendRequestBody,
+} from '../types/api.js';
 
 const send = new Hono();
 
@@ -21,9 +27,9 @@ const send = new Hono();
  * Validates the structure of incoming send requests.
  */
 const sendRequestSchema = z.object({
-  channel: z.enum(['email', 'sms', 'push', 'webhook'], {
-    error: 'Invalid channel. Supported channels: email',
-  }),
+  // Only the type is checked here: whether the channel exists is decided by the
+  // channel registry, so unknown channels get INVALID_CHANNEL, not VALIDATION_ERROR.
+  channel: z.string({ error: 'Channel is required' }),
   templateId: z.string().min(1, 'Template ID is required'),
   to: z
     .string()
@@ -35,8 +41,14 @@ const sendRequestSchema = z.object({
       email: z.string().email('Invalid from email'),
       name: z
         .string()
+        .max(100, 'Name must be at most 100 characters')
         .refine((val) => !val.includes('\r') && !val.includes('\n'), {
           message: 'Name cannot contain newline characters',
+        })
+        // An address-like display name ("ceo@company.com", "x <ceo@company.com>") would
+        // spoof or override the allowlisted sender address in the From header
+        .refine((val) => !/[<>"@]/.test(val), {
+          message: 'Name cannot contain <, >, " or @ characters',
         })
         .optional(),
     })
@@ -45,9 +57,65 @@ const sendRequestSchema = z.object({
 });
 
 /**
+ * Client Idempotency-Key format: 1-200 characters of [A-Za-z0-9._:-].
+ * Leaves room for the app-name prefix (max 50 + ':') within Resend's 256-character limit.
+ */
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
+
+/**
+ * Validate the optional Idempotency-Key header and scope it to the API key
+ *
+ * All frontends share one Resend account, so the client key is prefixed with the
+ * caller's app name to keep one app's keys from colliding with another's.
+ *
+ * @param header - Raw Idempotency-Key header value, if any
+ * @param apiKey - The authenticated API key
+ * @returns The provider idempotency key, or undefined when no header was sent
+ * @throws ValidationError if the header is malformed
+ */
+function toIdempotencyKey(
+  header: string | undefined,
+  apiKey: string | undefined
+): string | undefined {
+  if (header === undefined) {
+    return undefined;
+  }
+
+  if (!IDEMPOTENCY_KEY_PATTERN.test(header)) {
+    throw new ValidationError(
+      'Invalid Idempotency-Key header: use 1-200 characters of A-Z, a-z, 0-9, ".", "_", ":" or "-"',
+      ErrorCode.VALIDATION_ERROR
+    );
+  }
+
+  return `${apiKeyScope(apiKey)}:${header}`;
+}
+
+/**
+ * Non-secret identifier for an API key: its `KEY_<NAME>` prefix
+ *
+ * Config loading guarantees keys look like `KEY_<NAME>_<random>` with no underscore in
+ * the random part, so dropping the last segment leaves only the public app name. The
+ * secret part never leaves Conduit.
+ *
+ * @param apiKey - The authenticated API key
+ * @returns The key's `KEY_<NAME>` prefix (at most 50 chars), or 'anonymous'
+ */
+function apiKeyScope(apiKey: string | undefined): string {
+  const separator = apiKey?.lastIndexOf('_') ?? -1;
+  if (!apiKey || separator <= 0) {
+    return 'anonymous';
+  }
+  return apiKey.slice(0, Math.min(separator, 50));
+}
+
+/**
  * POST /api/send
  *
  * Send a message through any channel (email, SMS, push, webhook).
+ *
+ * Optional header: Idempotency-Key (1-200 chars of [A-Za-z0-9._:-]). Retrying with the
+ * same key and body does not send the email twice (e.g. after a PROVIDER_TIMEOUT).
  *
  * Request body:
  * {
@@ -55,7 +123,7 @@ const sendRequestSchema = z.object({
  *   "templateId": "contact-form",
  *   "to": "recipient@example.com",
  *   "data": { "name": "John", "email": "john@example.com", "message": "..." },
- *   "from": { "email": "sender@example.com", "name": "Sender Name" }, // optional
+ *   "from": { "email": "sender@example.com", "name": "Sender Name" }, // optional, must be in API_KEY_<NAME>_FROM_ADDRESSES
  *   "replyTo": "reply@example.com" // optional
  * }
  *
@@ -86,12 +154,38 @@ send.post('/send', async (c) => {
     body = await c.req.json<SendRequestBody>();
   }
 
+  // Reject an unknown channel before field validation, so the error code does not
+  // depend on whether the rest of the body happens to be valid
+  if (typeof body?.channel === 'string') {
+    resolveChannel(body.channel);
+  }
+
   const parseResult = sendRequestSchema.safeParse(body);
   if (!parseResult.success) {
     throw fromZodError(parseResult.error, 'Invalid request');
   }
 
-  const request = parseResult.data;
+  const idempotencyKey = toIdempotencyKey(
+    c.req.header('Idempotency-Key'),
+    getVar('apiKey') as string | undefined
+  );
+
+  // apiKey is set by the auth middleware, never by the client (the schema strips unknown
+  // fields); the email channel uses it to enforce the key's sender allowlist
+  const request: SendMessageRequest = {
+    ...parseResult.data,
+    apiKey: getVar('apiKey') as string | undefined,
+    channel: resolveChannel(parseResult.data.channel),
+    ...(idempotencyKey && { idempotencyKey }),
+  };
+
+  // Reject a disallowed sender before spending an LLM call on the request
+  if (request.channel === 'email') {
+    resolveSender(
+      request.from,
+      request.apiKey ? config.senderAllowlists.get(request.apiKey) : undefined
+    );
+  }
 
   // LLM content filtering (v1.2.0) runs only after the request has been validated,
   // and validates template data itself, so invalid requests never trigger LLM calls

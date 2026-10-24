@@ -5,13 +5,24 @@
  * Handles timeouts, error mapping, and provider availability checks.
  */
 
-import { Resend, type CreateEmailOptions } from 'resend';
+import {
+  Resend,
+  type CreateEmailOptions,
+  type CreateEmailRequestOptions,
+  type CreateEmailResponse,
+} from 'resend';
 import { ZodError } from 'zod';
-import type { SendMessageRequest } from '../types/api.js';
+import type { EmailFrom, SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
 import type { EmailTemplate } from '../types/templates.js';
 import { config, TIMEOUTS } from '../config.js';
-import { ProviderError, InternalError, ConduitError, fromZodError } from '../utils/errors.js';
+import {
+  ProviderError,
+  InternalError,
+  ConduitError,
+  ValidationError,
+  fromZodError,
+} from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 import { getTemplate } from '../templates/index.js';
 
@@ -28,7 +39,69 @@ const resend = new Resend(config.resendApiKey);
  * @returns Sanitized name with newlines removed
  */
 function sanitizeSenderName(name: string): string {
-  return name.replace(/[\r\n]/g, '').trim();
+  // Defense in depth: the request schema already rejects these, but resolveSender is also
+  // callable directly. Address delimiters in the name could spoof the From address.
+  return name.replace(/[\r\n<>"@]/g, '').trim();
+}
+
+/** Sender name used when the client does not supply one */
+const DEFAULT_SENDER_NAME = 'Conduit';
+
+/** Sender for keys without an allowlist (Resend test domain, works without verification) */
+const FALLBACK_SENDER_EMAIL = 'onboarding@resend.dev';
+
+/**
+ * Resolve the From header for a send request
+ *
+ * SECURITY: The sender address is operator-controlled. A client-supplied `from.email` is
+ * accepted only if it is in the API key's sender allowlist (API_KEY_<NAME>_FROM_ADDRESSES,
+ * case-insensitive). Without an allowlist any client `from` is rejected, so a leaked
+ * frontend key cannot send mail as arbitrary addresses on the verified domain.
+ *
+ * - `from` omitted: the first allowlisted address, or the Resend test sender without a list
+ * - `from` given: must be allowlisted; `from.name` is kept (newlines stripped)
+ *
+ * @param from - The client-supplied sender, if any
+ * @param allowlist - The key's allowed sender addresses (lowercased), if configured
+ * @returns The formatted From header value
+ * @throws ValidationError (400, SENDER_NOT_ALLOWED) if the client sender is not allowed
+ */
+export function resolveSender(
+  from: EmailFrom | undefined,
+  allowlist: readonly string[] | undefined
+): string {
+  const name = sanitizeSenderName(from?.name || DEFAULT_SENDER_NAME) || DEFAULT_SENDER_NAME;
+
+  if (!from) {
+    return `${name} <${allowlist?.[0] ?? FALLBACK_SENDER_EMAIL}>`;
+  }
+
+  if (!allowlist) {
+    throw new ValidationError(
+      'Sender not allowed: this API key does not accept a custom from address. Omit `from` to use the default sender.',
+      ErrorCode.SENDER_NOT_ALLOWED
+    );
+  }
+
+  const email = from.email.trim().toLowerCase();
+  if (!allowlist.includes(email)) {
+    throw new ValidationError(
+      'Sender not allowed: from.email is not in the sender allowlist for this API key.',
+      ErrorCode.SENDER_NOT_ALLOWED
+    );
+  }
+
+  return `${name} <${email}>`;
+}
+
+/**
+ * Build the error for a Resend call aborted by the provider timeout
+ */
+function providerTimeoutError(): ProviderError {
+  return new ProviderError('Email send timeout', ErrorCode.PROVIDER_TIMEOUT, {
+    provider: 'resend',
+    timeout: TIMEOUTS.provider,
+  });
 }
 
 /**
@@ -49,6 +122,12 @@ export const emailHandler: ChannelHandler = {
    */
   async send(request: SendMessageRequest): Promise<ChannelSendResult> {
     try {
+      // Resolve the sender first: a disallowed `from` is rejected before any rendering
+      const from = resolveSender(
+        request.from,
+        request.apiKey ? config.senderAllowlists.get(request.apiKey) : undefined
+      );
+
       // Get and validate the template
       const template = getTemplate(request.channel, request.templateId) as EmailTemplate<unknown>;
 
@@ -62,12 +141,6 @@ export const emailHandler: ChannelHandler = {
         text: template.text(validatedData),
       };
 
-      // Prepare email parameters
-      // SECURITY: Sanitize sender name to prevent email header injection
-      const from = request.from
-        ? `${sanitizeSenderName(request.from.name || 'Conduit')} <${request.from.email}>`
-        : 'Conduit <onboarding@resend.dev>'; // Default sender (test domain, works without verification)
-
       // Typed so the SDK's option names are enforced: the SDK maps `replyTo` to the
       // API's `reply_to` and silently drops unknown keys.
       const emailParams: CreateEmailOptions = {
@@ -79,23 +152,28 @@ export const emailHandler: ChannelHandler = {
         replyTo: request.replyTo,
       };
 
-      // Send with timeout
-      const sendPromise = resend.emails.send(emailParams);
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(
-            new ProviderError('Email send timeout', ErrorCode.PROVIDER_TIMEOUT, {
-              provider: 'resend',
-              timeout: TIMEOUTS.provider,
-            })
-          );
-        }, TIMEOUTS.provider);
-      });
+      // Abort the HTTP request itself on timeout (not just stop waiting for it), so a
+      // timed-out send is not delivered later. AbortSignal.timeout needs no cleanup.
+      // The idempotency key lets a client retry after a timeout without duplicating mail.
+      const signal = AbortSignal.timeout(TIMEOUTS.provider);
+      const requestOptions: CreateEmailRequestOptions = { signal };
+      if (request.idempotencyKey) {
+        requestOptions.idempotencyKey = request.idempotencyKey;
+      }
 
-      const response = await Promise.race([sendPromise, timeoutPromise]);
+      let response: CreateEmailResponse;
+      try {
+        response = await resend.emails.send(emailParams, requestOptions);
+      } catch (error) {
+        if (signal.aborted) throw providerTimeoutError();
+        throw error;
+      }
 
       // Check for errors in response
       if (response.error) {
+        // The SDK turns an aborted fetch into a generic "Unable to fetch data" error
+        if (signal.aborted) throw providerTimeoutError();
+
         const errorMsg = response.error.message;
 
         // Detect common domain verification errors and provide helpful guidance

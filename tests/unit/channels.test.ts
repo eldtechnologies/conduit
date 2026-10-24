@@ -9,10 +9,12 @@ import {
   getChannelHandler,
   getRegisteredChannels,
   isChannelRegistered,
+  resolveChannel,
 } from '../../src/channels/index.js';
-import { emailHandler } from '../../src/channels/email.js';
-import { ProviderError, InternalError } from '../../src/utils/errors.js';
-import type { SendMessageRequest } from '../../src/types/api.js';
+import { emailHandler, resolveSender } from '../../src/channels/email.js';
+import { ProviderError, InternalError, ValidationError } from '../../src/utils/errors.js';
+import { ErrorCode, type SendMessageRequest } from '../../src/types/api.js';
+import { TIMEOUTS } from '../../src/config.js';
 import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 describe('Channel Infrastructure', () => {
@@ -35,6 +37,25 @@ describe('Channel Infrastructure', () => {
     });
   });
 
+  describe('resolveChannel', () => {
+    it('should return a registered channel', () => {
+      expect(resolveChannel('email')).toBe('email');
+    });
+
+    it('should throw INVALID_CHANNEL for an unregistered channel', () => {
+      let error: unknown;
+      try {
+        resolveChannel('fax');
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).code).toBe('INVALID_CHANNEL');
+      expect((error as ValidationError).statusCode).toBe(400);
+    });
+  });
+
   describe('getRegisteredChannels', () => {
     it('should return array of registered channels', () => {
       const channels = getRegisteredChannels();
@@ -54,6 +75,68 @@ describe('Channel Infrastructure', () => {
       expect(isChannelRegistered('webhook')).toBe(false);
       expect(isChannelRegistered('invalid')).toBe(false);
     });
+  });
+});
+
+// Configured in tests/setup.ts with API_KEY_SENDER_FROM_ADDRESSES
+const SENDER_KEY = 'KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+
+describe('resolveSender', () => {
+  const allowlist = ['noreply@example.com', 'support@example.com'];
+
+  function expectSenderNotAllowed(fn: () => unknown): void {
+    let error: unknown;
+    try {
+      fn();
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).statusCode).toBe(400);
+    expect((error as ValidationError).code).toBe(ErrorCode.SENDER_NOT_ALLOWED);
+  }
+
+  it('uses the Resend test sender when from is omitted and no allowlist is configured', () => {
+    expect(resolveSender(undefined, undefined)).toBe('Conduit <onboarding@resend.dev>');
+  });
+
+  it('uses the first allowlisted address when from is omitted', () => {
+    expect(resolveSender(undefined, allowlist)).toBe('Conduit <noreply@example.com>');
+  });
+
+  it('accepts an allowlisted from address and keeps the name', () => {
+    expect(resolveSender({ email: 'support@example.com', name: 'Support' }, allowlist)).toBe(
+      'Support <support@example.com>'
+    );
+  });
+
+  it('matches the allowlist case-insensitively', () => {
+    expect(resolveSender({ email: 'Support@EXAMPLE.com' }, allowlist)).toBe(
+      'Conduit <support@example.com>'
+    );
+  });
+
+  it('rejects a from address that is not allowlisted', () => {
+    expectSenderNotAllowed(() => resolveSender({ email: 'ceo@example.com' }, allowlist));
+  });
+
+  it('rejects any client from address when no allowlist is configured', () => {
+    expectSenderNotAllowed(() => resolveSender({ email: 'noreply@example.com' }, undefined));
+  });
+
+  it('strips newlines from the sender name and falls back to the default name', () => {
+    expect(resolveSender({ email: 'noreply@example.com', name: 'Evil\r\nBcc: x' }, allowlist)).toBe(
+      'EvilBcc: x <noreply@example.com>'
+    );
+    expect(resolveSender({ email: 'noreply@example.com', name: '\r\n' }, allowlist)).toBe(
+      'Conduit <noreply@example.com>'
+    );
+  });
+
+  it('strips address delimiters from the sender name so it cannot override the address', () => {
+    expect(
+      resolveSender({ email: 'noreply@example.com', name: 'Boss <ceo@company.com>' }, allowlist)
+    ).toBe('Boss ceocompany.com <noreply@example.com>');
   });
 });
 
@@ -131,13 +214,45 @@ describe('Email Channel Handler', () => {
 
       await emailHandler.send({
         ...baseRequest,
+        apiKey: SENDER_KEY,
         from: { email: 'noreply@example.com', name: 'Evil\r\nBcc: x@y.z' },
         replyTo: 'jane@example.com',
       });
 
       const body = sentBody();
       expect(body.reply_to).toBe('jane@example.com');
-      expect(body.from).toBe('EvilBcc: x@y.z <noreply@example.com>');
+      expect(body.from).toBe('EvilBcc: xy.z <noreply@example.com>');
+    });
+
+    it("should default to the key's first allowlisted sender when from is omitted", async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_default'));
+
+      await emailHandler.send({ ...baseRequest, apiKey: SENDER_KEY });
+
+      expect(sentBody().from).toBe('Conduit <noreply@example.com>');
+    });
+
+    it('should reject a client from without calling Resend when the key has no allowlist', async () => {
+      const error = await emailHandler
+        .send({
+          ...baseRequest,
+          apiKey: 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+          from: { email: 'ceo@example.com' },
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).code).toBe(ErrorCode.SENDER_NOT_ALLOWED);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should reject a client from when the request carries no API key', async () => {
+      const error = await emailHandler
+        .send({ ...baseRequest, from: { email: 'noreply@example.com' } })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('should map a Resend API error to a ProviderError', async () => {
@@ -174,6 +289,88 @@ describe('Email Channel Handler', () => {
 
       expect(error).toBeInstanceOf(ProviderError);
       expect((error as ProviderError).message).toContain('https://resend.com/domains');
+    });
+
+    describe('provider timeout', () => {
+      const originalTimeout = TIMEOUTS.provider;
+
+      beforeEach(() => {
+        TIMEOUTS.provider = 20;
+      });
+
+      afterEach(() => {
+        TIMEOUTS.provider = originalTimeout;
+      });
+
+      /** A fetch that never answers, but rejects like real fetch when its signal aborts. */
+      function hangUntilAborted(_url: unknown, init?: RequestInit): Promise<unknown> {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const reason: unknown = init.signal?.reason;
+            reject(reason instanceof Error ? reason : new Error('aborted'));
+          });
+        });
+      }
+
+      it('should abort the Resend request and report PROVIDER_TIMEOUT', async () => {
+        fetchMock.mockImplementationOnce(hangUntilAborted);
+
+        const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(ProviderError);
+        expect((error as ProviderError).code).toBe(ErrorCode.PROVIDER_TIMEOUT);
+        expect((error as ProviderError).statusCode).toBe(502);
+        // The HTTP request itself was aborted, so a slow send cannot still be delivered
+        const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+        expect(signal?.aborted).toBe(true);
+      });
+
+      it('should report PROVIDER_TIMEOUT when the response body read is aborted', async () => {
+        // Headers arrive, then the body stalls until the abort (non-OK path re-throws)
+        fetchMock.mockImplementationOnce((_url, init) =>
+          Promise.resolve({
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            headers: new Headers(),
+            text: () => hangUntilAborted(_url, init),
+          })
+        );
+
+        const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(ProviderError);
+        expect((error as ProviderError).code).toBe(ErrorCode.PROVIDER_TIMEOUT);
+      });
+
+      it('should pass a live signal and succeed when Resend answers in time', async () => {
+        fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_fast'));
+
+        const result = await emailHandler.send(baseRequest);
+
+        expect(result.messageId).toBe('email_fast');
+        const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+        expect(signal).toBeInstanceOf(AbortSignal);
+        expect(signal?.aborted).toBe(false);
+      });
+    });
+
+    it('should forward the idempotency key as the Idempotency-Key header', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_idem'));
+
+      await emailHandler.send({ ...baseRequest, idempotencyKey: 'scope:order-123' });
+
+      const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+      expect(headers.get('Idempotency-Key')).toBe('scope:order-123');
+    });
+
+    it('should not send an Idempotency-Key header without a key', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_plain'));
+
+      await emailHandler.send(baseRequest);
+
+      const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+      expect(headers.has('Idempotency-Key')).toBe(false);
     });
 
     it('should report a ProviderError when the Resend API is unreachable', async () => {

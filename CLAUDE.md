@@ -272,6 +272,7 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 - Recipient whitelisting (v1.1.0, optional):
   - `API_KEY_*_RECIPIENTS` - Comma-separated list of allowed email addresses
   - `API_KEY_*_RECIPIENT_DOMAINS` - Comma-separated list of allowed domains
+- Sender allowlist (optional): `API_KEY_*_FROM_ADDRESSES` - Comma-separated allowed `from` addresses (validated at startup; first is the default sender). Without it, any client `from` is rejected with 400 `SENDER_NOT_ALLOWED`.
 
 ## Phased Development
 

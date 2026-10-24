@@ -4,12 +4,20 @@
  * Tests health check endpoints with full middleware stack.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'fs';
 import { Hono } from 'hono';
 import health from '../../src/routes/health.js';
 import { authenticate } from '../../src/middleware/auth.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
+import { emailHandler } from '../../src/channels/email.js';
 import { readJson } from '../helpers/response.js';
+
+const PACKAGE_VERSION = (
+  JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+    version: string;
+  }
+).version;
 
 interface PublicHealthResponse {
   status: string;
@@ -112,7 +120,7 @@ describe('Health Endpoints', () => {
       const body = await readJson<DetailedHealthResponse>(res);
 
       expect(body.channels.email).toBeDefined();
-      expect(body.channels.email.status).toBe('inactive'); // Not implemented yet
+      expect(body.channels.email.status).toBe('active');
       expect(body.channels.email.provider).toBe('resend');
       expect(body.channels.email.configured).toBe(true); // RESEND_API_KEY is set in test env
     });
@@ -166,11 +174,14 @@ describe('Health Endpoints', () => {
 
     describe('version and provider configuration', () => {
       const savedVersion = process.env.npm_package_version;
-      const savedResendKey = process.env.RESEND_API_KEY;
 
       afterEach(() => {
-        restoreEnv('npm_package_version', savedVersion);
-        restoreEnv('RESEND_API_KEY', savedResendKey);
+        vi.restoreAllMocks();
+        if (savedVersion === undefined) {
+          delete process.env.npm_package_version;
+        } else {
+          process.env.npm_package_version = savedVersion;
+        }
       });
 
       const fetchDetailed = async () => {
@@ -182,34 +193,27 @@ describe('Health Endpoints', () => {
         return readJson<DetailedHealthResponse>(res);
       };
 
-      it('should report the package version when npm provides it', async () => {
-        process.env.npm_package_version = '9.8.7';
+      it('should report the package.json version', async () => {
         const body = await fetchDetailed();
 
-        expect(body.version).toBe('9.8.7');
+        expect(body.version).toBe(PACKAGE_VERSION);
       });
 
-      it('should fall back to a default version outside npm scripts', async () => {
+      it('should report the package.json version outside npm scripts (Docker runs node directly)', async () => {
         delete process.env.npm_package_version;
         const body = await fetchDetailed();
 
-        expect(body.version).toBe('0.1.0');
+        expect(body.version).toBe(PACKAGE_VERSION);
+        expect(body.version).not.toBe('0.1.0');
       });
 
-      it('should report email as unconfigured without a Resend API key', async () => {
-        delete process.env.RESEND_API_KEY;
+      it('should report email as inactive and unconfigured when the channel is unavailable', async () => {
+        vi.spyOn(emailHandler, 'isAvailable').mockResolvedValue(false);
         const body = await fetchDetailed();
 
+        expect(body.channels.email.status).toBe('inactive');
         expect(body.channels.email.configured).toBe(false);
       });
     });
   });
 });
-
-function restoreEnv(name: string, value: string | undefined): void {
-  if (value === undefined) {
-    delete process.env[name];
-  } else {
-    process.env[name] = value;
-  }
-}
