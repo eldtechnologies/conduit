@@ -11,7 +11,7 @@ import {
   isChannelRegistered,
   resolveChannel,
 } from '../../src/channels/index.js';
-import { emailHandler } from '../../src/channels/email.js';
+import { emailHandler, resolveSender } from '../../src/channels/email.js';
 import { ProviderError, InternalError, ValidationError } from '../../src/utils/errors.js';
 import { ErrorCode, type SendMessageRequest } from '../../src/types/api.js';
 import { TIMEOUTS } from '../../src/config.js';
@@ -75,6 +75,68 @@ describe('Channel Infrastructure', () => {
       expect(isChannelRegistered('webhook')).toBe(false);
       expect(isChannelRegistered('invalid')).toBe(false);
     });
+  });
+});
+
+// Configured in tests/setup.ts with API_KEY_SENDER_FROM_ADDRESSES
+const SENDER_KEY = 'KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+
+describe('resolveSender', () => {
+  const allowlist = ['noreply@example.com', 'support@example.com'];
+
+  function expectSenderNotAllowed(fn: () => unknown): void {
+    let error: unknown;
+    try {
+      fn();
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).statusCode).toBe(400);
+    expect((error as ValidationError).code).toBe(ErrorCode.SENDER_NOT_ALLOWED);
+  }
+
+  it('uses the Resend test sender when from is omitted and no allowlist is configured', () => {
+    expect(resolveSender(undefined, undefined)).toBe('Conduit <onboarding@resend.dev>');
+  });
+
+  it('uses the first allowlisted address when from is omitted', () => {
+    expect(resolveSender(undefined, allowlist)).toBe('Conduit <noreply@example.com>');
+  });
+
+  it('accepts an allowlisted from address and keeps the name', () => {
+    expect(resolveSender({ email: 'support@example.com', name: 'Support' }, allowlist)).toBe(
+      'Support <support@example.com>'
+    );
+  });
+
+  it('matches the allowlist case-insensitively', () => {
+    expect(resolveSender({ email: 'Support@EXAMPLE.com' }, allowlist)).toBe(
+      'Conduit <support@example.com>'
+    );
+  });
+
+  it('rejects a from address that is not allowlisted', () => {
+    expectSenderNotAllowed(() => resolveSender({ email: 'ceo@example.com' }, allowlist));
+  });
+
+  it('rejects any client from address when no allowlist is configured', () => {
+    expectSenderNotAllowed(() => resolveSender({ email: 'noreply@example.com' }, undefined));
+  });
+
+  it('strips newlines from the sender name and falls back to the default name', () => {
+    expect(resolveSender({ email: 'noreply@example.com', name: 'Evil\r\nBcc: x' }, allowlist)).toBe(
+      'EvilBcc: x <noreply@example.com>'
+    );
+    expect(resolveSender({ email: 'noreply@example.com', name: '\r\n' }, allowlist)).toBe(
+      'Conduit <noreply@example.com>'
+    );
+  });
+
+  it('strips address delimiters from the sender name so it cannot override the address', () => {
+    expect(
+      resolveSender({ email: 'noreply@example.com', name: 'Boss <ceo@company.com>' }, allowlist)
+    ).toBe('Boss ceocompany.com <noreply@example.com>');
   });
 });
 
@@ -152,13 +214,45 @@ describe('Email Channel Handler', () => {
 
       await emailHandler.send({
         ...baseRequest,
+        apiKey: SENDER_KEY,
         from: { email: 'noreply@example.com', name: 'Evil\r\nBcc: x@y.z' },
         replyTo: 'jane@example.com',
       });
 
       const body = sentBody();
       expect(body.reply_to).toBe('jane@example.com');
-      expect(body.from).toBe('EvilBcc: x@y.z <noreply@example.com>');
+      expect(body.from).toBe('EvilBcc: xy.z <noreply@example.com>');
+    });
+
+    it("should default to the key's first allowlisted sender when from is omitted", async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_default'));
+
+      await emailHandler.send({ ...baseRequest, apiKey: SENDER_KEY });
+
+      expect(sentBody().from).toBe('Conduit <noreply@example.com>');
+    });
+
+    it('should reject a client from without calling Resend when the key has no allowlist', async () => {
+      const error = await emailHandler
+        .send({
+          ...baseRequest,
+          apiKey: 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+          from: { email: 'ceo@example.com' },
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).code).toBe(ErrorCode.SENDER_NOT_ALLOWED);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should reject a client from when the request carries no API key', async () => {
+      const error = await emailHandler
+        .send({ ...baseRequest, from: { email: 'noreply@example.com' } })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('should map a Resend API error to a ProviderError', async () => {

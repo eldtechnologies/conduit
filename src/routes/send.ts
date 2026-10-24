@@ -39,8 +39,14 @@ const sendRequestSchema = z.object({
       email: z.string().email('Invalid from email'),
       name: z
         .string()
+        .max(100, 'Name must be at most 100 characters')
         .refine((val) => !val.includes('\r') && !val.includes('\n'), {
           message: 'Name cannot contain newline characters',
+        })
+        // An address-like display name ("ceo@company.com", "x <ceo@company.com>") would
+        // spoof or override the allowlisted sender address in the From header
+        .refine((val) => !/[<>"@]/.test(val), {
+          message: 'Name cannot contain <, >, " or @ characters',
         })
         .optional(),
     })
@@ -115,7 +121,7 @@ function apiKeyScope(apiKey: string | undefined): string {
  *   "templateId": "contact-form",
  *   "to": "recipient@example.com",
  *   "data": { "name": "John", "email": "john@example.com", "message": "..." },
- *   "from": { "email": "sender@example.com", "name": "Sender Name" }, // optional
+ *   "from": { "email": "sender@example.com", "name": "Sender Name" }, // optional, must be in API_KEY_<NAME>_FROM_ADDRESSES
  *   "replyTo": "reply@example.com" // optional
  * }
  *
@@ -162,8 +168,11 @@ send.post('/send', async (c) => {
     getVar('apiKey') as string | undefined
   );
 
+  // apiKey is set by the auth middleware, never by the client (the schema strips unknown
+  // fields); the email channel uses it to enforce the key's sender allowlist
   const request: SendMessageRequest = {
     ...parseResult.data,
+    apiKey: getVar('apiKey') as string | undefined,
     channel: resolveChannel(parseResult.data.channel),
     ...(idempotencyKey && { idempotencyKey }),
   };

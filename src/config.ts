@@ -53,6 +53,10 @@ export interface Config {
   // Recipient whitelisting (v1.1.0)
   recipientWhitelists: Map<string, RecipientWhitelist>;
 
+  // Sender allowlists: API key value -> allowed `from` addresses (lowercased).
+  // The first address is the key's default sender.
+  senderAllowlists: Map<string, string[]>;
+
   // LLM spam filtering (v1.2.0)
   llm?: LLMConfig;
   llmFilterRules: Map<string, FilterRules>;
@@ -151,6 +155,7 @@ const API_KEY_PREFIX = 'API_KEY_';
 const API_KEY_CONFIG_SUFFIXES = [
   '_RECIPIENTS',
   '_RECIPIENT_DOMAINS',
+  '_FROM_ADDRESSES',
   '_LLM_ENABLED',
   '_LLM_RULES',
   '_LLM_THRESHOLD',
@@ -279,6 +284,48 @@ function loadRecipientWhitelists(apiKeyEnv: ApiKeyEnv): Map<string, RecipientWhi
   }
 
   return whitelists;
+}
+
+const senderEmailSchema = z.string().email();
+
+/**
+ * Build sender allowlists from API_KEY_<NAME>_FROM_ADDRESSES (comma-separated email addresses).
+ * Returns a Map keyed by API key value; order is preserved so the first address is the default.
+ *
+ * Fails startup (throws) when a list is empty or contains an invalid email address, so a typo
+ * can never silently widen or disable the sender policy. Errors name the variable and entry
+ * position but not the value.
+ */
+function loadSenderAllowlists(apiKeyEnv: ApiKeyEnv): Map<string, string[]> {
+  const allowlists = new Map<string, string[]>();
+  const errors: string[] = [];
+
+  for (const { envName, keyName, suffix, value } of apiKeyEnv.configVars) {
+    if (suffix !== '_FROM_ADDRESSES') continue;
+
+    const addresses = parseList(value);
+    if (addresses.length === 0) {
+      errors.push(`${envName}: must list at least one email address`);
+      continue;
+    }
+
+    const invalid = addresses
+      .map((address, index) => (senderEmailSchema.safeParse(address).success ? -1 : index + 1))
+      .filter((position) => position > 0);
+    if (invalid.length > 0) {
+      errors.push(`${envName}: invalid email address at position ${invalid.join(', ')}`);
+      continue;
+    }
+
+    // loadApiKeyEnv guarantees every config var refers to a configured key
+    allowlists.set(apiKeyEnv.keys.get(keyName)!, [...new Set(addresses)]);
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid sender allowlist configuration:\n  - ${errors.join('\n  - ')}`);
+  }
+
+  return allowlists;
 }
 
 /**
@@ -438,6 +485,7 @@ export function loadConfig(processEnv: NodeJS.ProcessEnv): Config {
     enforceHttps: env.ENFORCE_HTTPS,
     revokedKeys: env.REVOKED_KEYS,
     recipientWhitelists: loadRecipientWhitelists(apiKeyEnv),
+    senderAllowlists: loadSenderAllowlists(apiKeyEnv),
     llm: loadLLMConfig(env),
     llmFilterRules: loadLLMFilterRules(apiKeyEnv, env.LLM_FALLBACK_MODE),
   };
