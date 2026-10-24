@@ -5,7 +5,7 @@
  * CRITICAL: Verifies protection against API abuse.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { rateLimit, clearAllRateLimits } from '../../src/middleware/rateLimit.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
@@ -71,6 +71,7 @@ describe('Rate Limiting Middleware', () => {
       expect(body.retryAfter).toBeDefined();
       expect(body.retryAfter).toBeGreaterThan(0);
       expect(body.retryAfter).toBeLessThan(60); // Should be less than 1 minute
+      expect(res.headers.get('retry-after')).toBe(String(body.retryAfter));
     });
   });
 
@@ -178,25 +179,132 @@ describe('Rate Limiting Middleware', () => {
     });
   });
 
-  describe('per-hour limit', () => {
-    it('should enforce per-hour limit independently', async () => {
-      // Create app with very high per-minute limit to test per-hour limit
-      // In reality, per-minute is 10 and per-hour is 100
-      // So we'd need to make 100 requests to hit per-hour limit
+  describe('per-hour and per-day limits (fake timers)', () => {
+    const MINUTE = 60 * 1000;
+    const HOUR = 60 * MINUTE;
 
-      // For this test, just verify the logic is there
-      // We can't practically test 100 requests in a unit test
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    });
 
-      // Make 10 requests (exhausts per-minute)
-      for (let i = 0; i < 10; i++) {
-        await app.fetch(new Request('http://localhost:3000/test'));
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const hit = () => app.fetch(new Request('http://localhost:3000/test'));
+
+    /**
+     * Send a full per-minute batch every minute until a request is rejected.
+     * Returns the first 429 response and the number of accepted requests.
+     */
+    async function sendMinuteBatchesUntilRejected(): Promise<{
+      res: Response;
+      accepted: number;
+    }> {
+      let accepted = 0;
+      for (let minute = 0; minute < 24 * 60; minute++) {
+        for (let i = 0; i < 10; i++) {
+          const res = await hit();
+          if (res.status === 429) {
+            return { res, accepted };
+          }
+          accepted++;
+        }
+        vi.advanceTimersByTime(MINUTE);
+      }
+      throw new Error('Never rate limited');
+    }
+
+    it('should enforce the per-hour limit when the minute bucket has tokens', async () => {
+      const { res, accepted } = await sendMinuteBatchesUntilRejected();
+
+      // 100/hour capacity plus ~1.67 tokens/minute of refill over ~12 minutes
+      expect(accepted).toBeGreaterThanOrEqual(100);
+      expect(accepted).toBeLessThan(130);
+      expect(res.status).toBe(429);
+      expect(res.headers.get('retry-after')).not.toBeNull();
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.error).toContain('per-hour');
+      // Hour bucket refills 1 token every 36s
+      expect(body.retryAfter).toBeGreaterThan(0);
+      expect(body.retryAfter).toBeLessThanOrEqual(36);
+    });
+
+    it('should enforce the per-day limit when minute and hour buckets have tokens', async () => {
+      let accepted = 0;
+      let rejected: Response | undefined;
+
+      // Each hour: up to 100 requests spread over 10 minutes, then wait out the hour
+      for (let hour = 0; hour < 24 && !rejected; hour++) {
+        for (let minute = 0; minute < 10 && !rejected; minute++) {
+          for (let i = 0; i < 10; i++) {
+            const res = await hit();
+            if (res.status === 429) {
+              rejected = res;
+              break;
+            }
+            accepted++;
+          }
+          vi.advanceTimersByTime(MINUTE);
+        }
+        vi.advanceTimersByTime(HOUR - 10 * MINUTE);
       }
 
-      // Should be rate limited (per-minute)
-      const res = await app.fetch(new Request('http://localhost:3000/test'));
-      expect(res.status).toBe(429);
-      const body = await readJson<ErrorResponse>(res);
-      expect(body.error).toContain('per-minute');
+      expect(rejected).toBeDefined();
+      const body = await readJson<ErrorResponse>(rejected as Response);
+      expect(body.error).toContain('per-day');
+      expect(accepted).toBeGreaterThanOrEqual(500);
+      // Day bucket refills 1 token every 172.8s
+      expect(body.retryAfter).toBeGreaterThan(0);
+      expect(body.retryAfter).toBeLessThanOrEqual(173);
+    });
+
+    it('should not drain hour/day buckets with rejected requests', async () => {
+      // Exhaust the minute bucket
+      for (let i = 0; i < 10; i++) {
+        expect((await hit()).status).toBe(200);
+      }
+
+      // Hammer the key with 200 requests that must all be rejected
+      for (let i = 0; i < 200; i++) {
+        expect((await hit()).status).toBe(429);
+      }
+
+      // After the minute bucket refills, the request succeeds and the
+      // hour/day budget reflects only the 11 accepted requests
+      vi.advanceTimersByTime(MINUTE);
+      const res = await hit();
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-ratelimit-remaining-day')).toBe('489');
+      expect(res.headers.get('x-ratelimit-remaining-hour')).toBe('90');
+    });
+
+    it('should report the longest wait across all depleted buckets', async () => {
+      // Every 66s the minute bucket is full again (10 tokens) and the hour
+      // bucket gains ~1.83. Draining the minute bucket each time drives the
+      // hour bucket down until both empty on the same request.
+      for (let step = 0; step < 50; step++) {
+        let acceptedInStep = 0;
+        let res = await hit();
+        while (res.status === 200) {
+          acceptedInStep++;
+          res = await hit();
+        }
+
+        const body = await readJson<ErrorResponse>(res);
+        if (body.error.includes('per-hour')) {
+          // Minute bucket was drained too (all 10 tokens used this step), but
+          // the hour bucket needs longer, so its wait is reported
+          expect(acceptedInStep).toBe(10);
+          expect(body.retryAfter).toBeGreaterThan(6);
+          expect(res.headers.get('retry-after')).toBe(String(body.retryAfter));
+          return;
+        }
+        expect(body.error).toContain('per-minute');
+        vi.advanceTimersByTime(66 * 1000);
+      }
+      throw new Error('Hour bucket never became the binding limit');
     });
   });
 
