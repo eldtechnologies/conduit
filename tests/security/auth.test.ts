@@ -5,9 +5,24 @@
  * CRITICAL: Includes timing attack resistance verification.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+// Wrap crypto.timingSafeEqual in a spy (real behaviour kept) so tests can
+// assert which comparisons auth performs, instead of measuring wall-clock time.
+vi.mock('crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('crypto')>();
+  return { ...actual, timingSafeEqual: vi.fn(actual.timingSafeEqual) };
+});
+
+/** Decode a buffer passed to timingSafeEqual back into the key string. */
+const asText = (view: NodeJS.ArrayBufferView) =>
+  Buffer.from(view.buffer, view.byteOffset, view.byteLength).toString();
+
+const REVOKED_CONFIGURED_KEY = 'KEY_REVOKED_1234567890abcdef1234567890abcdef';
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
+import { timingSafeEqual } from 'crypto';
 import { authenticate } from '../../src/middleware/auth.js';
+import { config } from '../../src/config.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import { readJson, type AppVariables, type ErrorResponse } from '../helpers/response.js';
 
@@ -116,122 +131,109 @@ describe('Authentication Middleware', () => {
   });
 
   describe('revoked API key', () => {
-    it('should reject revoked API key', async () => {
-      const req = new Request('http://localhost:3000/test', {
-        headers: { 'X-API-Key': 'KEY_REVOKED_1234567890abcdef1234567890abcdef' },
-      });
-      const res = await app.fetch(req);
+    const originalRevokedKeys = [...config.revokedKeys];
+
+    afterEach(() => {
+      config.revokedKeys = [...originalRevokedKeys];
+    });
+
+    const requestWith = (apiKey: string) =>
+      app.fetch(new Request('http://localhost:3000/test', { headers: { 'X-API-Key': apiKey } }));
+
+    it('should reject a configured key that is revoked', async () => {
+      // Precondition: the key is valid, so only revocation can reject it
+      expect(config.apiKeys).toContain(REVOKED_CONFIGURED_KEY);
+      expect(config.revokedKeys).toContain(REVOKED_CONFIGURED_KEY);
+
+      const res = await requestWith(REVOKED_CONFIGURED_KEY);
 
       expect(res.status).toBe(401);
       const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('UNAUTHORIZED');
-      expect(body.error).toBeDefined();
+      expect(body.error).toBe('API key has been revoked');
+    });
+
+    it('should accept the same key once it is no longer revoked', async () => {
+      config.revokedKeys = [];
+
+      const res = await requestWith(REVOKED_CONFIGURED_KEY);
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ message: 'OK' });
+    });
+
+    it('should not reject other keys because of the revoked list', async () => {
+      const res = await requestWith('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1');
+
+      expect(res.status).toBe(200);
     });
   });
 
   describe('timing attack resistance', () => {
-    it('should use constant-time comparison (statistical test)', async () => {
-      // This test verifies that the time to check a valid vs invalid key
-      // is similar, preventing timing attacks
+    const timingSafeEqualSpy = vi.mocked(timingSafeEqual);
 
+    beforeEach(() => {
+      timingSafeEqualSpy.mockClear();
+    });
+
+    /** Strings passed as the second (reference) argument of each comparison. */
+    const comparedAgainst = () =>
+      timingSafeEqualSpy.mock.calls.map(([, reference]) => asText(reference));
+
+    const sameLengthKeys = (apiKey: string) => [
+      ...config.revokedKeys.filter((key) => key.length === apiKey.length),
+      ...config.apiKeys.filter((key) => key.length === apiKey.length),
+    ];
+
+    const requestWith = (apiKey: string) =>
+      app.fetch(new Request('http://localhost:3000/test', { headers: { 'X-API-Key': apiKey } }));
+
+    it('should compare a matching first key against every same-length key (no early break)', async () => {
+      const firstKey = config.apiKeys[0];
+      if (!firstKey) throw new Error('No API keys configured');
+      const expected = sameLengthKeys(firstKey);
+      // Needs other same-length keys after the match, or an early break is undetectable
+      expect(config.apiKeys.filter((key) => key.length === firstKey.length).length).toBeGreaterThan(
+        1
+      );
+
+      const res = await requestWith(firstKey);
+
+      expect(res.status).toBe(200);
+      expect(comparedAgainst()).toEqual(expected);
+    });
+
+    it('should compare a matching last key against every same-length key', async () => {
+      const lastKey = config.apiKeys[config.apiKeys.length - 1];
+      if (!lastKey) throw new Error('No API keys configured');
+
+      const res = await requestWith(lastKey);
+
+      expect(res.status).toBe(200);
+      expect(comparedAgainst()).toEqual(sameLengthKeys(lastKey));
+    });
+
+    it('should compare an invalid key against every same-length key', async () => {
       const validKey = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
-      const invalidKey = 'KEY_TEST_0000000000000000000000000000000'; // Same length
+      const invalidKey = 'KEY_TEST_' + '0'.repeat(validKey.length - 'KEY_TEST_'.length);
+      expect(invalidKey).toHaveLength(validKey.length);
 
-      const iterations = 100;
-      const validTimes: number[] = [];
-      const invalidTimes: number[] = [];
+      const res = await requestWith(invalidKey);
 
-      // Measure time for valid key
-      for (let i = 0; i < iterations; i++) {
-        const start = performance.now();
-        const req = new Request('http://localhost:3000/test', {
-          headers: { 'X-API-Key': validKey },
-        });
-        await app.fetch(req);
-        const end = performance.now();
-        validTimes.push(end - start);
+      expect(res.status).toBe(401);
+      expect(comparedAgainst()).toEqual(sameLengthKeys(invalidKey));
+      expect(comparedAgainst()).toContain(validKey);
+    });
+
+    it('should never use a non-constant-time comparison for configured keys', async () => {
+      // Every comparison goes through timingSafeEqual with equal-length buffers
+      await requestWith('KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3');
+
+      expect(timingSafeEqualSpy).toHaveBeenCalled();
+      for (const [candidate, reference] of timingSafeEqualSpy.mock.calls) {
+        expect(asText(candidate)).toBe('KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3');
+        expect(candidate.byteLength).toBe(reference.byteLength);
       }
-
-      // Measure time for invalid key
-      for (let i = 0; i < iterations; i++) {
-        const start = performance.now();
-        const req = new Request('http://localhost:3000/test', {
-          headers: { 'X-API-Key': invalidKey },
-        });
-        await app.fetch(req);
-        const end = performance.now();
-        invalidTimes.push(end - start);
-      }
-
-      // Calculate averages
-      const avgValid = validTimes.reduce((a, b) => a + b, 0) / validTimes.length;
-      const avgInvalid = invalidTimes.reduce((a, b) => a + b, 0) / invalidTimes.length;
-
-      // The difference should be very small (within 50% of each other)
-      // This accounts for normal variance in execution time
-      // Note: The actual difference is usually <10%, but we use 50% to avoid flaky tests
-      const difference = Math.abs(avgValid - avgInvalid);
-      const maxDifference = Math.max(avgValid, avgInvalid) * 0.5;
-
-      expect(difference).toBeLessThan(maxDifference);
-
-      // Log timing information for debugging
-      console.info(`Valid key avg: ${avgValid.toFixed(3)}ms`);
-      console.info(`Invalid key avg: ${avgInvalid.toFixed(3)}ms`);
-      console.info(
-        `Difference: ${difference.toFixed(3)}ms (${((difference / avgValid) * 100).toFixed(1)}%)`
-      );
-    }, 30000); // 30 second timeout for this test
-
-    it('should check all keys (not break early)', async () => {
-      // This test verifies that we don't break early when finding a match
-      // by checking that the time is similar regardless of key position
-
-      const firstKey = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1'; // First in list
-      const secondKey = 'KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3'; // Second in list
-
-      const iterations = 100;
-      const firstKeyTimes: number[] = [];
-      const secondKeyTimes: number[] = [];
-
-      // Measure time for first key
-      for (let i = 0; i < iterations; i++) {
-        const start = performance.now();
-        const req = new Request('http://localhost:3000/test', {
-          headers: { 'X-API-Key': firstKey },
-        });
-        await app.fetch(req);
-        const end = performance.now();
-        firstKeyTimes.push(end - start);
-      }
-
-      // Measure time for second key
-      for (let i = 0; i < iterations; i++) {
-        const start = performance.now();
-        const req = new Request('http://localhost:3000/test', {
-          headers: { 'X-API-Key': secondKey },
-        });
-        await app.fetch(req);
-        const end = performance.now();
-        secondKeyTimes.push(end - start);
-      }
-
-      // Calculate averages
-      const avgFirst = firstKeyTimes.reduce((a, b) => a + b, 0) / firstKeyTimes.length;
-      const avgSecond = secondKeyTimes.reduce((a, b) => a + b, 0) / secondKeyTimes.length;
-
-      // The difference should be very small (within 50%)
-      // Note: The actual difference is usually <10%, but we use 50% to avoid flaky tests
-      const difference = Math.abs(avgFirst - avgSecond);
-      const maxDifference = Math.max(avgFirst, avgSecond) * 0.5;
-
-      expect(difference).toBeLessThan(maxDifference);
-
-      console.info(`First key avg: ${avgFirst.toFixed(3)}ms`);
-      console.info(`Second key avg: ${avgSecond.toFixed(3)}ms`);
-      console.info(
-        `Difference: ${difference.toFixed(3)}ms (${((difference / avgFirst) * 100).toFixed(1)}%)`
-      );
-    }, 30000); // 30 second timeout for this test
+    });
   });
 });

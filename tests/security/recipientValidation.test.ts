@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import app from '@/index.js';
+import { clearAllRateLimits } from '@/middleware/rateLimit.js';
 import { readJson, type SuccessResponse, type ErrorResponse } from '../helpers/response.js';
 import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
@@ -18,6 +19,8 @@ describe('Recipient Validation (v1.1.0)', () => {
   let fetchMock: FetchMock;
 
   beforeEach(() => {
+    // The app keeps rate-limit state at module level; start every test with full buckets
+    clearAllRateLimits();
     fetchMock = installFetchMock();
     fetchMock.mockImplementation(() => Promise.resolve(resendSuccessResponse('mock-msg-id')));
   });
@@ -470,43 +473,59 @@ describe('Recipient Validation (v1.1.0)', () => {
   });
 
   describe('Integration with Other Middleware', () => {
-    it('should respect rate limiting after whitelist check', async () => {
-      // Make multiple rapid requests to trigger rate limit
-      const requests = Array.from({ length: 15 }, () =>
-        Promise.resolve(
-          app.fetch(
-            new Request('http://localhost/api/send', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': WHITELISTED_KEY,
-                Origin: 'https://test.com',
+    const sendTo = (to: string): Promise<Response> =>
+      Promise.resolve(
+        app.fetch(
+          new Request('http://localhost/api/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': WHITELISTED_KEY,
+              Origin: 'https://test.com',
+            },
+            body: JSON.stringify({
+              channel: 'email',
+              templateId: 'contact-form',
+              to,
+              data: {
+                name: 'Test User',
+                email: 'test@example.com',
+                message: 'Test message',
               },
-              body: JSON.stringify({
-                channel: 'email',
-                templateId: 'contact-form',
-                to: 'allowed@example.com',
-                data: {
-                  name: 'Test User',
-                  email: 'test@example.com',
-                  message: 'Test message',
-                },
-              }),
-            })
-          )
+            }),
+          })
         )
       );
 
-      const responses = await Promise.all(requests);
+    it('should respect rate limiting after whitelist check', async () => {
+      // 15 concurrent sends to a whitelisted recipient; the per-minute limit is 10
+      const responses = await Promise.all(
+        Array.from({ length: 15 }, () => sendTo('allowed@example.com'))
+      );
 
-      // Some should succeed, some should be rate limited
-      const rateLimited = responses.filter((r) => r.status === 429);
-      expect(rateLimited.length).toBeGreaterThan(0);
+      const statuses = responses.map((r) => r.status);
+      expect(statuses.filter((status) => status === 200)).toHaveLength(10);
+      expect(statuses.filter((status) => status === 429)).toHaveLength(5);
+      expect(fetchMock).toHaveBeenCalledTimes(10);
 
-      const firstRateLimited = rateLimited[0];
-      if (!firstRateLimited) throw new Error('Expected at least one rate-limited response');
+      const firstRateLimited = responses.find((r) => r.status === 429);
+      if (!firstRateLimited) throw new Error('Expected a rate-limited response');
       const rateLimitedData = await readJson<ErrorResponse>(firstRateLimited);
       expect(rateLimitedData.code).toBe('RATE_LIMIT_EXCEEDED');
+    });
+
+    it('should reject non-whitelisted recipients with 403 without consuming rate-limit tokens', async () => {
+      const responses = await Promise.all(
+        Array.from({ length: 15 }, () => sendTo('notallowed@example.com'))
+      );
+
+      expect(responses.map((r) => r.status)).toEqual(Array<number>(15).fill(403));
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // The rejected requests left the whole per-minute budget intact
+      const allowed = await sendTo('allowed@example.com');
+      expect(allowed.status).toBe(200);
+      expect(allowed.headers.get('x-ratelimit-remaining-minute')).toBe('9');
     });
   });
 });

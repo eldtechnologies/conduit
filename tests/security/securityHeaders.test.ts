@@ -5,11 +5,22 @@
  * CRITICAL: These tests verify our defense against various web attacks.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { enforceHttps, securityHeaders } from '../../src/middleware/securityHeaders.js';
+import { config } from '../../src/config.js';
 
 describe('Security Headers Middleware', () => {
+  // The middleware reads process.env.NODE_ENV per request and config.enforceHttps
+  // (loaded once at import), so tests stub the former and mutate the latter.
+  // Both are restored after every test, even when an assertion fails.
+  const originalEnforceHttps = config.enforceHttps;
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    config.enforceHttps = originalEnforceHttps;
+  });
+
   describe('enforceHttps', () => {
     let app: Hono;
 
@@ -20,14 +31,8 @@ describe('Security Headers Middleware', () => {
     });
 
     it('should reject HTTP requests in production', async () => {
-      // Temporarily set to production
-      const originalEnv = process.env.NODE_ENV;
-      const originalEnforceHttps = process.env.ENFORCE_HTTPS;
+      vi.stubEnv('NODE_ENV', 'production');
 
-      process.env.NODE_ENV = 'production';
-      process.env.ENFORCE_HTTPS = 'true';
-
-      // Force config reload by re-importing (in real app, this is set at startup)
       const req = new Request('http://localhost:3000/test', {
         headers: { 'x-forwarded-proto': 'http' },
       });
@@ -35,15 +40,10 @@ describe('Security Headers Middleware', () => {
 
       expect(res.status).toBe(403);
       expect(await res.text()).toBe('HTTPS Required');
-
-      // Restore
-      process.env.NODE_ENV = originalEnv;
-      process.env.ENFORCE_HTTPS = originalEnforceHttps;
     });
 
     it('should allow HTTPS requests in production', async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
 
       const req = new Request('http://localhost:3000/test', {
         headers: { 'x-forwarded-proto': 'https' },
@@ -52,13 +52,10 @@ describe('Security Headers Middleware', () => {
 
       expect(res.status).toBe(200);
       expect(await res.text()).toBe('OK');
-
-      process.env.NODE_ENV = originalEnv;
     });
 
     it('should add HSTS header in production', async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
 
       const req = new Request('http://localhost:3000/test', {
         headers: { 'x-forwarded-proto': 'https' },
@@ -68,13 +65,11 @@ describe('Security Headers Middleware', () => {
       expect(res.headers.get('strict-transport-security')).toBe(
         'max-age=31536000; includeSubDomains; preload'
       );
-
-      process.env.NODE_ENV = originalEnv;
     });
 
     it('should allow HTTP in development', async () => {
-      const originalEnforceHttps = process.env.ENFORCE_HTTPS;
-      process.env.ENFORCE_HTTPS = 'false';
+      vi.stubEnv('NODE_ENV', 'development');
+      config.enforceHttps = false;
 
       const req = new Request('http://localhost:3000/test', {
         headers: { 'x-forwarded-proto': 'http' },
@@ -82,26 +77,46 @@ describe('Security Headers Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(200);
+      expect(res.headers.get('strict-transport-security')).toBeNull();
+    });
 
-      process.env.ENFORCE_HTTPS = originalEnforceHttps;
+    it('should reject HTTP outside production when ENFORCE_HTTPS is enabled', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      config.enforceHttps = true;
+
+      const res = await app.fetch(
+        new Request('http://localhost:3000/test', { headers: { 'x-forwarded-proto': 'http' } })
+      );
+
+      expect(res.status).toBe(403);
+      expect(await res.text()).toBe('HTTPS Required');
+    });
+
+    it('should add HSTS outside production when ENFORCE_HTTPS is enabled', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      config.enforceHttps = true;
+
+      const res = await app.fetch(
+        new Request('http://localhost:3000/test', { headers: { 'x-forwarded-proto': 'https' } })
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('strict-transport-security')).toBe(
+        'max-age=31536000; includeSubDomains; preload'
+      );
     });
   });
 
   describe('enforceHttps health exemption', () => {
     let app: Hono;
-    const originalEnv = process.env.NODE_ENV;
 
     beforeEach(() => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       app = new Hono();
       app.use('*', enforceHttps);
       app.get('/health', (c) => c.text('OK'));
       app.get('/health/detailed', (c) => c.text('OK'));
       app.get('/healthz', (c) => c.text('OK'));
-    });
-
-    afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
     });
 
     const overHttp = (path: string) =>
@@ -212,8 +227,7 @@ describe('Security Headers Middleware', () => {
       app.use('*', securityHeaders);
       app.get('/test', (c) => c.json({ message: 'OK' }));
 
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
 
       const req = new Request('http://localhost:3000/test', {
         headers: { 'x-forwarded-proto': 'https' },
@@ -221,12 +235,12 @@ describe('Security Headers Middleware', () => {
       const res = await app.fetch(req);
 
       // Should have all security headers
-      expect(res.headers.get('strict-transport-security')).toBeDefined();
+      expect(res.headers.get('strict-transport-security')).toBe(
+        'max-age=31536000; includeSubDomains; preload'
+      );
       expect(res.headers.get('x-content-type-options')).toBe('nosniff');
       expect(res.headers.get('x-frame-options')).toBe('DENY');
       expect(res.headers.get('content-security-policy')).toBeDefined();
-
-      process.env.NODE_ENV = originalEnv;
     });
   });
 });

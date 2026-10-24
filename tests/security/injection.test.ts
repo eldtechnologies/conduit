@@ -6,17 +6,30 @@
  * - Input validation bypasses
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import app from '../../src/index.js';
-import { readJson, type ErrorResponse } from '../helpers/response.js';
+import { readJson, type ErrorResponse, type SuccessResponse } from '../helpers/response.js';
+import { clearAllRateLimits } from '../../src/middleware/rateLimit.js';
+import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 const VALID_API_KEY = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 // Key with a sender allowlist (a client `from` is rejected for keys without one)
 const SENDER_API_KEY = 'KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+const MESSAGE_ID = 'msg_injection';
 
 describe('Email Header Injection Prevention', () => {
+  // Resend is mocked so accepted requests return 200 without any network call
+  const originalFetch = global.fetch;
+  let fetchMock: FetchMock;
+
   beforeEach(() => {
-    // Tests run with test environment variables from tests/setup.ts
+    clearAllRateLimits();
+    fetchMock = installFetchMock();
+    fetchMock.mockImplementation(() => Promise.resolve(resendSuccessResponse(MESSAGE_ID)));
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   describe('from.name validation', () => {
@@ -176,9 +189,10 @@ describe('Email Header Injection Prevention', () => {
       });
 
       const res = await app.fetch(req);
-      // May fail due to invalid RESEND_API_KEY in tests, but should pass validation
-      // Either 200 (success) or 502 (provider error) is acceptable
-      expect([200, 502]).toContain(res.status);
+      expect(res.status).toBe(200);
+      const sent = await readJson<SuccessResponse>(res);
+      expect(sent.messageId).toBe(MESSAGE_ID);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -284,9 +298,10 @@ describe('Email Header Injection Prevention', () => {
       });
 
       const res = await app.fetch(req);
-      // May fail due to invalid RESEND_API_KEY in tests, but should pass validation
-      // Either 200 (success) or 502 (provider error) is acceptable
-      expect([200, 502]).toContain(res.status);
+      expect(res.status).toBe(200);
+      const sent = await readJson<SuccessResponse>(res);
+      expect(sent.messageId).toBe(MESSAGE_ID);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 });
