@@ -41,9 +41,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # TODO: enable once the 8 known unformatted files are fixed (docs wave).
-      # - name: Check formatting
-      #   run: npm run format:check
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Test with coverage (80% thresholds)
         run: npm run test:coverage
