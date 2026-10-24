@@ -4,6 +4,7 @@
  * Custom error classes and error sanitization for production environments.
  */
 
+import type { ZodError } from 'zod';
 import type { ErrorResponse } from '../types/api.js';
 import { ErrorCode } from '../types/api.js';
 
@@ -51,6 +52,23 @@ export class ValidationError extends ConduitError {
     super(message, code, 400, details);
     this.name = 'ValidationError';
   }
+}
+
+/**
+ * Convert a ZodError into a ValidationError
+ *
+ * Flattens issues into a `path: message` list so clients get actionable
+ * field-level feedback, and keeps the raw issues in details for debugging.
+ *
+ * @param error - The ZodError from a failed parse
+ * @param prefix - Context for the message (e.g. "Invalid request")
+ * @returns A 400 ValidationError
+ */
+export function fromZodError(error: ZodError, prefix: string): ValidationError {
+  const issues = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+  return new ValidationError(`${prefix}: ${issues.join(', ')}`, ErrorCode.VALIDATION_ERROR, {
+    validationErrors: error.issues,
+  });
 }
 
 /**
