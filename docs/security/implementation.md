@@ -48,7 +48,8 @@ export async function enforceHttps(c: Context, next: Next) {
 **Environment Configuration**:
 ```bash
 # .env
-ENFORCE_HTTPS=true  # Default false. Enforces HTTPS even when NODE_ENV is not production
+# Default false. Enforces HTTPS even when NODE_ENV is not production
+ENFORCE_HTTPS=true
 ```
 
 With `NODE_ENV=production`, HTTPS is always enforced; `ENFORCE_HTTPS=false` does not turn it off. `NODE_ENV` defaults to `development`, so set `NODE_ENV=production` in production.

@@ -228,26 +228,39 @@ interface FilterResult {
 ```bash
 #
 # LLM Spam Filtering (Optional)
+# Keep comments on their own lines: some env-file loaders (e.g. docker run --env-file)
+# do not strip inline comments, and a value like "block  # comment" fails startup
 #
 
 # Global provider configuration (all three required for filtering)
-LLM_PROVIDER=anthropic               # anthropic | openai (anything else fails startup)
-LLM_API_KEY=sk-ant-api...            # Provider API key (Conduit keeps this secure)
-LLM_MODEL=claude-haiku-4-5-20251001    # Fast, cheap model recommended
-LLM_TIMEOUT=5000                     # Max LLM request time (ms), default 5000
-LLM_FALLBACK_MODE=allow              # allow | block (case-insensitive), default allow
-                                     # Default fail mode for keys without _LLM_FAIL_MODE
-# LLM_ENDPOINT=https://...           # Optional custom endpoint
+# anthropic | openai (anything else fails startup)
+LLM_PROVIDER=anthropic
+# Provider API key (Conduit keeps this secure)
+LLM_API_KEY=sk-ant-api...
+# Fast, cheap model recommended
+LLM_MODEL=claude-haiku-4-5-20251001
+# Max LLM request time (ms), default 5000
+LLM_TIMEOUT=5000
+# allow | block (case-insensitive), default allow.
+# Default fail mode for keys without _LLM_FAIL_MODE
+LLM_FALLBACK_MODE=allow
+# Optional custom endpoint
+# LLM_ENDPOINT=https://...
 
 # The API key itself (generate with: npm run generate-key -- mysite)
 API_KEY_MYSITE=KEY_MYSITE_50c1c716a72d6637bb4bfa4e0d0c2269
 
 # Per-API-key LLM filtering rules
-API_KEY_MYSITE_LLM_ENABLED=true                    # Enable LLM filtering for this key
-API_KEY_MYSITE_LLM_RULES=spam,abuse,profanity      # What to check for
-API_KEY_MYSITE_LLM_THRESHOLD=0.7                   # Block if rejected with confidence >= 0.7
-API_KEY_MYSITE_LLM_FAIL_MODE=block                 # allow | block (fail closed)
-API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000          # LLM budget limit
+# Enable LLM filtering for this key
+API_KEY_MYSITE_LLM_ENABLED=true
+# What to check for
+API_KEY_MYSITE_LLM_RULES=spam,abuse,profanity
+# Block if rejected with confidence >= 0.7
+API_KEY_MYSITE_LLM_THRESHOLD=0.7
+# allow | block (fail closed)
+API_KEY_MYSITE_LLM_FAIL_MODE=block
+# LLM budget limit
+API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000
 ```
 
 There is no custom prompt option and no sender whitelist. `API_KEY_*_LLM_CUSTOM_PROMPT` and the removed `API_KEY_*_LLM_WHITELIST_SENDERS` both fail startup. See [Current Behaviour](#current-behaviour).
@@ -315,7 +328,7 @@ Sender and domain whitelisting is not part of `FilterRules`. It was removed beca
 
 ---
 
-### Phase 2: Advanced Features (v1.3.0)
+### Phase 2: Advanced Features (planned; not part of v1.3.x)
 
 **Goal**: Enhanced detection, multiple providers, analytics
 
