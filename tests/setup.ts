@@ -21,6 +21,11 @@ process.env.API_KEY_TEST_WHITELIST_RECIPIENT_DOMAINS = 'trusted.com';
 
 process.env.API_KEY_TEST_NO_WHITELIST = 'KEY_TEST_NO_WHITELIST_xyz789abc012def345ghi678jkl901mno';
 
+// Sender allowlist test key (API_KEY_*_FROM_ADDRESSES). Mixed case and spaces on purpose:
+// entries are trimmed and lowercased, and the first entry is the key's default sender.
+process.env.API_KEY_SENDER = 'KEY_SENDER_0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+process.env.API_KEY_SENDER_FROM_ADDRESSES = 'noreply@example.com, Support@Example.com';
+
 // LLM spam filtering test keys (v1.2.0)
 process.env.LLM_PROVIDER = 'anthropic';
 process.env.LLM_API_KEY = 'sk-ant-test-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
