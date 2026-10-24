@@ -5,10 +5,12 @@
  * Handles validation, routing to channels, and response formatting.
  */
 
+import { createHash } from 'crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { resolveChannel, routeToChannel } from '../channels/index.js';
-import { fromZodError } from '../utils/errors.js';
+import { fromZodError, ValidationError } from '../utils/errors.js';
+import { ErrorCode } from '../types/api.js';
 import type {
   LLMAnalysis,
   SendMessageRequest,
@@ -48,9 +50,51 @@ const sendRequestSchema = z.object({
 });
 
 /**
+ * Client Idempotency-Key format: 1-200 characters of [A-Za-z0-9._:-].
+ * Leaves room for the per-API-key prefix within Resend's 256-character limit.
+ */
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
+
+/**
+ * Validate the optional Idempotency-Key header and scope it to the API key
+ *
+ * All frontends share one Resend account, so the client key is prefixed with a
+ * hash of the caller's API key to keep one app's keys from colliding with another's.
+ *
+ * @param header - Raw Idempotency-Key header value, if any
+ * @param apiKey - The authenticated API key
+ * @returns The provider idempotency key, or undefined when no header was sent
+ * @throws ValidationError if the header is malformed
+ */
+function toIdempotencyKey(
+  header: string | undefined,
+  apiKey: string | undefined
+): string | undefined {
+  if (header === undefined) {
+    return undefined;
+  }
+
+  if (!IDEMPOTENCY_KEY_PATTERN.test(header)) {
+    throw new ValidationError(
+      'Invalid Idempotency-Key header: use 1-200 characters of A-Z, a-z, 0-9, ".", "_", ":" or "-"',
+      ErrorCode.VALIDATION_ERROR
+    );
+  }
+
+  const scope = createHash('sha256')
+    .update(apiKey ?? '')
+    .digest('hex')
+    .slice(0, 16);
+  return `${scope}:${header}`;
+}
+
+/**
  * POST /api/send
  *
  * Send a message through any channel (email, SMS, push, webhook).
+ *
+ * Optional header: Idempotency-Key (1-200 chars of [A-Za-z0-9._:-]). Retrying with the
+ * same key and body does not send the email twice (e.g. after a PROVIDER_TIMEOUT).
  *
  * Request body:
  * {
@@ -100,9 +144,15 @@ send.post('/send', async (c) => {
     throw fromZodError(parseResult.error, 'Invalid request');
   }
 
+  const idempotencyKey = toIdempotencyKey(
+    c.req.header('Idempotency-Key'),
+    getVar('apiKey') as string | undefined
+  );
+
   const request: SendMessageRequest = {
     ...parseResult.data,
     channel: resolveChannel(parseResult.data.channel),
+    ...(idempotencyKey && { idempotencyKey }),
   };
 
   // Route to the appropriate channel
