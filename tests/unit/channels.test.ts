@@ -13,7 +13,8 @@ import {
 } from '../../src/channels/index.js';
 import { emailHandler } from '../../src/channels/email.js';
 import { ProviderError, InternalError, ValidationError } from '../../src/utils/errors.js';
-import type { SendMessageRequest } from '../../src/types/api.js';
+import { ErrorCode, type SendMessageRequest } from '../../src/types/api.js';
+import { TIMEOUTS } from '../../src/config.js';
 import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 describe('Channel Infrastructure', () => {
@@ -194,6 +195,88 @@ describe('Email Channel Handler', () => {
 
       expect(error).toBeInstanceOf(ProviderError);
       expect((error as ProviderError).message).toContain('https://resend.com/domains');
+    });
+
+    describe('provider timeout', () => {
+      const originalTimeout = TIMEOUTS.provider;
+
+      beforeEach(() => {
+        TIMEOUTS.provider = 20;
+      });
+
+      afterEach(() => {
+        TIMEOUTS.provider = originalTimeout;
+      });
+
+      /** A fetch that never answers, but rejects like real fetch when its signal aborts. */
+      function hangUntilAborted(_url: unknown, init?: RequestInit): Promise<unknown> {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const reason: unknown = init.signal?.reason;
+            reject(reason instanceof Error ? reason : new Error('aborted'));
+          });
+        });
+      }
+
+      it('should abort the Resend request and report PROVIDER_TIMEOUT', async () => {
+        fetchMock.mockImplementationOnce(hangUntilAborted);
+
+        const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(ProviderError);
+        expect((error as ProviderError).code).toBe(ErrorCode.PROVIDER_TIMEOUT);
+        expect((error as ProviderError).statusCode).toBe(502);
+        // The HTTP request itself was aborted, so a slow send cannot still be delivered
+        const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+        expect(signal?.aborted).toBe(true);
+      });
+
+      it('should report PROVIDER_TIMEOUT when the response body read is aborted', async () => {
+        // Headers arrive, then the body stalls until the abort (non-OK path re-throws)
+        fetchMock.mockImplementationOnce((_url, init) =>
+          Promise.resolve({
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            headers: new Headers(),
+            text: () => hangUntilAborted(_url, init),
+          })
+        );
+
+        const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(ProviderError);
+        expect((error as ProviderError).code).toBe(ErrorCode.PROVIDER_TIMEOUT);
+      });
+
+      it('should pass a live signal and succeed when Resend answers in time', async () => {
+        fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_fast'));
+
+        const result = await emailHandler.send(baseRequest);
+
+        expect(result.messageId).toBe('email_fast');
+        const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+        expect(signal).toBeInstanceOf(AbortSignal);
+        expect(signal?.aborted).toBe(false);
+      });
+    });
+
+    it('should forward the idempotency key as the Idempotency-Key header', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_idem'));
+
+      await emailHandler.send({ ...baseRequest, idempotencyKey: 'scope:order-123' });
+
+      const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+      expect(headers.get('Idempotency-Key')).toBe('scope:order-123');
+    });
+
+    it('should not send an Idempotency-Key header without a key', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_plain'));
+
+      await emailHandler.send(baseRequest);
+
+      const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+      expect(headers.has('Idempotency-Key')).toBe(false);
     });
 
     it('should report a ProviderError when the Resend API is unreachable', async () => {

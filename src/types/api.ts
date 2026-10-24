@@ -81,6 +81,12 @@ export interface SendMessageRequest {
   from?: EmailFrom;
   replyTo?: string;
 
+  /**
+   * Provider idempotency key, derived from the client's Idempotency-Key header.
+   * Retries with the same key within the provider's window are not re-sent.
+   */
+  idempotencyKey?: string;
+
   // Future: SMS/Push/Webhook specific fields (Phase 2+)
 }
 
