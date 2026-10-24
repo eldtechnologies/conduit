@@ -23,12 +23,17 @@ Get Conduit up and running in 5 minutes.
 2. Connect your Conduit Git repository
 3. Add environment variables:
    ```bash
+   NODE_ENV=production
    RESEND_API_KEY=re_your_key_here
-   API_KEY_MYSITE=KEY_MYSITE_generate_random_string
+   # Paste the output of: npm run generate-key -- MYSITE (see Step 3)
+   API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
+   API_KEY_MYSITE_FROM_ADDRESSES=noreply@mail.yourdomain.com
    ALLOWED_ORIGINS=https://yoursite.com
    ```
 4. Deploy (Coolify auto-detects the Dockerfile)
 5. Set custom domain: `conduit.yourdomain.com`
+
+**`NODE_ENV` defaults to `development`.** Production deployments must run with `NODE_ENV=production`: it enables HTTPS enforcement with HSTS and hides internal error details. The Docker image already sets it; set it yourself on any platform that does not build from the Dockerfile. With `NODE_ENV=production`, every route except `GET /health` requires `X-Forwarded-Proto: https`, so Conduit must run behind a reverse proxy that sets that header (Coolify's proxy does).
 
 ### Option B: Docker (Local Development)
 
@@ -37,10 +42,11 @@ Get Conduit up and running in 5 minutes.
 git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 
-# Create .env file
+# Create .env file (replace the example key with your own, see Step 3)
 cat > .env << 'EOF'
+NODE_ENV=development
 RESEND_API_KEY=re_your_key_here
-API_KEY_MYSITE=KEY_MYSITE_abc123xyz
+API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
 ALLOWED_ORIGINS=http://localhost:8080,https://yoursite.com
 PORT=3000
 EOF
@@ -52,6 +58,20 @@ docker run -p 3000:3000 --env-file .env conduit
 # Test it's running
 curl http://localhost:3000/health
 ```
+
+**Why `NODE_ENV=development`?** The Docker image (and `docker compose`) default to `NODE_ENV=production`, which rejects every plain-HTTP request except `GET /health` with `403 HTTPS Required`. For a local run without a TLS proxy, set `NODE_ENV=development` in `.env`. Keep comments in `.env` on their own lines: `docker run --env-file` does not strip trailing `# comments` from values.
+
+The server validates every `API_KEY_*` variable at startup and refuses to start if a variable is neither a known per-key setting nor a valid key (for example a typo like `API_KEY_MYSITE_RECIPIENT=support@yoursite.com`), or if a per-key variable's `API_KEY_<NAME>` is not set. Check the container logs if it exits immediately.
+
+### Option C: Node.js (without Docker)
+
+```bash
+npm ci
+npm run build                      # compiles to dist/
+node --env-file=.env dist/index.js # same as npm start, plus loading .env
+```
+
+`npm start` (`node dist/index.js`) and `npm run dev` do not read `.env` themselves. Either export the variables in your shell or pass the file to Node as above (for development: `npx tsx watch --env-file=.env src/index.ts`). Set `NODE_ENV=production` when running this way in production.
 
 Expected response:
 ```json
@@ -67,19 +87,38 @@ Each frontend application needs its own API key.
 **Generate securely with crypto.randomBytes:**
 
 ```bash
+npm run generate-key -- MYSITE
+
+# or, without cloning the repository:
 node -e "console.log('KEY_MYSITE_' + require('crypto').randomBytes(16).toString('hex'))"
 ```
 
 Example output: `KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1`
 
+Keys must have the form `KEY_<NAME>_<random>` (uppercase name, at least 12 random letters or digits). Any other value in an `API_KEY_*` variable stops the server at startup.
+
 **Add to Conduit environment:**
 
 ```bash
-API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
-API_KEY_PORTFOLIO=KEY_PORTFOLIO_j9k2m5n8p4q8r2s6t9u3v7w1x5y9z3a7
+API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
+API_KEY_PORTFOLIO=<output of: npm run generate-key -- PORTFOLIO>
 ```
 
 **⚠️ Security Note:** Never use `Math.random()` for API keys - it's not cryptographically secure.
+
+### Allow a Sender Address (`from`)
+
+The sender address is controlled by the operator, not the client. List the addresses each key may send from:
+
+```bash
+# First address is the default sender when a request omits `from`
+API_KEY_MYSITE_FROM_ADDRESSES=noreply@mail.yourdomain.com,support@mail.yourdomain.com
+```
+
+- A request whose `from.email` is not in the list is rejected with HTTP 400 `SENDER_NOT_ALLOWED`.
+- **Without this variable, any request that sets `from` is rejected with 400 `SENDER_NOT_ALLOWED`**, and requests without `from` are sent as `Conduit <onboarding@resend.dev>` (Resend's test sender, for testing only).
+- Addresses must be on a domain you have verified in Resend.
+- `from.name` may not contain `<`, `>`, `"`, `@` or line breaks.
 
 ## Step 4: Configure Recipient Whitelisting (Optional but Recommended)
 
@@ -120,8 +159,8 @@ API_KEY_MYSITE_RECIPIENT_DOMAINS=company.com
 RESEND_API_KEY=re_your_key_here
 
 # Frontend API keys
-API_KEY_WEBSITE=KEY_WEBSITE_abc123xyz
-API_KEY_NEWSLETTER=KEY_NEWSLETTER_def456xyz
+API_KEY_WEBSITE=<output of: npm run generate-key -- WEBSITE>
+API_KEY_NEWSLETTER=<output of: npm run generate-key -- NEWSLETTER>
 
 # Recipient whitelisting (optional)
 API_KEY_WEBSITE_RECIPIENTS=support@company.com,admin@company.com
@@ -138,8 +177,9 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 - If `API_KEY_*_RECIPIENTS` or `API_KEY_*_RECIPIENT_DOMAINS` is set, only whitelisted recipients are allowed
 - If neither is set, all recipients are allowed (backward compatible)
 - Requests to non-whitelisted recipients return HTTP 403 with error code `RECIPIENT_NOT_ALLOWED`
+- `API_KEY_WEBSITE_RECIPIENTS` etc. require `API_KEY_WEBSITE` to be set, otherwise startup fails
 
-**See full guide**: **[Recipient Whitelisting Documentation](../features/recipient-whitelisting.md)**
+**See full guide**: **[Recipient Whitelisting Documentation](features/recipient-whitelisting.md)**
 
 ## Step 5: Configure LLM Spam Filtering (Optional but Recommended)
 
@@ -157,36 +197,42 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 **2. Add to Conduit environment:**
 
 ```bash
-# LLM Provider API Keys (at least one required)
-ANTHROPIC_API_KEY=sk-ant-...
-# or
-OPENAI_API_KEY=sk-...
+# Global provider settings (all three are required to turn filtering on)
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-...
+LLM_MODEL=claude-haiku-4-5-20251001
+# or: LLM_PROVIDER=openai, LLM_API_KEY=sk-..., LLM_MODEL=<an OpenAI model>
 
 # Enable per API key
-API_KEY_MYSITE_SPAM_FILTER_ENABLED=true
-API_KEY_MYSITE_SPAM_FILTER_PROVIDER=anthropic  # or "openai"
-API_KEY_MYSITE_SPAM_FILTER_THRESHOLD=70        # 0-100, higher = stricter
-API_KEY_MYSITE_SPAM_FILTER_FAIL_MODE=open      # "open" or "closed"
-API_KEY_MYSITE_SPAM_FILTER_BUDGET_DAILY=500    # USD cents (e.g., 500 = $5.00/day)
-
-# Optional: Skip trusted senders
-API_KEY_MYSITE_SPAM_FILTER_WHITELISTED_SENDERS=trusted@company.com,*@partner.com
+API_KEY_MYSITE_LLM_ENABLED=true
+# Block when model confidence >= threshold (0-1, default 0.7)
+API_KEY_MYSITE_LLM_THRESHOLD=0.7
+# On provider errors or exhausted budget: allow (fail open) or block (fail closed)
+API_KEY_MYSITE_LLM_FAIL_MODE=block
+# Daily cap on LLM calls for this key (default 1000)
+API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000
+# Optional: categories to check (default: all except profanity)
+API_KEY_MYSITE_LLM_RULES=spam,abuse,phishing,scam,promptInjection
 ```
 
-**3. What gets blocked:**
-- Marketing spam and bulk email
-- Phishing and credential harvesting attempts
-- Hate speech and harassment
-- Prompt injection attacks
-- Social engineering and scams
-- Suspicious patterns and anomalies
+Only `anthropic` and `openai` are supported. If a key sets `_LLM_ENABLED=true` but `LLM_PROVIDER`, `LLM_API_KEY` or `LLM_MODEL` is missing, the server refuses to start. `_LLM_FAIL_MODE` defaults to `LLM_FALLBACK_MODE` (default `allow`); any value other than `allow` or `block` fails startup. Threshold values outside 0-1 are ignored and the default 0.7 is used.
 
-**4. Budget protection:**
-Set `SPAM_FILTER_BUDGET_DAILY` to control costs. Once the daily budget is reached:
-- `fail_mode=open`: Messages pass through without LLM analysis (fail safe)
-- `fail_mode=closed`: Messages are rejected to prevent unfiltered spam (fail secure)
+**3. What gets checked** (enable or disable with `_LLM_RULES`):
+- `spam` - marketing spam and bulk email
+- `phishing` - credential harvesting attempts
+- `abuse` - hate speech and harassment
+- `profanity` - offensive language (off by default)
+- `promptInjection` - prompt injection attacks
+- `scam` - social engineering and scams
 
-**See full guide**: **[LLM Spam Filtering Documentation](../features/llm-spam-filtering.md)**
+Blocked messages return HTTP 403 with a `CONTENT_BLOCKED_*` error code. Content is checked only after the request and template data pass validation and the sender check, so invalid requests never cost an LLM call.
+
+**4. Budget and failure handling:**
+Set `_LLM_MAX_CALLS_PER_DAY` to control costs (the count resets at midnight UTC). When the daily limit is reached, or the provider fails or times out:
+- `_LLM_FAIL_MODE=allow`: Messages pass through without LLM analysis (fail open)
+- `_LLM_FAIL_MODE=block`: Messages are rejected with HTTP 503 (`LLM_BUDGET_EXCEEDED` or `LLM_PROVIDER_ERROR`) to prevent unfiltered spam (fail closed)
+
+**See full guide**: **[LLM Spam Filtering Documentation](features/llm-spam-filtering.md)**
 
 ## Step 6: Integrate with Your Frontend
 
@@ -211,7 +257,7 @@ interface ContactFormData {
   name: string;
   email: string;
   message: string;
-  phone?: string;
+  subject?: string;
 }
 
 export async function sendEmail(data: ContactFormData): Promise<boolean> {
@@ -227,10 +273,8 @@ export async function sendEmail(data: ContactFormData): Promise<boolean> {
         channel: 'email',
         templateId: 'contact-form',
         to: 'hello@yourcompany.com',
-        from: {
-          email: 'noreply@yourcompany.com',
-          name: 'Your Company',
-        },
+        // `from` omitted: Conduit uses the first address in API_KEY_MYSITE_FROM_ADDRESSES.
+        // A client-supplied `from` must be in that list, or the request fails with 400.
         replyTo: data.email,
         data,
       }),
@@ -258,7 +302,7 @@ function ContactForm() {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
       message: formData.get('message') as string,
-      phone: formData.get('phone') as string,
+      subject: (formData.get('subject') as string) || undefined,
     });
 
     if (success) {
@@ -272,7 +316,7 @@ function ContactForm() {
     <form onSubmit={handleSubmit}>
       <input name="name" required placeholder="Your name" />
       <input name="email" type="email" required placeholder="your@email.com" />
-      <input name="phone" placeholder="Phone (optional)" />
+      <input name="subject" placeholder="Subject (optional)" />
       <textarea name="message" required placeholder="Your message" />
       <button type="submit">Send Message</button>
     </form>
@@ -309,7 +353,7 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
       channel: 'email',
       templateId: 'contact-form',
       to: 'hello@yourcompany.com',
-      from: { email: 'noreply@yourcompany.com', name: 'Your Company' },
+      // `from` omitted: uses the first address in API_KEY_MYSITE_FROM_ADDRESSES
       replyTo: formData.get('email'),
       data: {
         name: formData.get('name'),
@@ -340,17 +384,28 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
 - **[Architecture](architecture.md)** - Understand how Conduit works under the hood
 - **[Security](security/)** - Security best practices and hardening
 - **[Spam Prevention](security/spam-prevention.md)** - Protect against bots and form abuse (quick 15-min setup)
-- **[Recipient Whitelisting](../features/recipient-whitelisting.md)** - Prevent stolen key abuse (95% risk reduction)
+- **[Recipient Whitelisting](features/recipient-whitelisting.md)** - Prevent stolen key abuse (95% risk reduction)
 
 ### Common Issues
 
-**"CORS error"**
+**"CORS error" / 403 `ORIGIN_NOT_ALLOWED`**
 - Ensure your origin is in `ALLOWED_ORIGINS` exactly (including protocol, no trailing slash)
 - Example: `ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com`
 
-**"Invalid API key"**
+**"HTTPS Required" (403)**
+- `NODE_ENV=production` (the Docker default) requires `X-Forwarded-Proto: https` on every route except `GET /health`
+- Run behind a TLS-terminating proxy, or set `NODE_ENV=development` for local plain-HTTP testing
+
+**"Invalid API key" (401 `UNAUTHORIZED`)**
 - Verify the key in Conduit's environment matches the key in your frontend
 - Check for extra spaces or line breaks
+
+**400 `SENDER_NOT_ALLOWED`**
+- The request set `from`, but `from.email` is not in `API_KEY_<NAME>_FROM_ADDRESSES` (or the key has no sender allowlist)
+- Add the address to the allowlist, or omit `from` to use the key's default sender
+
+**Server exits at startup**
+- Read the error: it names the offending variable (for example an invalid `API_KEY_*` value, a per-key variable without its `API_KEY_<NAME>`, or a missing `LLM_*` setting)
 
 **"Email not sending"**
 - Check Resend dashboard for delivery status

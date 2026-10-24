@@ -6,7 +6,7 @@
 [![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
 [![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-blue.svg)]()
 [![Security Scan](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 ---
 
@@ -57,7 +57,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 ```
 
 **That's it!** Conduit handles:
-- 🔒 Secure communication with providers (Resend, Twilio, Firebase)
+- 🔒 Secure communication with the email provider (Resend; Twilio and Firebase are planned)
 - 🛡️ Authentication, CORS, and rate limiting
 - 📝 Template rendering and validation
 - 📊 Structured logging
@@ -70,16 +70,19 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 - **Email delivery** via [Resend.com](https://resend.com) with a comprehensive domain setup guide
 - **🤖 AI-powered spam filtering** (optional) — block spam, abuse, phishing, and prompt-injection attacks
   - Anthropic Claude and OpenAI GPT support
-  - Configurable per API key with custom rules and thresholds
-  - Fail-open / fail-closed modes for reliability
-  - Budget limits to control LLM costs (~$0.0005 per message)
-  - Sender whitelisting to skip trusted emails
+  - Configurable per API key with category rules and a 0-1 confidence threshold
+  - Fail-open (`allow`) / fail-closed (`block`) modes for reliability
+  - Daily call limits to control LLM costs (~$0.0005 per message)
+  - Runs only after request validation, so invalid requests never cost an LLM call
   - See the [LLM Spam Filtering Guide](docs/features/llm-spam-filtering.md)
 - **Contact form template** with XSS sanitization and header-injection prevention
 - **API key authentication** with constant-time comparison (timing-attack resistant)
 - **Rate limiting** (10/min, 100/hr, 500/day per key) — token-bucket algorithm
 - **CORS protection** with strict origin whitelisting + `X-Source-Origin` for proxies/gateways
 - **Recipient whitelisting** — prevent stolen API keys from spamming arbitrary recipients
+- **Sender allowlist** — the operator decides which `from` addresses each key may use (`API_KEY_*_FROM_ADDRESSES`)
+- **Idempotent retries** — optional `Idempotency-Key` header so a retried request is not sent twice
+- **Strict startup validation** — invalid or misspelled `API_KEY_*` variables stop the server instead of being ignored
 - **Security hardening**:
   - HTTPS enforcement with HSTS
   - Request body size limits (50KB)
@@ -88,7 +91,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
   - XSS sanitization with DOMPurify
 - **Structured JSON logging** with request/response tracking
 - **Health monitoring** — public `/health` endpoint + authenticated `/health/detailed`
-- **263 tests** across unit, integration, and security suites
+- **Unit, integration, and security test suites** (80% coverage threshold enforced)
 
 ### Where Conduit could go next 🌱
 
@@ -97,7 +100,7 @@ These are directions the architecture supports — not commitments. Channel scaf
 - **More channels:** SMS (Twilio), push (Firebase Cloud Messaging), WhatsApp Business, generic HTTP webhooks, Slack and Discord integrations
 - **Operational features:** delivery tracking, retry policies, dead-letter queues, scheduled sending
 - **Insight & UX:** analytics dashboard, visual template builder, A/B testing
-- **Auth & multi-tenancy:** scoped API keys, key revocation/rotation, audit logs
+- **Auth & multi-tenancy:** scoped API keys, automated key rotation, audit logs (manual revocation via `REVOKED_KEYS` already exists)
 
 Have a use case you'd like to see? Open a [discussion](https://github.com/eldtechnologies/conduit/discussions) or [issue](https://github.com/eldtechnologies/conduit/issues).
 
@@ -111,7 +114,7 @@ Have a use case you'd like to see? Open a [discussion](https://github.com/eldtec
 ```bash
 1. Create new service in Coolify
 2. Connect your Git repository
-3. Add environment variables (RESEND_API_KEY, API_KEY_*, ALLOWED_ORIGINS)
+3. Add environment variables (NODE_ENV=production, RESEND_API_KEY, API_KEY_*, API_KEY_*_FROM_ADDRESSES, ALLOWED_ORIGINS)
 4. Deploy
 5. Set custom domain: conduit.yourdomain.com
 ```
@@ -120,16 +123,31 @@ Have a use case you'd like to see? Open a [discussion](https://github.com/eldtec
 ```bash
 git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
+cp .env.example .env   # then fill in your values
 docker build -t conduit .
 docker run -p 3000:3000 --env-file .env conduit
 ```
+
+The image (and `docker compose`) default to `NODE_ENV=production`, which rejects plain-HTTP requests to every route except `GET /health` with `403 HTTPS Required`. For a local run without a TLS proxy, set `NODE_ENV=development` in `.env`.
+
+**Option C: Node.js**
+```bash
+npm ci
+npm run build
+node --env-file=.env dist/index.js   # npm start runs dist/index.js but does not load .env
+```
+
+`NODE_ENV` defaults to `development`. **Production must run with `NODE_ENV=production`** (HTTPS enforcement with HSTS, sanitized error responses).
 
 ### 2. Generate API Keys
 
 ```bash
 # Secure generation with crypto.randomBytes
-node -e "console.log('KEY_MYSITE_' + require('crypto').randomBytes(16).toString('hex'))"
+npm run generate-key -- MYSITE
+# or: node -e "console.log('KEY_MYSITE_' + require('crypto').randomBytes(16).toString('hex'))"
 ```
+
+Keys must look like `KEY_<NAME>_<12+ letters or digits>`. Conduit validates every `API_KEY_*` variable at startup and refuses to start on an invalid key, an unknown per-key setting, or a per-key setting for a key that is not configured.
 
 ### 3. Integrate with Your Frontend
 
@@ -144,17 +162,20 @@ Before deploying to production, complete these steps:
   - ✅ Use a subdomain (e.g., `mail.yourdomain.com`) to protect your main domain reputation
   - Add DNS records (SPF, DKIM)
   - Wait for verification (5-30 minutes)
-- [ ] **Update frontend** to use verified domain in `from.email` field
+- [ ] **Allow your sender address** with `API_KEY_*_FROM_ADDRESSES` (an address on the verified domain; the first one is the default sender)
+  - Without an allowlist, any request that sets `from` is rejected with `400 SENDER_NOT_ALLOWED`, and mail without `from` goes out as `onboarding@resend.dev` (Resend test sender)
 - [ ] **Test email delivery** with verified domain
 
 **Security & Configuration:**
 - [ ] **Set environment variables**
+  - `NODE_ENV=production` - Required in production (the default is `development`)
   - `RESEND_API_KEY` - Your Resend API key
-  - `API_KEY_*` - One per frontend app (generate with crypto.randomBytes)
+  - `API_KEY_*` - One per frontend app (generate with `npm run generate-key -- APPNAME`)
   - `ALLOWED_ORIGINS` - Whitelist your frontend domains
+  - See [`.env.example`](.env.example) for all supported variables
 - [ ] **Configure CORS** - Add all production domains to `ALLOWED_ORIGINS`
 - [ ] **Review rate limits** - Adjust `RATE_LIMIT_*` if needed (default: 10/min, 100/hr, 500/day)
-- [ ] **Enable HTTPS** - Ensure `x-forwarded-proto` header is set by your proxy/load balancer
+- [ ] **Enable HTTPS** - Ensure `X-Forwarded-Proto: https` is set by your proxy/load balancer (required for every route except `/health` in production)
 
 **Testing:**
 - [ ] **Test API endpoint** - `curl https://conduit.yourdomain.com/health`
@@ -171,6 +192,8 @@ Before deploying to production, complete these steps:
 - [ ] **Enable recipient whitelisting** - Prevent stolen keys from spamming arbitrary recipients
   - Set `API_KEY_*_RECIPIENTS` or `API_KEY_*_RECIPIENT_DOMAINS` environment variables
   - See **[Recipient Whitelisting Guide](docs/features/recipient-whitelisting.md)**
+- [ ] **Enable LLM spam filtering** (optional) - `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` plus `API_KEY_*_LLM_ENABLED=true`
+  - See **[LLM Spam Filtering Guide](docs/features/llm-spam-filtering.md)**
 - [ ] **Add honeypot fields** to forms (90% bot reduction, 15 minutes)
 - [ ] **Configure CAPTCHA** if needed (Cloudflare Turnstile free tier)
 - [ ] See **[Spam Prevention Guide](docs/security/spam-prevention.md)** for complete setup
@@ -196,11 +219,13 @@ Before deploying to production, complete these steps:
 ## Architecture
 
 ```
-Frontend Apps → HTTPS → [CORS] → [Auth] → [Recipient Validation] → [Rate Limit] → [Logger]
+Frontend Apps → [HTTPS] → [CORS] → [Security Headers] → [Logger]
+                                      ↓  (/api/* only)
+              [Body Limit] → [Auth] → [Recipient Validation] → [Rate Limit]
                                       ↓
-                           Channel Router → Template Validator
+       Send route: request + template validation → sender check → [LLM Filter]
                                       ↓
-                 [Email|SMS|Push|Webhook] Handler → Provider API
+                    Channel Router → Email Handler (Resend)
 ```
 
 **Key Components**:
@@ -208,7 +233,7 @@ Frontend Apps → HTTPS → [CORS] → [Auth] → [Recipient Validation] → [Ra
 - **TypeScript**: Type-safe development
 - **Zod**: Runtime validation
 - **Docker**: Containerized deployment
-- **Providers**: Resend (email), Twilio (SMS), Firebase (push)
+- **Providers**: Resend (email); Twilio (SMS) and Firebase (push) are planned
 
 See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams and flows.
 
@@ -227,6 +252,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 - ✅ CORS protection with strict origin whitelisting
 - ✅ PII masking in logs (GDPR compliant)
 - ✅ Recipient whitelisting (prevents stolen key abuse)
+- ✅ Per-key sender allowlist (clients cannot pick arbitrary `from` addresses)
 - 🛡️ Spam prevention with multi-tier protection (honeypot, CAPTCHA, LLM filtering)
 - 🤖 **Automated Security**:
   - Daily vulnerability scanning (npm audit + OSV Scanner)
@@ -247,9 +273,9 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 ### What's in the box
 - **Email pipeline**: POST `/api/send`, Resend integration, contact-form template, Zod-validated request bodies, header-injection prevention.
 - **Security hardening**: HTTPS + HSTS, constant-time API key comparison, CORS allowlist with proxy support (`X-Source-Origin`), token-bucket rate limiting, 50KB request size limit, security headers (CSP, X-Frame-Options, etc.), XSS sanitization on user content.
-- **Spam prevention**: optional LLM filtering (Anthropic / OpenAI), recipient whitelisting, sender whitelisting, multi-tier defense guidance.
+- **Spam prevention**: optional LLM filtering (Anthropic / OpenAI, fail-open or fail-closed), recipient whitelisting, per-key sender allowlist, multi-tier defense guidance.
 - **Operations**: structured JSON logs with PII masking, public `/health` + authenticated `/health/detailed`, graceful shutdown, Docker image with health checks.
-- **Quality bar**: 263 tests (unit, integration, security), TypeScript strict mode (`noUncheckedIndexedAccess`), ESLint + Prettier, zero `npm audit` / OSV findings.
+- **Quality bar**: unit, integration and security tests with an 80% coverage threshold, TypeScript strict mode (`noUncheckedIndexedAccess`), ESLint + Prettier, CI that fails on `npm audit` / OSV findings.
 
 For a full version history, see [CHANGELOG.md](CHANGELOG.md).
 
@@ -291,17 +317,21 @@ Conduit is open source and welcomes contributions!
 git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 
-# Install dependencies (once implemented)
+# Install dependencies
 npm install
 
-# Run development server
-npm run dev
+# Configure (npm scripts do not load .env themselves)
+cp .env.example .env
 
-# Run tests
+# Run development server with .env loaded
+npx tsx watch --env-file=.env src/index.ts
+
+# Run tests (they set their own environment in tests/setup.ts)
 npm test
 
-# Build for production
+# Build for production and run the build
 npm run build
+node --env-file=.env dist/index.js   # or: npm start, with the variables exported
 ```
 
 See **[CLAUDE.md](CLAUDE.md)** for detailed development guidance.

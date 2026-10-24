@@ -22,7 +22,7 @@ Conduit uses a multi-layered approach to automated security:
 **Configuration**: `.github/dependabot.yml`
 
 **What it does:**
-- Checks for npm dependency updates every Monday at 9 AM UTC
+- Checks for npm, GitHub Actions and Docker base image updates every Monday at 9 AM UTC
 - Automatically creates PRs for updates
 - Groups related updates to reduce PR noise:
   - Development dependencies (minor + patch)
@@ -61,7 +61,7 @@ groups:
 
 **Runs on:**
 - Every push to `main` branch
-- Every pull request
+- Every pull request against `main`
 - Daily at 2 AM UTC
 - Manual trigger (workflow_dispatch)
 
@@ -73,9 +73,10 @@ groups:
 - Checks against npm's vulnerability database
 
 #### b. OSV Scanner
-- Uses Google's OSV Scanner
+- Uses Google's OSV Scanner (reusable workflow)
 - Checks package-lock.json against OSV database
 - Covers vulnerabilities from multiple sources (not just npm)
+- Fails the job on any reported vulnerability (`fail-on-vuln: true`) and uploads SARIF results to GitHub code scanning
 
 #### c. Dependency Review (PR only)
 - Analyzes dependency changes in PRs
@@ -83,8 +84,8 @@ groups:
 - Fails PR if moderate+ severity vulnerabilities introduced
 
 #### d. Security Summary
-- Aggregates results from all scans
-- Provides pass/fail status
+- Aggregates the npm audit and OSV Scanner results (Dependency Review reports on its own)
+- Fails if either of them did not succeed
 
 **Status Badge:**
 ```markdown
