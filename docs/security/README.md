@@ -289,7 +289,7 @@ See [implementation.md#security-testing](implementation.md#security-testing) for
 4. **Recover**: Generate new keys, distribute securely
 5. **Post-Mortem**: Document root cause, update security measures
 
-See [archive/review-pre-v1.0.0.md#incident-response](archive/review-pre-v1.0.0.md) for detailed procedures (archived historical document).
+See [implementation.md#incident-response](implementation.md#incident-response) for detailed procedures.
 
 ## Security Documentation
 
