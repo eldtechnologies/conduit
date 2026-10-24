@@ -5,26 +5,27 @@
  * Verifies that API keys can be restricted to specific recipients/domains.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import app from '@/index.js';
 import { readJson, type SuccessResponse, type ErrorResponse } from '../helpers/response.js';
+import { installFetchMock, type FetchMock } from '../helpers/fetch.js';
 
 describe('Recipient Validation (v1.1.0)', () => {
   // Resend SDK invokes global `fetch` under the hood (see node_modules/resend/dist/index.js).
   // Mocking it here lets these tests exercise the full middleware stack end-to-end
   // through `app.fetch(...)` without ever reaching the real Resend API with a fake key.
   const originalFetch = global.fetch;
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: FetchMock;
 
   beforeEach(() => {
-    fetchMock = vi.fn().mockResolvedValue({
+    fetchMock = installFetchMock();
+    fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
       json: () => Promise.resolve({ id: 'mock-msg-id' }),
       text: () => Promise.resolve(JSON.stringify({ id: 'mock-msg-id' })),
     });
-    global.fetch = fetchMock;
   });
 
   afterAll(() => {
