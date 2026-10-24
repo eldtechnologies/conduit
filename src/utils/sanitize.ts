@@ -46,13 +46,22 @@ export function sanitizeHtml(dirty: string): string {
  * toPlainText('a < b &amp; c') // Returns: 'a < b & c'
  */
 export function toPlainText(dirty: string): string {
+  // Parse into a DOM fragment and read its text, which decodes every entity. The string
+  // form is not usable here: it is HTML-serialised (re-escaping &, < and >) whenever the
+  // input contains a '<'. The DOM type is declared locally because the project's lib
+  // settings exclude the DOM typings.
   const fragment = DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS: [],
     ALLOWED_ATTR: [],
     KEEP_CONTENT: true,
     RETURN_DOM_FRAGMENT: true,
-  });
+  }) as unknown as TextNodeContainer;
   return fragment.textContent ?? '';
+}
+
+/** The part of DocumentFragment that toPlainText reads */
+interface TextNodeContainer {
+  textContent: string | null;
 }
 
 /**
