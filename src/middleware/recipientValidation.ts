@@ -37,6 +37,29 @@ function isRecipientAllowed(recipient: string, whitelist: RecipientWhitelist): b
 }
 
 /**
+ * Parse the request body as a JSON object
+ *
+ * Malformed JSON and non-object bodies (null, arrays, primitives) are client
+ * errors, so they are rejected with 400 instead of surfacing as a 500.
+ *
+ * @throws ValidationError if the body is not valid JSON or not a JSON object
+ */
+async function parseJsonObjectBody(c: Context): Promise<SendRequestBody> {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    throw new ValidationError('Invalid JSON body', ErrorCode.VALIDATION_ERROR);
+  }
+
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new ValidationError('Request body must be a JSON object', ErrorCode.VALIDATION_ERROR);
+  }
+
+  return body;
+}
+
+/**
  * Recipient validation middleware
  *
  * Validates that the recipient is in the API key's whitelist.
@@ -54,7 +77,7 @@ export async function validateRecipient(c: Context, next: Next) {
 
   // ALWAYS parse request body once here and store it
   // This prevents body consumption issues with Hono's Request streams
-  const body = await c.req.json<SendRequestBody>();
+  const body = await parseJsonObjectBody(c);
 
   // Store parsed body in context for route handler to use
   c.set('parsedBody', body);

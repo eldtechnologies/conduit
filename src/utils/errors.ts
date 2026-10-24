@@ -55,6 +55,16 @@ export class ValidationError extends ConduitError {
 }
 
 /**
+ * Payload too large errors (413)
+ */
+export class PayloadTooLargeError extends ConduitError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, ErrorCode.PAYLOAD_TOO_LARGE, 413, details);
+    this.name = 'PayloadTooLargeError';
+  }
+}
+
+/**
  * Convert a ZodError into a ValidationError
  *
  * Flattens issues into a `path: message` list so clients get actionable
@@ -97,12 +107,37 @@ export class ProviderError extends ConduitError {
 
 /**
  * Service unavailable errors (503)
+ *
+ * `retryAfter` (seconds) is exposed as a top-level response field and as the
+ * Retry-After header. It can be passed explicitly or, for callers that put it
+ * in `details` (which production strips), is picked up from `details.retryAfter`.
  */
 export class ServiceUnavailableError extends ConduitError {
-  constructor(message: string, code: ErrorCode, details?: Record<string, unknown>) {
+  public readonly retryAfter?: number;
+
+  constructor(
+    message: string,
+    code: ErrorCode,
+    details?: Record<string, unknown>,
+    retryAfter?: number
+  ) {
     super(message, code, 503, details);
     this.name = 'ServiceUnavailableError';
+    const fromDetails = details?.retryAfter;
+    this.retryAfter = retryAfter ?? (typeof fromDetails === 'number' ? fromDetails : undefined);
   }
+}
+
+/**
+ * Get the retry delay (seconds) for errors that carry one.
+ *
+ * @returns Seconds to wait, or undefined if the error has no retry hint
+ */
+export function getRetryAfter(error: unknown): number | undefined {
+  if (error instanceof RateLimitError || error instanceof ServiceUnavailableError) {
+    return error.retryAfter;
+  }
+  return undefined;
 }
 
 /**
@@ -139,9 +174,10 @@ export function sanitizeError(error: unknown, env: string): ErrorResponse {
       response.details = error.details;
     }
 
-    // Add retryAfter for rate limit errors
-    if (error instanceof RateLimitError) {
-      response.retryAfter = error.retryAfter;
+    // Add retryAfter for rate limit and service unavailable errors
+    const retryAfter = getRetryAfter(error);
+    if (retryAfter !== undefined) {
+      response.retryAfter = retryAfter;
     }
 
     return response;

@@ -276,6 +276,49 @@ describe('Recipient Validation (v1.1.0)', () => {
   });
 
   describe('Error Handling', () => {
+    const sendRaw = (apiKey: string, body: string) =>
+      app.fetch(
+        new Request('http://localhost/api/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+            Origin: 'https://test.com',
+          },
+          body,
+        })
+      );
+
+    it.each([
+      ['malformed JSON', '{bad'],
+      ['an empty body', ''],
+    ])('should reject %s with 400 VALIDATION_ERROR', async (_label, raw) => {
+      for (const key of [WHITELISTED_KEY, NO_WHITELIST_KEY]) {
+        const response = await sendRaw(key, raw);
+
+        expect(response.status).toBe(400);
+        const data = await readJson<ErrorResponse>(response);
+        expect(data.code).toBe('VALIDATION_ERROR');
+        expect(data.error).toBe('Invalid JSON body');
+      }
+    });
+
+    it.each([
+      ['null', 'null'],
+      ['an array', '[]'],
+      ['a string', '"hello"'],
+      ['a number', '42'],
+    ])('should reject a JSON body that is %s with 400', async (_label, raw) => {
+      for (const key of [WHITELISTED_KEY, NO_WHITELIST_KEY]) {
+        const response = await sendRaw(key, raw);
+
+        expect(response.status).toBe(400);
+        const data = await readJson<ErrorResponse>(response);
+        expect(data.code).toBe('VALIDATION_ERROR');
+        expect(data.error).toBe('Request body must be a JSON object');
+      }
+    });
+
     it('should reject requests with missing recipient', async () => {
       const response = await app.fetch(
         new Request('http://localhost/api/send', {

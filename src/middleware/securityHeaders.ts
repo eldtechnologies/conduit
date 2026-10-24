@@ -13,11 +13,15 @@ import { config } from '../config.js';
  *
  * Rejects HTTP requests and adds HSTS header to force HTTPS for 1 year.
  * In development, this check is skipped to allow local HTTP testing.
- * Health endpoints are also exempt to allow container health checks.
+ * Only the public `/health` endpoint is exempt (container health checks);
+ * the authenticated `/health/detailed` still requires HTTPS.
+ *
+ * HTTPS is detected via X-Forwarded-Proto, so Conduit must run behind a
+ * trusted reverse proxy that sets or overwrites that header.
  */
 export async function enforceHttps(c: Context, next: Next) {
-  // Skip HTTPS enforcement for health check endpoints (container health checks)
-  if (c.req.path.startsWith('/health')) {
+  // Skip HTTPS enforcement for the public health check only (container health checks)
+  if (c.req.path === '/health') {
     await next();
     return;
   }

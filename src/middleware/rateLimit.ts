@@ -66,21 +66,6 @@ function refillBucket(bucket: TokenBucket): void {
 }
 
 /**
- * Try to consume a token from the bucket
- * Returns true if successful, false if rate limited
- */
-function consumeToken(bucket: TokenBucket): boolean {
-  refillBucket(bucket);
-
-  if (bucket.tokens >= 1) {
-    bucket.tokens -= 1;
-    return true;
-  }
-
-  return false;
-}
-
-/**
  * Calculate retry-after time in seconds
  */
 function calculateRetryAfter(bucket: TokenBucket): number {
@@ -118,9 +103,11 @@ function getRateLimitState(apiKey: string): RateLimitState {
  * The middleware:
  * 1. Gets API key from context (set by auth middleware)
  * 2. Gets or creates rate limit state for the key
- * 3. Attempts to consume tokens from all buckets
- * 4. If any bucket is empty, returns 429 with Retry-After
- * 5. If successful, allows request to continue
+ * 3. Refills all buckets and checks that every bucket has a token
+ * 4. If any bucket is empty, returns 429 with Retry-After (the longest wait
+ *    across the empty buckets) WITHOUT consuming from any bucket, so rejected
+ *    requests never drain the hour/day budget
+ * 5. Otherwise consumes one token from every bucket and continues
  */
 export async function rateLimit(c: Context, next: Next) {
   // Get API key from context (set by auth middleware)
@@ -136,28 +123,35 @@ export async function rateLimit(c: Context, next: Next) {
   // Get rate limit state for this API key
   const state = getRateLimitState(apiKey);
 
-  // Try to consume tokens from all buckets
-  const minuteOk = consumeToken(state.perMinute);
-  const hourOk = consumeToken(state.perHour);
-  const dayOk = consumeToken(state.perDay);
+  const buckets: Array<[string, TokenBucket]> = [
+    ['per-minute', state.perMinute],
+    ['per-hour', state.perHour],
+    ['per-day', state.perDay],
+  ];
 
-  // If any bucket is rate limited, calculate retry-after and throw error
-  if (!minuteOk || !hourOk || !dayOk) {
-    let retryAfter: number;
-    let limitType: string;
+  // Check every bucket before consuming from any of them
+  for (const [, bucket] of buckets) {
+    refillBucket(bucket);
+  }
+  const depleted = buckets.filter(([, bucket]) => bucket.tokens < 1);
 
-    if (!minuteOk) {
-      retryAfter = calculateRetryAfter(state.perMinute);
-      limitType = 'per-minute';
-    } else if (!hourOk) {
-      retryAfter = calculateRetryAfter(state.perHour);
-      limitType = 'per-hour';
-    } else {
-      retryAfter = calculateRetryAfter(state.perDay);
-      limitType = 'per-day';
+  if (depleted.length > 0) {
+    // Report the longest wait: the request only succeeds once every bucket has a token
+    let limitType = '';
+    let retryAfter = 0;
+    for (const [type, bucket] of depleted) {
+      const wait = calculateRetryAfter(bucket);
+      if (wait >= retryAfter) {
+        retryAfter = wait;
+        limitType = type;
+      }
     }
 
     throw new RateLimitError(`Rate limit exceeded (${limitType})`, retryAfter);
+  }
+
+  for (const [, bucket] of buckets) {
+    bucket.tokens -= 1;
   }
 
   // Add rate limit headers to response
