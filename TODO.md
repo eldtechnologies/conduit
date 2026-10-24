@@ -1,6 +1,6 @@
 # Conduit Implementation TODO
 
-**Status**: Phase 1 (email) complete - v1.3.1 plus unreleased changes on `main`
+**Status**: Phase 1 (email) complete - v2.0.0-rc.1
 **Last Updated**: 2026-10-24
 
 Completed work (project setup, security layer, email channel, templates, send endpoint, Docker, tests, docs, recipient whitelisting, LLM spam filtering, sender allowlist, CI) has been removed from this list. See [CHANGELOG.md](CHANGELOG.md) and the git history for what was done. Only open items remain below.

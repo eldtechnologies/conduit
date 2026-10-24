@@ -14,7 +14,7 @@ Conduit's core security principles:
 
 ## Quick Security Status
 
-### Current Status: **PRODUCTION READY v1.3.1** ✅
+### Current Status: **v2.0.0-rc.1 — security hardening release candidate**
 
 🎉 **All critical security measures implemented and tested!**
 

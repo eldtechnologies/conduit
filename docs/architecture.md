@@ -1,6 +1,6 @@
 # Conduit Architecture
 
-**Version**: 1.3.1 (package.json), including the unreleased changes on `main`
+**Version**: 2.0.0-rc.1
 **Last Updated**: 2026-10-24
 **Status**: Email channel implemented; SMS, push and webhook channels are planned and not implemented
 
@@ -1529,12 +1529,12 @@ The actual implementation differs from the original specification in several imp
 
 #### 7. **Error Code Mapping**
 - **Original Spec**: `PAYLOAD_TOO_LARGE` → HTTP 413
-- **Actual Implementation**: `PAYLOAD_TOO_LARGE` → HTTP 413 (it returned 400 before the unreleased changes on `main`)
+- **Actual Implementation**: `PAYLOAD_TOO_LARGE` → HTTP 413 (it returned 400 before v2.0.0)
 - **Rationale**: Standard status code for oversized bodies
 
 ### Version History
 
-See [CHANGELOG.md](../CHANGELOG.md) for v1.2.1 and later. Highlights of the unreleased changes on `main`:
+See [CHANGELOG.md](../CHANGELOG.md) for v1.2.1 and later. Highlights of v2.0.0-rc.1:
 - Middleware order: rate limiting before LLM filtering; LLM filter called from the send route after validation
 - 413 for oversized bodies (also chunked), 403 `ORIGIN_NOT_ALLOWED`, 400 for malformed JSON, `Retry-After` header
 - Strict `API_KEY_*` loading; `gemini`/`ollama` no longer accepted as `LLM_PROVIDER`
@@ -1583,7 +1583,7 @@ This architecture provides:
 ✅ **Maintainability**: Modular structure, typed interfaces, clear separation of concerns
 ✅ **Extensibility**: Easy to add new channels and templates
 
-**Current Status** (v1.3.1 + unreleased changes on `main`):
+**Current Status** (v2.0.0-rc.1):
 - ✅ Phase 1 Complete (Email via Resend)
 - ✅ Production-ready with security hardening
 - ✅ Recipient whitelisting (95% risk reduction for stolen keys)

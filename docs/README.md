@@ -29,6 +29,7 @@ docs/
 **Goal**: Integrate Conduit into your application
 
 1. **[Getting Started](getting-started.md)** - Deploy and integrate in 5 minutes
+   - Upgrading from 1.x? Start with **[Upgrading to 2.0](upgrading-to-2.0.md)**
 2. **[User Guide](user-guide.md)** - Complete integration examples (React, Vue, Vanilla JS)
 3. **[API Reference](api-reference.md)** - API endpoints, request/response formats, templates
 
@@ -229,7 +230,7 @@ Feature planning and implementation guides for Conduit features.
 
 ## 📋 Documentation Roadmap
 
-### Phase 1: Email (v1.0.0 - v1.3.1) ✅ COMPLETE
+### Phase 1: Email (v1.0.0 - v2.0.0) ✅ COMPLETE
 - ✅ Complete API specification
 - ✅ Architecture documentation
 - ✅ Security review and implementation guide
@@ -284,5 +285,5 @@ Found an issue or want to improve the docs?
 ---
 
 **Last Updated**: 2026-10-24
-**Documentation Version**: 1.3.1 (including the unreleased changes on `main`)
-**Project Status**: Production Ready (v1.3.1)
+**Documentation Version**: 2.0.0-rc.1
+**Project Status**: Release candidate (v2.0.0-rc.1); see [upgrading-to-2.0.md](upgrading-to-2.0.md)

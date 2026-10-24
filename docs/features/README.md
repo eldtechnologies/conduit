@@ -63,7 +63,7 @@ Each feature document should include:
 - **Configuration**: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `API_KEY_<NAME>_LLM_*`
 - **Value Proposition**: Spam detection without exposing LLM API keys to frontend
 
-### Unreleased (Implemented on `main`)
+### v2.0.0-rc.1
 
 **Sender Allowlist** - Restrict which `from` addresses each API key may send as
 - **Status**: ✅ Implemented
