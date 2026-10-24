@@ -34,7 +34,9 @@ const resend = new Resend(config.resendApiKey);
  * @returns Sanitized name with newlines removed
  */
 function sanitizeSenderName(name: string): string {
-  return name.replace(/[\r\n]/g, '').trim();
+  // Defense in depth: the request schema already rejects these, but resolveSender is also
+  // callable directly. Address delimiters in the name could spoof the From address.
+  return name.replace(/[\r\n<>"@]/g, '').trim();
 }
 
 /** Sender name used when the client does not supply one */

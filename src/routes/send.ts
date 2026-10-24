@@ -38,8 +38,14 @@ const sendRequestSchema = z.object({
       email: z.string().email('Invalid from email'),
       name: z
         .string()
+        .max(100, 'Name must be at most 100 characters')
         .refine((val) => !val.includes('\r') && !val.includes('\n'), {
           message: 'Name cannot contain newline characters',
+        })
+        // An address-like display name ("ceo@company.com", "x <ceo@company.com>") would
+        // spoof or override the allowlisted sender address in the From header
+        .refine((val) => !/[<>"@]/.test(val), {
+          message: 'Name cannot contain <, >, " or @ characters',
         })
         .optional(),
     })

@@ -111,6 +111,12 @@ describe('resolveSender', () => {
       'Conduit <noreply@example.com>'
     );
   });
+
+  it('strips address delimiters from the sender name so it cannot override the address', () => {
+    expect(
+      resolveSender({ email: 'noreply@example.com', name: 'Boss <ceo@company.com>' }, allowlist)
+    ).toBe('Boss ceocompany.com <noreply@example.com>');
+  });
 });
 
 describe('Email Channel Handler', () => {
@@ -194,7 +200,7 @@ describe('Email Channel Handler', () => {
 
       const body = sentBody();
       expect(body.reply_to).toBe('jane@example.com');
-      expect(body.from).toBe('EvilBcc: x@y.z <noreply@example.com>');
+      expect(body.from).toBe('EvilBcc: xy.z <noreply@example.com>');
     });
 
     it("should default to the key's first allowlisted sender when from is omitted", async () => {

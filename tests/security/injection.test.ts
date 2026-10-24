@@ -20,6 +20,48 @@ describe('Email Header Injection Prevention', () => {
   });
 
   describe('from.name validation', () => {
+    it.each([
+      ['an embedded address', 'Boss <ceo@company.com>'],
+      ['an address as the name', 'ceo@company.com'],
+      ['a quote', 'Evil" <ceo@company.com'],
+      ['a closing bracket', 'x>'],
+    ])('should reject %s in from.name', async (_label, name) => {
+      const req = new Request('http://localhost:3000/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': SENDER_API_KEY },
+        body: JSON.stringify({
+          channel: 'email',
+          templateId: 'contact-form',
+          to: 'recipient@example.com',
+          from: { email: 'noreply@example.com', name },
+          data: { name: 'Test User', email: 'test@example.com', message: 'Test message' },
+        }),
+      });
+
+      const res = await app.fetch(req);
+      expect(res.status).toBe(400);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('VALIDATION_ERROR');
+      expect(body.error).toContain('Name cannot contain <, >, " or @ characters');
+    });
+
+    it('should reject from.name longer than 100 characters', async () => {
+      const req = new Request('http://localhost:3000/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': SENDER_API_KEY },
+        body: JSON.stringify({
+          channel: 'email',
+          templateId: 'contact-form',
+          to: 'recipient@example.com',
+          from: { email: 'noreply@example.com', name: 'a'.repeat(101) },
+          data: { name: 'Test User', email: 'test@example.com', message: 'Test message' },
+        }),
+      });
+
+      const res = await app.fetch(req);
+      expect(res.status).toBe(400);
+    });
+
     it('should reject newline characters in from.name (\\n)', async () => {
       const req = new Request('http://localhost:3000/api/send', {
         method: 'POST',
