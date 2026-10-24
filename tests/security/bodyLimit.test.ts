@@ -72,7 +72,7 @@ describe('Body Size Limit Middleware', () => {
 
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(400); // ValidationError maps to 400
+      expect(res.status).toBe(413);
       const body = await readJson<ErrorResponse>(res);
       expect(body.success).toBe(false);
       expect(body.error).toContain('Request body too large');
@@ -108,7 +108,7 @@ describe('Body Size Limit Middleware', () => {
 
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(413);
       const body = (await res.json()) as { error: string; code: string; details: { maxSize: number; actualSize: number } };
       expect(body.error).toContain('Maximum size: 50KB');
       expect(body.code).toBe('PAYLOAD_TOO_LARGE');
@@ -117,7 +117,7 @@ describe('Body Size Limit Middleware', () => {
       expect(body.details.actualSize).toBe(largeSize);
     });
 
-    it('should allow requests without Content-Length header', async () => {
+    it('should allow small requests without Content-Length header', async () => {
       const payload = JSON.stringify({
         channel: 'email',
         templateId: 'contact-form',
@@ -144,6 +144,62 @@ describe('Body Size Limit Middleware', () => {
       // Should not be rejected by bodyLimit middleware
       // May fail at provider, but should pass size check
       expect([200, 502]).toContain(res.status);
+    });
+
+    it('should reject streamed bodies over 50KB without Content-Length', async () => {
+      const chunk = new TextEncoder().encode('x'.repeat(1024));
+      let sent = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          // 5MB total, far beyond the limit
+          if (sent >= 5 * 1024) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunk);
+          sent++;
+        },
+      });
+
+      const req = new Request('http://localhost:3000/api/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': VALID_API_KEY,
+        },
+        body: stream,
+        duplex: 'half',
+      } as RequestInit);
+      expect(req.headers.get('content-length')).toBeNull();
+
+      const res = await app.fetch(req);
+
+      expect(res.status).toBe(413);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('PAYLOAD_TOO_LARGE');
+      // Reading stops once the limit is crossed
+      expect(sent).toBeLessThan(5 * 1024);
+    });
+
+    it('should reject chunked bodies over 50KB even with a small Content-Length', async () => {
+      const largePayload = 'x'.repeat(MAX_SIZE + 1);
+
+      const req = new Request('http://localhost:3000/api/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': VALID_API_KEY,
+          'Content-Length': '10',
+          'Transfer-Encoding': 'chunked',
+        },
+        body: largePayload,
+      });
+
+      const res = await app.fetch(req);
+
+      expect(res.status).toBe(413);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('PAYLOAD_TOO_LARGE');
     });
 
     it('should handle edge case: exactly 50KB', async () => {
@@ -204,7 +260,7 @@ describe('Body Size Limit Middleware', () => {
       const res = await app.fetch(req);
 
       // Should be rejected by bodyLimit middleware
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(413);
       const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('PAYLOAD_TOO_LARGE');
     });
