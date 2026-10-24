@@ -1,12 +1,15 @@
 # Conduit
 
-**A lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.**
+**A lightweight, secure communication proxy for sending email from frontend applications without exposing provider API keys. Built to grow into SMS, push notifications and webhooks (planned).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status: Production Ready](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
+[![Status: Release Candidate](https://img.shields.io/badge/Status-Release%20Candidate-orange.svg)](CHANGELOG.md)
 [![Version: 2.0.0-rc.1](https://img.shields.io/badge/Version-2.0.0--rc.1-orange.svg)](CHANGELOG.md)
+[![CI](https://github.com/eldtechnologies/conduit/actions/workflows/ci.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/ci.yml)
 [![Security Scan](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
+
+> 🔐 **2.0 is a security hardening release.** It closes several ways that 1.x could be abused to send mail as a configured frontend, spoof senders or bypass content filtering, and it refuses to start on unsafe configuration that 1.x quietly accepted. **Upgrading from 1.x? Read [Upgrading to 2.0](docs/upgrading-to-2.0.md) before you deploy.** Details in the [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -26,7 +29,7 @@
 Frontend applications often need to send emails, SMS, or push notifications, but **exposing provider API keys in client-side code is dangerous**. Conduit solves this by providing a secure backend proxy that:
 
 - ✅ **Keeps API keys secure** - Provider credentials stay on the backend, never exposed to clients
-- ✅ **Provides one unified API** - Send email, SMS, push, and webhooks through a single endpoint
+- ✅ **Provides one unified API** - A single `/api/send` endpoint with a `channel` field; email today, SMS, push and webhooks planned
 - ✅ **Prevents abuse** - Built-in rate limiting and CORS protection
 - ✅ **Scales effortlessly** - Share one Conduit instance across multiple frontend apps
 - ✅ **Stays lightweight** - Built with Hono, minimal dependencies, fast startup
@@ -66,7 +69,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 
 ## Features
 
-### Today: Email (production-ready) ✅
+### Today: Email ✅
 - **Email delivery** via [Resend.com](https://resend.com) with a comprehensive domain setup guide
 - **🤖 AI-powered spam filtering** (optional) — block spam, abuse, phishing, and prompt-injection attacks
   - Anthropic Claude and OpenAI GPT support
@@ -85,7 +88,7 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 - **Strict startup validation** — invalid or misspelled `API_KEY_*` variables stop the server instead of being ignored
 - **Security hardening**:
   - HTTPS enforcement with HSTS
-  - Request body size limits (50KB)
+  - Request body size limits (50KB, enforced on streamed/chunked bodies too; 413 when exceeded)
   - Security headers (CSP, X-Frame-Options, etc.)
   - Input validation with Zod schemas
   - XSS sanitization with DOMPurify
@@ -246,20 +249,20 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 - ✅ HTTPS/TLS enforcement with HSTS
 - ✅ Constant-time API key comparison (prevents timing attacks)
 - ✅ XSS sanitization for email templates
-- ✅ Request size limits (50KB max)
+- ✅ Request size limits (50KB max, including streamed bodies)
 - ✅ Comprehensive security headers
-- ✅ Rate limiting per API key across all channels
+- ✅ Rate limiting per API key across all channels, applied before any paid LLM call
 - ✅ CORS protection with strict origin whitelisting
-- ✅ PII masking in logs (GDPR compliant)
+- ✅ API keys and sensitive headers (cookies, client IPs) masked in logs
+- ✅ Strict startup validation: unrecognised `API_KEY_*` variables and incomplete LLM configuration stop the server
 - ✅ Recipient whitelisting (prevents stolen key abuse)
 - ✅ Per-key sender allowlist (clients cannot pick arbitrary `from` addresses)
+- ✅ LLM content filter that fails closed in `block` mode (provider errors and malformed model output are never treated as "safe")
 - 🛡️ Spam prevention with multi-tier protection (honeypot, CAPTCHA, LLM filtering)
 - 🤖 **Automated Security**:
-  - Daily vulnerability scanning (npm audit + OSV Scanner)
-  - Automated dependency updates via Dependabot
-  - Immediate security patches (auto-PR within hours of CVE disclosure)
-  - GitHub Security Advisories enabled
-  - Zero known vulnerabilities policy
+  - Daily vulnerability scanning (npm audit + OSV Scanner), plus CodeQL on every push and PR
+  - Dependabot version and security updates
+  - CI fails on any known vulnerability, and on typecheck, lint, format or test failures
 
 **[→ Security Documentation](docs/security/)**
 **[→ Spam Prevention Guide](docs/security/spam-prevention.md)** - Quick 15-minute setup
@@ -275,7 +278,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 - **Security hardening**: HTTPS + HSTS, constant-time API key comparison, CORS allowlist with proxy support (`X-Source-Origin`), token-bucket rate limiting, 50KB request size limit, security headers (CSP, X-Frame-Options, etc.), XSS sanitization on user content.
 - **Spam prevention**: optional LLM filtering (Anthropic / OpenAI, fail-open or fail-closed), recipient whitelisting, per-key sender allowlist, multi-tier defense guidance.
 - **Operations**: structured JSON logs with PII masking, public `/health` + authenticated `/health/detailed`, graceful shutdown, Docker image with health checks.
-- **Quality bar**: unit, integration and security tests with an 80% coverage threshold, TypeScript strict mode (`noUncheckedIndexedAccess`), ESLint + Prettier, CI that fails on `npm audit` / OSV findings.
+- **Quality bar**: unit, integration and security tests with an 80% coverage threshold enforced in CI, TypeScript strict mode (`noUncheckedIndexedAccess`), ESLint + Prettier checked in CI, and a build + boot + Docker smoke test on every PR. CI also fails on `npm audit` / OSV findings.
 
 For a full version history, see [CHANGELOG.md](CHANGELOG.md).
 
@@ -378,7 +381,7 @@ Inspired by the need for secure, simple communication from frontend applications
 ---
 
 <p align="center">
-  <strong>One API for all your communication needs</strong>
+  <strong>Secure email from your frontend — one API, more channels to come</strong>
   <br>
   Made with ❤️ by <a href="https://github.com/eldtechnologies">ELD Technologies SL</a>
 </p>
