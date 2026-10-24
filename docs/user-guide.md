@@ -23,13 +23,13 @@ Perfect for contact forms, verification codes, notifications, and any scenario w
 - Newsletters
 - Transactional emails
 
-### Phase 2: SMS & Push (Coming Soon) 📱
+### Phase 2: SMS & Push (Planned, not implemented) 📱
 - Verification codes
 - Alerts and notifications
 - WhatsApp messages
 - Mobile push notifications
 
-### Phase 3: Webhooks (Coming Soon) 🌐
+### Phase 3: Webhooks (Planned, not implemented) 🌐
 - Slack notifications
 - Discord alerts
 - Custom HTTP endpoints
@@ -54,12 +54,16 @@ Perfect for contact forms, verification codes, notifications, and any scenario w
 1. Create new service in Coolify
 2. Connect your Conduit Git repository
 3. Add environment variables:
+   - NODE_ENV=production
    - RESEND_API_KEY=re_your_key_here
-   - API_KEY_MYSITE=KEY_MYSITE_generate_random_string
+   - API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
+   - API_KEY_MYSITE_FROM_ADDRESSES=noreply@mail.yourdomain.com
    - ALLOWED_ORIGINS=https://yoursite.com
 4. Deploy (Coolify auto-detects the Dockerfile)
 5. Set custom domain: conduit.yourdomain.com
 ```
+
+`NODE_ENV` defaults to `development`; production deployments must run with `NODE_ENV=production` (HTTPS enforcement with HSTS, sanitized errors). The Docker image sets it already. In production every route except `GET /health` requires `X-Forwarded-Proto: https` from your reverse proxy.
 
 #### Option B: Docker Locally
 ```bash
@@ -67,10 +71,11 @@ Perfect for contact forms, verification codes, notifications, and any scenario w
 git clone https://github.com/eldtechnologies/conduit.git
 cd conduit
 
-# Create .env file
+# Create .env file (replace the example key with your own, see step 3)
 cat > .env << EOF
+NODE_ENV=development
 RESEND_API_KEY=re_your_key_here
-API_KEY_MYSITE=KEY_MYSITE_abc123xyz
+API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
 ALLOWED_ORIGINS=http://localhost:8080,https://yoursite.com
 PORT=3000
 EOF
@@ -81,6 +86,15 @@ docker run -p 3000:3000 --env-file .env conduit
 
 # Test it's running
 curl http://localhost:3000/health
+```
+
+The image (and `docker compose`) default to `NODE_ENV=production`, which answers plain-HTTP requests to anything but `GET /health` with `403 HTTPS Required`. `NODE_ENV=development` in `.env` allows local plain-HTTP testing.
+
+#### Option C: Node.js
+```bash
+npm ci
+npm run build
+node --env-file=.env dist/index.js   # npm start runs dist/index.js but does not load .env
 ```
 
 ### 3. Generate API Keys for Your Frontends
@@ -99,9 +113,17 @@ Example output: `KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1`
 
 Add to your Conduit environment variables:
 ```bash
-API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6x7h3
-API_KEY_PORTFOLIO=KEY_PORTFOLIO_j9k2m5n8p4q8
+API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
+API_KEY_PORTFOLIO=<output of: npm run generate-key -- PORTFOLIO>
 ```
+
+All `API_KEY_*` variables are validated at startup. The server refuses to start if a value is not a valid key (`KEY_<NAME>_<12+ letters or digits>`), if a per-key variable has an unknown suffix, or if a per-key variable (such as `API_KEY_MYSITE_RECIPIENTS`) refers to an `API_KEY_<NAME>` that is not set.
+
+Set the sender address for each key (the first address is used when a request omits `from`):
+```bash
+API_KEY_MYSITE_FROM_ADDRESSES=noreply@mail.yourdomain.com
+```
+Without `API_KEY_<NAME>_FROM_ADDRESSES`, a request that sets `from` is rejected with `400 SENDER_NOT_ALLOWED`, and mail without `from` is sent as `Conduit <onboarding@resend.dev>` (Resend's test sender).
 
 ### 4. Integrate with Your Frontend
 
@@ -111,7 +133,7 @@ API_KEY_PORTFOLIO=KEY_PORTFOLIO_j9k2m5n8p4q8
 ```bash
 # .env (DO NOT COMMIT THIS FILE)
 VITE_CONDUIT_URL=https://conduit.yourdomain.com
-VITE_CONDUIT_API_KEY=KEY_MYSITE_a8f9d2c1b4e6x7h3
+VITE_CONDUIT_API_KEY=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
 ```
 
 **Step 2: Create communication service**
@@ -140,10 +162,8 @@ export async function sendEmail(data: ContactFormData): Promise<boolean> {
         channel: 'email',
         templateId: 'contact-form',
         to: 'hello@yourcompany.com',
-        from: {
-          email: 'noreply@yourcompany.com',
-          name: 'Your Company',
-        },
+        // `from` omitted: uses the first address in API_KEY_MYSITE_FROM_ADDRESSES.
+        // A client-supplied `from` must be in that list, or the request fails with 400.
         replyTo: data.email,
         data,
       }),
@@ -156,7 +176,7 @@ export async function sendEmail(data: ContactFormData): Promise<boolean> {
   }
 }
 
-// Phase 2: Send SMS (coming soon)
+// Phase 2: Send SMS (planned, NOT implemented: today this returns 400 INVALID_CHANNEL)
 export async function sendSMS(phone: string, code: string): Promise<boolean> {
   const response = await fetch(`${CONDUIT_URL}/api/send`, {
     method: 'POST',
@@ -230,7 +250,7 @@ export async function sendEmail(data: {
       channel: 'email',
       templateId: 'contact-form',
       to: 'hello@yourcompany.com',
-      from: { email: 'noreply@yourcompany.com', name: 'Your Company' },
+      // `from` omitted: uses the first address in API_KEY_MYSITE_FROM_ADDRESSES
       replyTo: data.email,
       data,
     }),
@@ -252,7 +272,7 @@ export async function sendEmail(data: {
 
 <script>
 const CONDUIT_URL = 'https://conduit.yourdomain.com';
-const API_KEY = 'KEY_MYSITE_a8f9d2c1b4e6x7h3';
+const API_KEY = 'KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 
 document.getElementById('contact-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -269,7 +289,7 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
       channel: 'email',
       templateId: 'contact-form',
       to: 'hello@yourcompany.com',
-      from: { email: 'noreply@yourcompany.com', name: 'Your Company' },
+      // `from` omitted: uses the first address in API_KEY_MYSITE_FROM_ADDRESSES
       replyTo: formData.get('email'),
       data: {
         name: formData.get('name'),
@@ -303,7 +323,7 @@ Perfect for contact forms.
   "templateId": "contact-form",
   "to": "hello@yourcompany.com",
   "from": {
-    "email": "onboarding@resend.dev",
+    "email": "noreply@mail.yourdomain.com",
     "name": "Your Company"
   },
   "replyTo": "customer@example.com",
@@ -316,7 +336,11 @@ Perfect for contact forms.
 }
 ```
 
-### Phase 2: SMS (Coming Q2 2025) 📱
+`from` is optional. If set, `from.email` must be listed in the key's `API_KEY_<NAME>_FROM_ADDRESSES`, otherwise the request is rejected with `400 SENDER_NOT_ALLOWED`. `from.name` (max 100 characters) may not contain `<`, `>`, `"`, `@` or line breaks.
+
+Template fields: `name` (1-100 chars), `email` (valid email), `message` (1-5000 chars), `subject` (optional, max 200 chars). Invalid template data returns `400 VALIDATION_ERROR`.
+
+### Phase 2: SMS (Planned, not implemented) 📱
 
 #### verification-code
 Send verification codes via SMS.
@@ -334,7 +358,7 @@ Send verification codes via SMS.
 }
 ```
 
-### Phase 2: Push Notifications (Coming Q2 2025) 🔔
+### Phase 2: Push Notifications (Planned, not implemented) 🔔
 
 #### new-message
 Push notification for new messages.
@@ -353,7 +377,7 @@ Push notification for new messages.
 }
 ```
 
-### Phase 3: Webhooks (Coming Q3 2025) 🌐
+### Phase 3: Webhooks (Planned, not implemented) 🌐
 
 #### slack-notification
 Send to Slack webhooks.
@@ -376,14 +400,22 @@ Send to Slack webhooks.
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `RESEND_API_KEY` | Yes (Phase 1) | Your Resend API key for email | `re_abc123...` |
-| `TWILIO_ACCOUNT_SID` | Yes (Phase 2) | Twilio Account SID for SMS | `ACxxx...` |
-| `TWILIO_AUTH_TOKEN` | Yes (Phase 2) | Twilio Auth Token | `xxx...` |
-| `FIREBASE_SERVER_KEY` | Yes (Phase 2) | Firebase Server Key for push | `AAAAxxx...` |
-| `API_KEY_*` | Yes | API keys for frontends (at least one) | `KEY_SITE1_xyz789` |
+| `RESEND_API_KEY` | Yes | Your Resend API key for email | `re_abc123...` |
+| `API_KEY_<NAME>` | Yes | API keys for frontends (at least one), validated at startup | `KEY_SITE1_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1` |
 | `ALLOWED_ORIGINS` | Yes | Comma-separated list of allowed origins | `https://site1.com,https://site2.com` |
+| `NODE_ENV` | No | `development`, `production` or `test` (default: `development`). **Set `production` in production**: it enforces HTTPS/HSTS and hides error details. The Docker image sets it. | `production` |
 | `PORT` | No | Server port (default: 3000) | `3000` |
-| `NODE_ENV` | No | Environment (default: production) | `production` |
+| `LOG_LEVEL` | No | Log level (default: `info`) | `info` |
+| `RATE_LIMIT_PER_MINUTE` / `_PER_HOUR` / `_PER_DAY` | No | Rate limits per API key (defaults: 10 / 100 / 500) | `20` |
+| `ENFORCE_HTTPS` | No | Also enforce HTTPS outside production (default: `false`); cannot disable it in production | `true` |
+| `REVOKED_KEYS` | No | Comma-separated API keys to reject | `KEY_OLD_...` |
+| `API_KEY_<NAME>_FROM_ADDRESSES` | No | Allowed `from` addresses for that key; first is the default sender | `noreply@mail.site1.com` |
+| `API_KEY_<NAME>_RECIPIENTS` | No | Recipient whitelist: allowed `to` addresses | `support@site1.com` |
+| `API_KEY_<NAME>_RECIPIENT_DOMAINS` | No | Recipient whitelist: allowed `to` domains | `site1.com` |
+| `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` | No | LLM spam filtering provider (`anthropic` or `openai`); see [LLM Spam Filtering](features/llm-spam-filtering.md) | `anthropic` |
+| `API_KEY_<NAME>_LLM_*` | No | Per-key LLM settings: `_ENABLED`, `_RULES`, `_THRESHOLD` (0-1), `_FAIL_MODE` (`allow`/`block`), `_MAX_CALLS_PER_DAY` | `true` |
+
+See [`.env.example`](../.env.example) for every supported variable with comments. SMS (Twilio), push (Firebase) and webhook variables are not read by the code yet.
 
 ### Rate Limits
 
@@ -468,27 +500,20 @@ Resend strongly recommends using **subdomains** instead of your top-level domain
    - Resend automatically verifies once records are detected
    - Check verification status on the Resend dashboard
 
-5. **Update your frontend code**
-   ```javascript
-   "from": {
-     "email": "noreply@mail.yourdomain.com",  // Use your verified domain
-     "name": "Your Company Name"
-   }
+5. **Allow the sender address in Conduit**
+   ```bash
+   # Use an address on your verified domain; the first one is the default sender
+   API_KEY_MYSITE_FROM_ADDRESSES=noreply@mail.yourdomain.com
    ```
+   Your frontend can then omit `from`, or send `"from": { "email": "noreply@mail.yourdomain.com", "name": "Your Company Name" }`. Any address not in the list is rejected with `400 SENDER_NOT_ALLOWED`.
 
 #### Testing Without Domain Verification
 
-For development and testing, use Resend's test domain (no verification needed):
-
-```javascript
-"from": {
-  "email": "onboarding@resend.dev",  // Works immediately
-  "name": "Your Company Name"
-}
-```
+For development and testing, use Resend's test sender (no verification needed): leave `API_KEY_<NAME>_FROM_ADDRESSES` unset and omit `from` in requests. Conduit then sends as `Conduit <onboarding@resend.dev>`. (Without an allowlist, a request that sets `from` is rejected with `400 SENDER_NOT_ALLOWED`.)
 
 **Limitations of test domain:**
 - ⚠️ Only for testing/development
+- ⚠️ Resend only delivers it to your own Resend account address
 - ⚠️ Low sending limits
 - ⚠️ May be marked as spam
 - ⚠️ Cannot receive replies
@@ -514,16 +539,20 @@ Send a message via any channel.
 Content-Type: application/json
 X-API-Key: your-api-key
 X-Source-Origin: https://yoursite.com
+Idempotency-Key: contact-7f3c2a91   (optional)
 ```
+
+`Idempotency-Key` is optional: 1-200 characters of `A-Z a-z 0-9 . _ : -` (anything else returns `400 VALIDATION_ERROR`). Retrying with the same key and body (for example after a `502 PROVIDER_TIMEOUT`) does not send the email twice within Resend's idempotency window. Keys are scoped per API key.
 
 **Request Body**:
 ```json
 {
-  "channel": "email|sms|push|webhook",
-  "templateId": "template-name",
-  "to": "recipient",
-  "from": { ... },  // Optional, channel-specific
-  "data": { ... }   // Template data
+  "channel": "email",               // Only "email" is implemented
+  "templateId": "contact-form",
+  "to": "recipient@example.com",
+  "from": { "email": "...", "name": "..." },  // Optional, must be in API_KEY_<NAME>_FROM_ADDRESSES
+  "replyTo": "customer@example.com",          // Optional
+  "data": { ... }                   // Template data
 }
 ```
 
@@ -537,14 +566,18 @@ X-Source-Origin: https://yoursite.com
 }
 ```
 
-**Error Response (400/401/429)**:
+Outside production, responses for keys with LLM filtering also include an `llmAnalysis` object; it is never returned when `NODE_ENV=production`.
+
+**Error Response (400/401/403/413/429/502/503)**:
 ```json
 {
   "success": false,
-  "error": "Invalid channel",
+  "error": "Invalid channel: sms. Supported channels: email",
   "code": "INVALID_CHANNEL"
 }
 ```
+
+Common codes: `400 VALIDATION_ERROR` (invalid body, malformed JSON or template data), `400 INVALID_CHANNEL`, `400 SENDER_NOT_ALLOWED`, `401 UNAUTHORIZED`, `403 ORIGIN_NOT_ALLOWED`, `403 RECIPIENT_NOT_ALLOWED`, `403 CONTENT_BLOCKED_*`, `413 PAYLOAD_TOO_LARGE` (body over 50KB), `429 RATE_LIMIT_EXCEEDED`, `502 PROVIDER_ERROR` / `PROVIDER_TIMEOUT`, `503 LLM_PROVIDER_ERROR` / `LLM_BUDGET_EXCEEDED`. See the [API Reference](api-reference.md) for the full list.
 
 ### GET /health
 
@@ -601,7 +634,6 @@ curl -X POST https://conduit.yourdomain.com/api/send \
     "channel": "email",
     "templateId": "contact-form",
     "to": "test@example.com",
-    "from": {"email": "onboarding@resend.dev", "name": "Test"},
     "data": {"name": "Test", "email": "test@example.com", "message": "Test"}
   }'
 ```
@@ -616,22 +648,28 @@ ALLOWED_ORIGINS=https://yoursite.com  # Must match exactly
 - Go to Emails → check for failed deliveries
 
 **Check 4: Check rate limits**
+
+A rate-limited request returns `429 RATE_LIMIT_EXCEEDED` with a `Retry-After` header and a `retryAfter` field (seconds):
 ```http
-X-RateLimit-Remaining: 0  ← Hit the limit
-X-RateLimit-Reset: 1642154460
+HTTP/1.1 429 Too Many Requests
+Retry-After: 42
 ```
+
+**Check 5: Check the sender**
+
+`400 SENDER_NOT_ALLOWED` means the request set `from` but `from.email` is not in the key's `API_KEY_<NAME>_FROM_ADDRESSES` (or the key has none). Add the address, or omit `from`.
 
 ### Invalid channel error
 
-**Error**: `Invalid channel. Supported: email`
+**Error**: `Invalid channel: sms. Supported channels: email` (`400 INVALID_CHANNEL`)
 
-**Cause**: Trying to use a channel not yet available (SMS, Push coming in Phase 2).
+**Cause**: Trying to use a channel that is not implemented (SMS and Push are planned for Phase 2).
 
 **Solution**: Use `"channel": "email"` for now, or wait for Phase 2.
 
 ### CORS errors
 
-**Error**: `Access to fetch has been blocked by CORS policy`
+**Error**: `Access to fetch has been blocked by CORS policy`, or `403 ORIGIN_NOT_ALLOWED` from Conduit
 
 **Solution**: Add your exact origin to `ALLOWED_ORIGINS`:
 ```bash
@@ -647,19 +685,19 @@ ALLOWED_ORIGINS=https://yoursite.com
 - Contact form template
 - API authentication & rate limiting
 
-### Phase 2: SMS & Push (Q1 2026) 📱
+### Phase 2: SMS & Push (Planned) 📱
 - SMS via Twilio
 - Push notifications via Firebase
 - WhatsApp Business API
 - Multi-channel templates
 
-### Phase 3: Webhooks (Q2 2026) 🌐
+### Phase 3: Webhooks (Planned) 🌐
 - HTTP webhooks
 - Slack integration
 - Discord integration
 - Custom integrations
 
-### Phase 4: Advanced (Q3 2026) 🚀
+### Phase 4: Advanced (Planned) 🚀
 - Analytics dashboard
 - Delivery tracking & webhooks
 - Retry policies & DLQ
@@ -675,7 +713,8 @@ Want a feature sooner? [Open an issue](https://github.com/eldtechnologies/condui
 
 - Keep API keys in `.env` files (never commit)
 - Use HTTPS for Conduit deployment
-- Rotate API keys every 6 months
+- Rotate API keys every 6 months (reject old keys immediately with `REVOKED_KEYS`)
+- Set `NODE_ENV=production` in production
 - Set strict CORS origins
 - Monitor logs for suspicious activity
 - Use different API keys per frontend
@@ -721,6 +760,15 @@ const sendWithRetry = async (data, retries = 2) => {
   }
   return false;
 };
+```
+
+### Retry Safely with Idempotency-Key
+
+Send the same `Idempotency-Key` header on every retry of one submission, so a retry after a timeout does not deliver the email twice:
+```typescript
+const idempotencyKey = crypto.randomUUID(); // once per form submission
+// ...then on every attempt:
+headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY, 'Idempotency-Key': idempotencyKey }
 ```
 
 ### Prevent Double-Submission
@@ -771,7 +819,7 @@ docker build -t conduit .
 ### Breaking Changes
 Check release notes on [GitHub](https://github.com/eldtechnologies/conduit/releases) before upgrading.
 
-**Future v2.0**: `channel` parameter will become required (no default).
+`channel` is required on every request (there is no default).
 
 ## Support
 
