@@ -128,7 +128,11 @@ describe('Body Size Limit Middleware', () => {
       const res = await app.fetch(req);
 
       expect(res.status).toBe(413);
-      const body = (await res.json()) as { error: string; code: string; details: { maxSize: number; actualSize: number } };
+      const body = (await res.json()) as {
+        error: string;
+        code: string;
+        details: { maxSize: number; actualSize: number };
+      };
       expect(body.error).toContain('Maximum size: 50KB');
       expect(body.code).toBe('PAYLOAD_TOO_LARGE');
       expect(body.details).toBeDefined();

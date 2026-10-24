@@ -175,7 +175,4 @@ export interface RenderedWebhookTemplate {
  * Union type of all rendered template outputs
  */
 export type RenderedTemplate =
-  | RenderedEmailTemplate
-  | RenderedSmsTemplate
-  | RenderedPushTemplate
-  | RenderedWebhookTemplate;
+  RenderedEmailTemplate | RenderedSmsTemplate | RenderedPushTemplate | RenderedWebhookTemplate;

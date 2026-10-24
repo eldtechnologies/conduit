@@ -88,7 +88,4 @@ export interface WebhookSendRequest extends SendMessageRequest {
  * Union type of all channel-specific requests
  */
 export type ChannelSpecificRequest =
-  | EmailSendRequest
-  | SmsSendRequest
-  | PushSendRequest
-  | WebhookSendRequest;
+  EmailSendRequest | SmsSendRequest | PushSendRequest | WebhookSendRequest;

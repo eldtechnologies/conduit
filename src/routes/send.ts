@@ -13,11 +13,7 @@ import { config } from '../config.js';
 import { filterContent } from '../middleware/llmFilter.js';
 import { fromZodError, ValidationError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
-import type {
-  SendMessageRequest,
-  SendMessageResponse,
-  SendRequestBody,
-} from '../types/api.js';
+import type { SendMessageRequest, SendMessageResponse, SendRequestBody } from '../types/api.js';
 
 const send = new Hono();
 
@@ -31,10 +27,7 @@ const sendRequestSchema = z.object({
   // channel registry, so unknown channels get INVALID_CHANNEL, not VALIDATION_ERROR.
   channel: z.string({ error: 'Channel is required' }),
   templateId: z.string().min(1, 'Template ID is required'),
-  to: z
-    .string()
-    .email('Invalid recipient email address')
-    .max(320, 'Email address too long'),
+  to: z.string().email('Invalid recipient email address').max(320, 'Email address too long'),
   data: z.record(z.string(), z.unknown()),
   from: z
     .object({

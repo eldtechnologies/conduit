@@ -114,7 +114,9 @@ if (process.env.NODE_ENV !== 'test') {
   console.info(`📝 Environment: ${config.nodeEnv}`);
   console.info(`🔑 API Keys loaded: ${config.apiKeys.length}`);
   console.info(`🛡️  Recipient Whitelists: ${config.recipientWhitelists.size} configured`);
-  console.info(`🤖 LLM Filtering: ${config.llm ? `Enabled (${config.llm.provider}, ${config.llmFilterRules.size} API keys)` : 'Disabled'}`);
+  console.info(
+    `🤖 LLM Filtering: ${config.llm ? `Enabled (${config.llm.provider}, ${config.llmFilterRules.size} API keys)` : 'Disabled'}`
+  );
   console.info(`🌐 Allowed Origins: ${config.allowedOrigins.join(', ')}`);
 
   /**

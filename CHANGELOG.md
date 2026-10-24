@@ -5,6 +5,100 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Strict API key loading** ([#130](https://github.com/eldtechnologies/conduit/pull/130)). An `API_KEY_*` env var is now either an API key `API_KEY_<NAME>` whose value matches `KEY_<NAME>_<12+ alphanumeric chars>`, or a recognised per-key config var (`_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`) for a configured key. Anything else fails startup. Before, any unrecognised `API_KEY_*` value (e.g. `API_KEY_MYSITE_SPAM_FILTER_ENABLED=true`) was accepted as a valid key with no recipient whitelist or LLM rules, so `X-API-Key: true` worked. Error messages name the variable and never print its value.
+- **Per-key sender allowlist** ([#132](https://github.com/eldtechnologies/conduit/pull/132)). A client could set `from.email` to any address on the Resend-verified domain. The `from` address is now checked against the new `API_KEY_<NAME>_FROM_ADDRESSES` (comma-separated, case-insensitive). The send route uses the authenticated key, so a client cannot borrow another key's allowlist through the body. `from.name` is also restricted so an address-like display name cannot spoof or override the allowlisted address in the `From` header: at most 100 characters, no `<`, `>`, `"` or `@`.
+- **LLM content filter fails closed** ([#135](https://github.com/eldtechnologies/conduit/pull/135)). Providers now throw on every failure (timeout, HTTP or network error, non-JSON body, malformed or inconsistent model output) instead of returning a "fallback" verdict, and the key's fail mode decides: `block` returns 503 `LLM_PROVIDER_ERROR`, `allow` sends the message.
+- **LLM sender whitelist removed** ([#135](https://github.com/eldtechnologies/conduit/pull/135)). It trusted client-supplied sender fields, so anyone could skip content filtering.
+- **Prompt injection hardening** ([#135](https://github.com/eldtechnologies/conduit/pull/135)). Content sent to the LLM is JSON-encoded inside a per-request random `<untrusted_content_…>` boundary, and only the validated template fields are analysed.
+- **Rate limiting runs before LLM filtering** ([#131](https://github.com/eldtechnologies/conduit/pull/131)), so a 429 never makes a paid LLM call.
+- **Body limit counts streamed bodies** ([#131](https://github.com/eldtechnologies/conduit/pull/131)). The 50KB limit now uses `hono/body-limit`, so chunked bodies without `Content-Length` are capped too (they were unlimited).
+- **HTTPS exemption is exact** ([#131](https://github.com/eldtechnologies/conduit/pull/131)). Only `/health` is exempt in production. `/health/detailed` and paths such as `/healthz` now require HTTPS.
+- **Log masking** ([#131](https://github.com/eldtechnologies/conduit/pull/131), [#135](https://github.com/eldtechnologies/conduit/pull/135)). API keys are logged as `KEY_<APP>_****` (anything else as `****`), including in the LLM filter and recipient validation logs. `Cookie`, `Set-Cookie` and client-IP headers (`X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `True-Client-IP`, `Forwarded`) are masked.
+- **Dependency advisories**: zod 4 resolves GHSA-mrhx-c7xc-m3w5 ([#112](https://github.com/eldtechnologies/conduit/pull/112)), vitest 4 resolves dev-only GHSA-82fw-gwwq-j7x9, GHSA-qxg6-89mg-rqv8 and the tinypool advisories ([#111](https://github.com/eldtechnologies/conduit/pull/111)), and further semver-compatible updates fix the remaining osv-scanner findings ([#107](https://github.com/eldtechnologies/conduit/pull/107)).
+
+### Breaking changes
+
+**Operators** — startup now fails (with the variable named, value not printed) on:
+
+- unrecognised or invalid `API_KEY_*` vars: misspelled suffixes (e.g. `API_KEY_SITE_RECIPIENT`), unsupported ones (`API_KEY_*_SPAM_FILTER_*`, `API_KEY_*_LLM_CUSTOM_PROMPT`), empty values, lowercase names (`API_KEY_mysite`), and key values not in `KEY_<NAME>_<12+ alphanumeric chars>` form. Generate valid keys with `npm run generate-key -- <NAME>`.
+- a per-key config var for a key name that has no `API_KEY_<NAME>`.
+- `API_KEY_*_LLM_WHITELIST_SENDERS` (feature removed; delete the variable).
+- `API_KEY_*_LLM_ENABLED=true` while `LLM_PROVIDER`, `LLM_API_KEY` or `LLM_MODEL` is missing. Before, such keys silently sent unfiltered mail.
+- an empty or invalid `API_KEY_*_FROM_ADDRESSES`.
+- an invalid `API_KEY_*_LLM_FAIL_MODE` or `LLM_FALLBACK_MODE` (both now accept `allow`/`block` in any case).
+- `LLM_PROVIDER=gemini` or `LLM_PROVIDER=ollama` (never implemented; only `anthropic` and `openai` are supported).
+
+Other operator-facing changes:
+
+- `LLM_FALLBACK_MODE` (default `allow`) is now the default per-key fail mode when `API_KEY_*_LLM_FAIL_MODE` is not set. Before, it was parsed and ignored, so `LLM_FALLBACK_MODE=block` now makes those keys fail closed.
+- Keys in `block` mode now get 503 `LLM_PROVIDER_ERROR` when the LLM provider fails or returns malformed output (they were sent unfiltered).
+- API key values are trimmed.
+- `npm run build` now emits `dist/index.js` via `tsconfig.build.json` (was `dist/src/index.js` plus compiled `tests/` and `scripts/`), so `npm start` works after a local build. The Docker image layout is unchanged.
+- `docker-compose.yml` still defaults to `NODE_ENV=production`, but now reads `NODE_ENV` and `PORT` from `.env` or the shell (`${NODE_ENV:-production}`, `${PORT:-3000}`); both used to be hard-coded. The port mapping and healthcheck follow `PORT`. For a local plain-HTTP run set `NODE_ENV=development`; in production every `/api` request without `X-Forwarded-Proto: https` gets 403.
+- The Dockerfile `HEALTHCHECK` uses `${PORT:-3000}`, so containers with a non-3000 `PORT` are no longer marked unhealthy.
+
+**API clients** (`POST /api/send` unless noted):
+
+- Sending `from` when the key has no `API_KEY_<NAME>_FROM_ADDRESSES`, or a `from.email` not in that list, returns **400 `SENDER_NOT_ALLOWED`** (the mail used to go out from the given address). Omit `from`, or have the operator allowlist it.
+- `from.name` longer than 100 characters or containing `<`, `>`, `"` or `@` (e.g. `Support @ Acme`, `Boss <ceo@company.com>`) returns **400 `VALIDATION_ERROR`** (`Name must be at most 100 characters` / `Name cannot contain <, >, " or @ characters`); such names used to be accepted. This applies whether or not the key has a sender allowlist.
+- Oversized bodies: 400 → **413 `PAYLOAD_TOO_LARGE`**. The message no longer includes the received size, and `details.actualSize` is present only when `Content-Length` was sent.
+- Disallowed CORS origin: 401 → **403 `ORIGIN_NOT_ALLOWED`**.
+- Unknown `channel` (e.g. `"fax"`, or the unimplemented `sms`/`push`/`webhook`): `VALIDATION_ERROR` → **400 `INVALID_CHANNEL`**, even when other fields are also invalid. A missing or non-string `channel` is still `VALIDATION_ERROR`.
+- Malformed, empty or non-object JSON: 500 `INTERNAL_ERROR` → **400 `VALIDATION_ERROR`** (`Invalid JSON body` / `Request body must be a JSON object`).
+- Invalid template `data`: 500 `INTERNAL_ERROR` → **400 `VALIDATION_ERROR`** with per-field messages, e.g. `Invalid template data: name: Name is required, ...` ([#114](https://github.com/eldtechnologies/conduit/pull/114)).
+- `llmAnalysis` is **no longer returned in production** responses (still returned outside production). The fail-open `fallbackReason` is always `LLM analysis failed`.
+- The content-blocked 403 message is now `Content blocked by content filter` (it used to include the model's reasoning); reasoning, confidence and categories are only in dev-only `details`.
+- `LLM_BUDGET_EXCEEDED` (503) carries `retryAfter` as a top-level field plus a `Retry-After` header, instead of `details.retryAfter`. The block-mode `LLM_PROVIDER_ERROR` no longer has `details.reason`.
+- Requests that fail schema, channel, template, template-data or sender checks get their 400 before any LLM call, so they no longer use LLM budget. LLM-blocked (403) requests now consume a rate-limit token.
+- `GET /health/detailed` requires HTTPS in production (403 `HTTPS Required` over plain HTTP).
+- Email subject and text body are plain text: no HTML entities (`R&D` arrives as typed, `Tom &amp; Jerry` becomes `Tom & Jerry`), and CR/LF in the subject become a space. The HTML body is still escaped.
+- Default zod error messages changed for fields without a custom message (zod 4); all send-schema fields have custom messages.
+
+### Added
+
+- `API_KEY_<NAME>_FROM_ADDRESSES` per-key sender allowlist. When `from` is omitted, the default sender is `Conduit <first-allowlisted-address>`, or `Conduit <onboarding@resend.dev>` when the key has no allowlist. Allowlisted addresses are sent lowercased ([#132](https://github.com/eldtechnologies/conduit/pull/132)).
+- `SENDER_NOT_ALLOWED` (400) error code ([#132](https://github.com/eldtechnologies/conduit/pull/132)).
+- Optional `Idempotency-Key` request header on `POST /api/send`: 1-200 characters of `[A-Za-z0-9._:-]`, otherwise 400 `VALIDATION_ERROR`. It is prefixed with the caller's public `KEY_<NAME>` part and forwarded to Resend as `idempotencyKey`; CORS allows the header ([#134](https://github.com/eldtechnologies/conduit/pull/134)).
+- `Retry-After` HTTP header on 429 responses and on 503s with a retry hint ([#131](https://github.com/eldtechnologies/conduit/pull/131)).
+- `.dockerignore`, keeping `.env`, `.git`, tests and docs out of the build context ([#129](https://github.com/eldtechnologies/conduit/pull/129)).
+- Network guard in `tests/setup.ts`: an unmocked `fetch` to a non-localhost host fails the test ([#133](https://github.com/eldtechnologies/conduit/pull/133)).
+
+### Fixed
+
+- **`replyTo` was never sent to Resend.** The email channel passed `reply_to`, which the SDK ignores; it now passes `replyTo` and is typed against `CreateEmailOptions` ([#120](https://github.com/eldtechnologies/conduit/pull/120)).
+- **Provider timeout aborts the request.** The 10s timeout now uses `AbortSignal.timeout`, so a timed-out send is not delivered after the client already got 502 `PROVIDER_TIMEOUT`, and no timer is left pending ([#134](https://github.com/eldtechnologies/conduit/pull/134)).
+- **Rate limiter checks all buckets before consuming.** Rejected requests no longer drain the hour/day buckets, and `retryAfter` reports the longest wait across the empty buckets ([#131](https://github.com/eldtechnologies/conduit/pull/131)).
+- **`/health/detailed`** reports email `active`/`configured` from the email handler (was always `inactive`), and `version` comes from `package.json` at startup (was `0.1.0` in Docker; `unknown` if it cannot be read) ([#134](https://github.com/eldtechnologies/conduit/pull/134)).
+- Per-key `API_KEY_*_LLM_FAIL_MODE` is trimmed and case-insensitive; invalid values used to be ignored, leaving the key fail-open ([#130](https://github.com/eldtechnologies/conduit/pull/130)).
+- Response log entries include the masked API key (it was read before authentication ran) ([#131](https://github.com/eldtechnologies/conduit/pull/131)).
+- Tests are hermetic and deterministic: Resend is mocked, timing tests no longer depend on wall-clock time, the rate-limit refill test uses fake timers, and the revoked-key test can fail ([#133](https://github.com/eldtechnologies/conduit/pull/133)).
+- Branch coverage restored above the 80% threshold after the vitest 4 upgrade ([#119](https://github.com/eldtechnologies/conduit/pull/119)).
+
+### Changed
+
+- Dependency upgrades (versions from `package-lock.json`):
+  - `zod` 3.25.76 → 4.6.7 ([#112](https://github.com/eldtechnologies/conduit/pull/112))
+  - `resend` 4.8.0 → 6.34.1 ([#120](https://github.com/eldtechnologies/conduit/pull/120))
+  - `@hono/node-server` 1.19.14 → 2.1.5 ([#117](https://github.com/eldtechnologies/conduit/pull/117))
+  - `hono` 4.12.25 → 4.13.13, `isomorphic-dompurify` 3.17.0 → 3.19.0 ([#107](https://github.com/eldtechnologies/conduit/pull/107))
+  - Dev: `vitest`, `@vitest/coverage-v8`, `@vitest/ui` 3.2.6 → 4.1.12 ([#111](https://github.com/eldtechnologies/conduit/pull/111))
+  - Dev: `eslint` 9 → 10.13.0, `@eslint/js` 9 → 10.0.1, `typescript-eslint` / `@typescript-eslint/*` → 8.71.2 ([#118](https://github.com/eldtechnologies/conduit/pull/118))
+- Removed the temporary `overrides.esbuild` pin added in 1.3.1; the tree now resolves esbuild 0.28.2 without it ([#116](https://github.com/eldtechnologies/conduit/pull/116)).
+- LLM filtering is no longer mounted as middleware. The send route calls it after request schema, channel, template, template-data and sender checks; the middleware order is documented in `src/index.ts` ([#135](https://github.com/eldtechnologies/conduit/pull/135)).
+- Dead Gemini/Ollama provider code removed; shared prompt building, response parsing and the timed POST live in `src/llm/providers/base.ts` ([#135](https://github.com/eldtechnologies/conduit/pull/135)).
+- Every LLM call attempt counts against `API_KEY_*_LLM_MAX_CALLS_PER_DAY`, including failed ones (unchanged behaviour, now tested).
+- `src/**`, `tests/**` and `scripts/**` are Prettier-formatted.
+
+### CI
+
+- New `CI` workflow on pull requests and pushes to `main`: `npx tsc --noEmit`, lint, `format:check`, `test:coverage` (80% thresholds), build, a `dist/index.js` check, a boot smoke test against `/health`, and a `docker build` job ([#129](https://github.com/eldtechnologies/conduit/pull/129)).
+- Security Scan fails when OSV reports vulnerabilities (`fail-on-vuln: true`; it was advisory) ([#129](https://github.com/eldtechnologies/conduit/pull/129)).
+- GitHub Actions upgraded: `actions/checkout` v7, `actions/setup-node` v7, `actions/dependency-review-action` v5, `google/osv-scanner-action` v2.5.0 ([#115](https://github.com/eldtechnologies/conduit/pull/115)).
+
 ## [1.3.1] — 2026-06-25
 
 ### Security
