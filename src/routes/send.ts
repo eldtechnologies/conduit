@@ -8,10 +8,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { resolveChannel, routeToChannel } from '../channels/index.js';
+import { resolveSender } from '../channels/email.js';
+import { config } from '../config.js';
+import { filterContent } from '../middleware/llmFilter.js';
 import { fromZodError, ValidationError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 import type {
-  LLMAnalysis,
   SendMessageRequest,
   SendMessageResponse,
   SendRequestBody,
@@ -145,7 +147,7 @@ send.post('/send', async (c) => {
   // Use pre-parsed body from recipientValidation middleware if available (v1.1.0)
   // The body is parsed by recipientValidation middleware to prevent consumption issues
   // Fall back to parsing here if middleware not applied (backward compatible)
-  // Cast c.get because parsedBody/llmAnalysis aren't in the Hono Variables map
+  // Cast c.get because parsedBody isn't in the Hono Variables map
   const getVar = c.get as (key: string) => unknown;
   let body = getVar('parsedBody') as SendRequestBody | undefined;
   if (!body) {
@@ -177,11 +179,20 @@ send.post('/send', async (c) => {
     ...(idempotencyKey && { idempotencyKey }),
   };
 
+  // Reject a disallowed sender before spending an LLM call on the request
+  if (request.channel === 'email') {
+    resolveSender(
+      request.from,
+      request.apiKey ? config.senderAllowlists.get(request.apiKey) : undefined
+    );
+  }
+
+  // LLM content filtering (v1.2.0) runs only after the request has been validated,
+  // and validates template data itself, so invalid requests never trigger LLM calls
+  const llmAnalysis = await filterContent(c, request);
+
   // Route to the appropriate channel
   const result = await routeToChannel(request);
-
-  // Get LLM analysis from context (if LLM filtering was applied)
-  const llmAnalysis = getVar('llmAnalysis') as LLMAnalysis | undefined;
 
   // Return success response
   const response: SendMessageResponse = {
@@ -189,7 +200,8 @@ send.post('/send', async (c) => {
     messageId: result.messageId,
     channel: request.channel,
     timestamp: result.timestamp,
-    ...(llmAnalysis && { llmAnalysis }), // Include LLM analysis if available
+    // Moderation internals help attackers tune content, so they are never sent in production
+    ...(llmAnalysis && config.nodeEnv !== 'production' && { llmAnalysis }),
   };
 
   return c.json(response, 200);

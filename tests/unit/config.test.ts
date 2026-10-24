@@ -151,9 +151,34 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       RESEND_API_KEY: 're_test',
       ALLOWED_ORIGINS: 'http://localhost:5173',
       API_KEY_MYSITE: MYSITE_KEY,
+      LLM_PROVIDER: 'anthropic',
+      LLM_API_KEY: 'sk-ant-test',
+      LLM_MODEL: 'claude-haiku-4-5-20251001',
       ...extra,
     };
   }
+
+  describe('LLM provider requirement', () => {
+    it('fails startup when a key enables LLM filtering but the provider is not configured', () => {
+      const env = baseEnv({
+        API_KEY_MYSITE_LLM_ENABLED: 'true',
+        API_KEY_MYSITE_LLM_FAIL_MODE: 'block',
+      });
+      delete env.LLM_MODEL;
+      delete env.LLM_API_KEY;
+
+      expect(() => loadConfig(env)).toThrow(
+        'LLM filtering is enabled for 1 API key(s) but the LLM provider is not configured. Missing: LLM_API_KEY, LLM_MODEL'
+      );
+    });
+
+    it('starts without provider config when no key enables LLM filtering', () => {
+      const env = baseEnv();
+      delete env.LLM_PROVIDER;
+
+      expect(loadConfig(env).llm).toBeUndefined();
+    });
+  });
 
   describe('API key detection', () => {
     it('accepts a key produced by the generator script', () => {
@@ -288,6 +313,41 @@ describe('loadConfig (API key and per-key config parsing)', () => {
     it('defaults per-key FAIL_MODE to allow when LLM_FALLBACK_MODE is unset', () => {
       const cfg = loadConfig(baseEnv({ API_KEY_MYSITE_LLM_ENABLED: 'true' }));
       expect(cfg.llmFilterRules.get(MYSITE_KEY)?.failMode).toBe('allow');
+    });
+
+    it.each(['BLOCK', ' Block ', 'block'])(
+      'parses LLM_FALLBACK_MODE %j case-insensitively',
+      (mode) => {
+        const cfg = loadConfig(
+          baseEnv({ LLM_FALLBACK_MODE: mode, API_KEY_MYSITE_LLM_ENABLED: 'true' })
+        );
+        expect(cfg.llmFilterRules.get(MYSITE_KEY)?.failMode).toBe('block');
+      }
+    );
+
+    it('fails startup on an invalid LLM_FALLBACK_MODE', () => {
+      expect(() => loadConfig(baseEnv({ LLM_FALLBACK_MODE: 'blok' }))).toThrow(
+        /LLM_FALLBACK_MODE must be .*allow.* or .*block/
+      );
+    });
+
+    it('fails startup when the removed LLM sender whitelist is configured', () => {
+      let message = '';
+      try {
+        loadConfig(baseEnv({ API_KEY_MYSITE_LLM_WHITELIST_SENDERS: 'owner@example.com' }));
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain('API_KEY_MYSITE_LLM_WHITELIST_SENDERS');
+      expect(message).toContain('removed for security reasons');
+      expect(message).toContain('spoofable');
+      expect(message).not.toContain('owner@example.com');
+    });
+
+    it('fails startup for the removed sender whitelist even for an unknown key name', () => {
+      expect(() =>
+        loadConfig(baseEnv({ API_KEY_OTHER_LLM_WHITELIST_SENDERS: 'a@example.com' }))
+      ).toThrow('API_KEY_OTHER_LLM_WHITELIST_SENDERS: the LLM sender whitelist was removed');
     });
   });
 

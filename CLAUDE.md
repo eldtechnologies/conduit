@@ -462,7 +462,7 @@ Apply middleware in this exact order (see `src/index.ts`):
 6. Authentication (for /api/* routes)
 7. Recipient Validation (for /api/send route) - v1.1.0 - before rate limiting so 403'd recipients don't consume tokens
 8. Rate Limiting (for /api/* routes) - MUST run before LLM filtering so 429'd requests never reach the LLM
-9. LLM Filtering (for /api/send route) - v1.2.0
+9. LLM Filtering (for /api/send) - v1.2.0 - not a middleware: the send route calls `filterContent()` after validating the request schema and template data, so invalid requests never reach the LLM
 
 ### Git Workflow
 - **Commits**: Small, atomic commits with clear messages

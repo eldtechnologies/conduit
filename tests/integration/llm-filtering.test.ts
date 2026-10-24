@@ -7,6 +7,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '@/index.js';
+import { config } from '@/config.js';
+import { clearAllRateLimits } from '@/middleware/rateLimit.js';
 import { readJson } from '../helpers/response.js';
 import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
@@ -32,10 +34,62 @@ interface LlmSendResponse {
 // Keys and LLM settings used here (API_KEY_LLM_TEST, API_KEY_NO_LLM, API_KEY_LOW_BUDGET, ...)
 // come from tests/setup.ts: src/config.ts reads process.env once, when it is first imported.
 
+// API key with LLM filtering in fail-closed mode (also set in tests/setup.ts)
+process.env.API_KEY_LLM_BLOCK = 'KEY_LLM_BLOCK_abc123def456ghi789jkl012mno345';
+process.env.API_KEY_LLM_BLOCK_LLM_ENABLED = 'true';
+process.env.API_KEY_LLM_BLOCK_LLM_FAIL_MODE = 'block';
+
+const validBody = {
+  channel: 'email',
+  templateId: 'contact-form',
+  to: 'support@example.com',
+  data: {
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    message: 'Hello, I have a question about your product.',
+  },
+};
+
+async function sendRequest(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  return await app.fetch(
+    new Request('http://localhost/api/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+        Origin: 'http://localhost:8080',
+        // Production enforces HTTPS behind a proxy
+        'X-Forwarded-Proto': 'https',
+      },
+      body: JSON.stringify(body),
+    })
+  );
+}
+
+function llmReply(decision: {
+  allowed: boolean;
+  confidence: number;
+  categories: string[];
+  reasoning?: string;
+}): Response {
+  return new Response(
+    JSON.stringify({
+      id: 'msg_reply',
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'text', text: JSON.stringify({ reasoning: 'ok', ...decision }) }],
+      model: 'claude-haiku-4-5-20251001',
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } }
+  );
+}
+
 describe('LLM Filtering Integration', () => {
   let fetchMock: FetchMock;
 
   beforeEach(() => {
+    // Many requests share API_KEY_LLM_TEST; keep them under the per-minute limit
+    clearAllRateLimits();
     fetchMock = installFetchMock();
   });
 
@@ -380,6 +434,148 @@ describe('LLM Filtering Integration', () => {
       expect(response.status).toBe(200);
       const data = await readJson<LlmSendResponse>(response);
       expect(data.success).toBe(true);
+    });
+  });
+
+  describe('fail-closed (block) mode with real provider failures', () => {
+    const blockKey = () => process.env.API_KEY_LLM_BLOCK!;
+
+    it.each<[string, (f: FetchMock) => void]>([
+      ['the provider is unreachable', (f) => f.mockRejectedValueOnce(new Error('ECONNREFUSED'))],
+      ['the request times out', (f) => f.mockRejectedValueOnce(new DOMException('', 'AbortError'))],
+      [
+        'the provider returns 500',
+        (f) => f.mockResolvedValueOnce(new Response('upstream secret detail', { status: 500 })),
+      ],
+      [
+        'the provider returns malformed JSON',
+        (f) =>
+          f.mockResolvedValueOnce(
+            new Response('{not json', {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            })
+          ),
+      ],
+    ])('should return 503 without sending when %s', async (_, arrange) => {
+      arrange(fetchMock);
+
+      const response = await sendRequest(blockKey(), validBody);
+
+      expect(response.status).toBe(503);
+      const data = await readJson<LlmSendResponse>(response);
+      expect(data.code).toBe('LLM_PROVIDER_ERROR');
+      expect(JSON.stringify(data)).not.toContain('upstream secret detail');
+      // Only the LLM call was made; nothing was sent to Resend
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('validation before LLM analysis', () => {
+    it.each<[string, Record<string, unknown>, string]>([
+      ['missing recipient', { ...validBody, to: undefined }, 'VALIDATION_ERROR'],
+      ['invalid channel value', { ...validBody, channel: 'fax' }, 'INVALID_CHANNEL'],
+      [
+        'disallowed sender',
+        { ...validBody, from: { email: 'ceo@example.com' } },
+        'SENDER_NOT_ALLOWED',
+      ],
+      [
+        'invalid template data',
+        { ...validBody, data: { name: 'X', email: 'nope', message: '' } },
+        'VALIDATION_ERROR',
+      ],
+      ['unknown template', { ...validBody, templateId: 'missing' }, 'INVALID_TEMPLATE'],
+    ])('should reject %s with 400 and make zero LLM calls', async (_, body, code) => {
+      const response = await sendRequest(process.env.API_KEY_LLM_BLOCK!, body);
+
+      expect(response.status).toBe(400);
+      const data = await readJson<LlmSendResponse>(response);
+      expect(data.code).toBe(code);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should send only validated template fields to the LLM', async () => {
+      fetchMock
+        .mockResolvedValueOnce(llmReply({ allowed: true, confidence: 0.1, categories: ['safe'] }))
+        .mockResolvedValueOnce(resendSuccessResponse('email_fields'));
+
+      const response = await sendRequest(process.env.API_KEY_LLM_TEST!, {
+        ...validBody,
+        data: { ...validBody.data, extra: 'UNVALIDATED PAYLOAD' },
+      });
+
+      expect(response.status).toBe(200);
+      const llmBody = fetchMock.mock.calls[0]![1]?.body as string;
+      expect(llmBody).toContain('Hello, I have a question');
+      expect(llmBody).not.toContain('UNVALIDATED PAYLOAD');
+    });
+  });
+
+  describe('production responses', () => {
+    async function inProduction<T>(fn: () => Promise<T>): Promise<T> {
+      const savedNodeEnv = config.nodeEnv;
+      const savedProcessEnv = process.env.NODE_ENV;
+      config.nodeEnv = 'production';
+      process.env.NODE_ENV = 'production';
+      try {
+        return await fn();
+      } finally {
+        config.nodeEnv = savedNodeEnv;
+        process.env.NODE_ENV = savedProcessEnv;
+      }
+    }
+
+    it('should not include llmAnalysis in successful responses', async () => {
+      fetchMock
+        .mockResolvedValueOnce(llmReply({ allowed: true, confidence: 0.9, categories: ['safe'] }))
+        .mockResolvedValueOnce(resendSuccessResponse('email_prod'));
+
+      const response = await inProduction(() =>
+        sendRequest(process.env.API_KEY_LLM_TEST!, validBody)
+      );
+
+      expect(response.status).toBe(200);
+      const data = await readJson<LlmSendResponse>(response);
+      expect(data.success).toBe(true);
+      expect(data.llmAnalysis).toBeUndefined();
+    });
+
+    it('should not include fail-open fallback details in successful responses', async () => {
+      fetchMock
+        .mockResolvedValueOnce(new Response('upstream secret detail', { status: 401 }))
+        .mockResolvedValueOnce(resendSuccessResponse('email_prod_fallback'));
+
+      const response = await inProduction(() =>
+        sendRequest(process.env.API_KEY_LLM_TEST!, validBody)
+      );
+
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      expect(text).not.toContain('llmAnalysis');
+      expect(text).not.toContain('upstream secret detail');
+    });
+
+    it('should not expose moderation internals when content is blocked', async () => {
+      fetchMock.mockResolvedValueOnce(
+        llmReply({
+          allowed: false,
+          confidence: 0.95,
+          categories: ['spam'],
+          reasoning: 'Keyword VIAGRA detected',
+        })
+      );
+
+      const response = await inProduction(() =>
+        sendRequest(process.env.API_KEY_LLM_TEST!, validBody)
+      );
+
+      expect(response.status).toBe(403);
+      const data = await readJson<LlmSendResponse>(response);
+      expect(data.code).toBe('CONTENT_BLOCKED_SPAM');
+      expect(data.details).toBeUndefined();
+      expect(JSON.stringify(data)).not.toContain('VIAGRA');
+      expect(JSON.stringify(data)).not.toContain('0.95');
     });
   });
 

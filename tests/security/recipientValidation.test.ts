@@ -5,7 +5,7 @@
  * Verifies that API keys can be restricted to specific recipients/domains.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import app from '@/index.js';
 import { clearAllRateLimits } from '@/middleware/rateLimit.js';
 import { readJson, type SuccessResponse, type ErrorResponse } from '../helpers/response.js';
@@ -441,6 +441,36 @@ describe('Recipient Validation (v1.1.0)', () => {
       expect(data.error).not.toContain('admin@example.com');
       expect(data.error).not.toContain('trusted.com');
       expect(data.error).not.toContain('example.com');
+    });
+
+    it('should log rejected recipients without the API key', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const response = await app.fetch(
+          new Request('http://localhost/api/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': WHITELISTED_KEY,
+              Origin: 'https://test.com',
+            },
+            body: JSON.stringify({
+              channel: 'email',
+              templateId: 'contact-form',
+              to: 'attacker@evil.com',
+              data: { name: 'Test User', email: 'test@example.com', message: 'Test message' },
+            }),
+          })
+        );
+
+        expect(response.status).toBe(403);
+        const call = warnSpy.mock.calls.find(([msg]) => msg === 'Recipient not in whitelist:');
+        expect(call).toBeDefined();
+        expect(call![1]).not.toHaveProperty('apiKey');
+        expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('KEY_TEST');
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
 
     it('should require authentication before checking whitelist', async () => {
