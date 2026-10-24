@@ -13,13 +13,14 @@ docs/
 ├── features/
 │   ├── README.md           # Feature planning framework
 │   ├── recipient-whitelisting.md  # v1.1.0 - Prevent stolen key abuse
-│   └── llm-spam-filtering.md      # v1.2.0 - AI-powered spam detection (planned)
+│   └── llm-spam-filtering.md      # v1.2.0 - AI-powered spam detection (implemented)
 └── security/
     ├── README.md           # Security overview and checklist
-    ├── review.md           # Comprehensive security analysis
     ├── implementation.md   # Step-by-step security hardening guide
+    ├── automated-security.md  # CI security scanning and dependency updates
     ├── spam-prevention.md  # Quick 15-min spam protection setup
-    └── advanced-protections.md  # Multi-tier defense strategies
+    ├── advanced-protections.md  # Multi-tier defense strategies
+    └── archive/            # Historical reviews (pre-v1.0.0 review, v1.0.1 audit)
 ```
 
 ## 🚀 Quick Links by Role
@@ -43,7 +44,7 @@ docs/
 **Goal**: Review and harden Conduit's security
 
 1. **[Security Overview](security/README.md)** - Security checklist and status
-2. **[Security Review](security/review.md)** - Threat model, vulnerabilities, compliance
+2. **[Security Review (archived)](security/archive/review-pre-v1.0.0.md)** - Original pre-v1.0.0 threat model, vulnerabilities, compliance
 3. **[Security Implementation](security/implementation.md)** - Step-by-step hardening guide
 4. **[Spam Prevention](security/spam-prevention.md)** - Quick 15-minute setup (honeypot, CAPTCHA, LLM filtering)
 5. **[Advanced Protections](security/advanced-protections.md)** - Multi-tier defense strategies
@@ -136,7 +137,8 @@ Comprehensive security documentation, analysis, and implementation guide.
 - GDPR/compliance overview
 - Incident response overview
 
-#### [Security Review](security/review.md)
+#### [Security Review (archived)](security/archive/review-pre-v1.0.0.md)
+Historical pre-v1.0.0 review, kept for reference. It predates the implementation, so its gaps are not the current status.
 - Executive summary and risk assessment
 - Detailed threat model and attack surface
 - **7 critical security gaps** with impact analysis
@@ -176,14 +178,14 @@ Feature planning and implementation guides for Conduit features.
 - **Configuration**: Per-API-key email and domain whitelists via environment variables
 - **Backward Compatible**: No whitelist = allow all recipients (existing behavior)
 
-#### [LLM Spam Filtering](features/llm-spam-filtering.md) (v1.2.0 - Planned)
+#### [LLM Spam Filtering](features/llm-spam-filtering.md) (v1.2.0 - Implemented)
 - **Value Proposition**: AI-powered spam detection without exposing LLM API keys to frontend
-- **Architecture**: Conduit server-side middleware (keeps LLM keys secure)
-- **Providers**: Anthropic Claude, OpenAI, Google Gemini, local Ollama
-- **Cost**: $0-15/month depending on provider and volume
-- **Timeline**: 2-3 weeks after v1.1.0 release
+- **Architecture**: Server-side, called from the send route after request and template validation and after rate limiting (keeps LLM keys secure, invalid requests cost no LLM call)
+- **Providers**: Anthropic Claude, OpenAI (Gemini and Ollama are not implemented)
+- **Configuration**: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` plus per-key `API_KEY_<NAME>_LLM_*` variables
+- **Cost**: Estimated $0-15/month depending on provider and volume
 
-**Start here if**: You want to understand planned features or propose new ones.
+**Start here if**: You want to understand implemented and planned features or propose new ones.
 
 ---
 
@@ -211,51 +213,52 @@ Feature planning and implementation guides for Conduit features.
 2. Configure [Recipient Whitelisting](features/recipient-whitelisting.md) (v1.1.0)
 3. Add honeypot fields (90% bot reduction)
 4. Optional: Enable CAPTCHA (Cloudflare Turnstile)
-5. Planned: Enable LLM filtering when available (v1.2.0)
+5. Optional: Enable [LLM spam filtering](features/llm-spam-filtering.md) (v1.2.0)
 
 ### "I need to understand the security requirements"
 1. Start with [Security Overview](security/README.md)
 2. Review [Security Checklist](security/README.md#critical-security-checklist)
 3. Implement items from [Security Implementation](security/implementation.md)
-4. Read [Security Review](security/review.md) for deep analysis
+4. Read the archived [Security Review](security/archive/review-pre-v1.0.0.md) for the original threat analysis
 
 ### "How do I add SMS support?"
-1. SMS is planned for Phase 2 (Q1 2026)
+1. SMS is planned for Phase 2 and not implemented yet
 2. See roadmap in [API Reference](api-reference.md) → Product Roadmap
 3. Review architecture in [Architecture](architecture.md) → Channel System
 4. Watch [GitHub releases](https://github.com/eldtechnologies/conduit/releases) for updates
 
 ## 📋 Documentation Roadmap
 
-### Phase 1: MVP (v1.1.0) ✅ COMPLETE
+### Phase 1: Email (v1.0.0 - v1.3.1) ✅ COMPLETE
 - ✅ Complete API specification
 - ✅ Architecture documentation
 - ✅ Security review and implementation guide
 - ✅ User integration guide
 - ✅ Getting started guide
 - ✅ Core email functionality (Resend integration)
-- ✅ 258 comprehensive tests (100% pass rate with proper API keys)
+- ✅ Test suite with 80% coverage thresholds enforced in CI
 - ✅ Production deployment guides
 - ✅ Spam prevention documentation
 - ✅ Recipient whitelisting feature
 - ✅ Feature planning framework (docs/features/)
+- ✅ LLM spam filtering (v1.2.0)
+- ✅ Sender allowlist per API key
 
-### Phase 2: SMS & Push (Q1 2026)
+### Phase 2: SMS & Push (planned, not implemented)
 - ⏳ SMS via Twilio
 - ⏳ Push notifications via Firebase
-- ⏳ LLM spam filtering (v1.2.0)
 - ⏳ WhatsApp Business API integration
 - ⏳ Multi-channel templates
 - ⏳ API client libraries (TypeScript, Python)
 
-### Phase 3: Webhooks (Q2 2026)
+### Phase 3: Webhooks (planned, not implemented)
 - ⏳ HTTP webhooks documentation
 - ⏳ Slack/Discord integration guides
 - ⏳ Custom integration examples
 - ⏳ Migration guides
 - ⏳ Performance tuning guide
 
-### Phase 4: Advanced Features (Q3 2026)
+### Phase 4: Advanced Features (planned, not implemented)
 - ⏳ Analytics dashboard
 - ⏳ Delivery tracking & webhooks
 - ⏳ Scheduled sending
@@ -280,6 +283,6 @@ Found an issue or want to improve the docs?
 
 ---
 
-**Last Updated**: 2025-10-15
-**Documentation Version**: 1.1.0
-**Project Status**: Production Ready (v1.1.0)
+**Last Updated**: 2026-10-24
+**Documentation Version**: 1.3.1 (including the unreleased changes on `main`)
+**Project Status**: Production Ready (v1.3.1)

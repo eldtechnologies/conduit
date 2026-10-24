@@ -6,13 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Conduit** is a lightweight, secure multi-channel communication proxy for sending emails, SMS, push notifications, and webhooks from frontend applications without exposing API keys.
 
-**Current Status**: Phase 1 Complete - v1.1.0 Production Ready with recipient whitelisting.
+**Current Status**: Phase 1 (email) complete and production ready - v1.3.1 (package.json) plus unreleased changes on `main`. Implemented: email via Resend, recipient whitelisting (v1.1.0), optional LLM spam filtering (v1.2.0), per-key sender allowlist. SMS, push and webhook channels are planned and not implemented.
 
-**Tech Stack** (planned):
-- Runtime: Node.js 20.19+
-- Framework: Hono (ultra-lightweight web framework)
-- Language: TypeScript
-- Email Provider: Resend.com (Phase 1)
+**Tech Stack**:
+- Runtime: Node.js 20.19+ (Docker image and CI use Node 22)
+- Framework: Hono 4 (ultra-lightweight web framework) with `@hono/node-server` 2
+- Language: TypeScript 5 (strict)
+- Validation: Zod 4
+- Email Provider: Resend.com via the `resend` SDK 6 (Phase 1)
+- Optional LLM spam filtering: Anthropic or OpenAI
+- Tooling: Vitest 4, ESLint 10, Prettier 3
 - Deployment: Docker + Coolify
 
 ## Core Architecture
@@ -36,11 +39,14 @@ Conduit uses a unified API endpoint (`POST /api/send`) for all communication cha
 ### System Architecture Overview
 
 ```
-Client Apps → HTTPS → [CORS] → [Auth] → [Rate Limit] → [Logger]
+Client Apps → [HTTPS] → [CORS] → [Security Headers] → [Logger] → [Body Limit]
+            → [Auth] → [Recipient Validation] → [Rate Limit]
+                         ↓
+   Send Route: channel → schema → sender allowlist → [LLM Filter, optional]
                          ↓
               Channel Router → Template Validator
                          ↓
-    [Email|SMS|Push|Webhook] Handler → Provider API
+    Email Handler → Resend API   (SMS/Push/Webhook: planned, not implemented)
 ```
 
 See [docs/architecture.md](docs/architecture.md) for complete request flow diagrams and middleware pipeline details.
@@ -54,22 +60,20 @@ See [docs/architecture.md](docs/architecture.md) for complete request flow diagr
    - Template rendering function (subject/html for email, body for SMS, etc.)
 
 2. **Channel Handlers**: Channel implementations in `src/channels/` handle provider-specific logic:
-   - `email.ts` - Resend integration
-   - `sms.ts` - Twilio integration (Phase 2)
-   - `push.ts` - Firebase Cloud Messaging (Phase 2)
-   - `webhook.ts` - HTTP webhooks (Phase 3)
+   - `email.ts` - Resend integration (implemented)
+   - `sms.ts` - Twilio integration (Phase 2, not implemented)
+   - `push.ts` - Firebase Cloud Messaging (Phase 2, not implemented)
+   - `webhook.ts` - HTTP webhooks (Phase 3, not implemented)
 
 3. **Security Layers**:
    - API key authentication via `X-API-Key` header
    - CORS protection with strict origin whitelisting
    - Rate limiting per API key across ALL channels (token bucket algorithm)
+   - Recipient whitelist and sender allowlist per API key
+   - Optional LLM content filtering per API key
    - Provider API keys stored in environment variables only
 
-4. **Middleware Stack** (in order):
-   - CORS validation (`middleware/cors.ts`)
-   - API key authentication (`middleware/auth.ts`)
-   - Rate limiting (`middleware/rateLimit.ts`)
-   - Request logging (`middleware/logger.ts`)
+4. **Middleware Stack**: see [Middleware Order (CRITICAL)](#middleware-order-critical) below and `src/index.ts`. LLM filtering is not middleware; `src/routes/send.ts` calls `filterContent()` after request validation.
 
 ## Security
 
@@ -79,91 +83,89 @@ See [docs/architecture.md](docs/architecture.md) for complete request flow diagr
 
 **MANDATORY for Phase 1 (MVP)**:
 - [x] HTTPS enforcement with HSTS header
-- [x] Request size limit (50KB max body size) - bodyLimit middleware (v1.0.1)
+- [x] Request size limit (50KB max body size) - `bodyLimit` middleware on `hono/body-limit`, also for chunked bodies, 413 `PAYLOAD_TOO_LARGE`
 - [x] Cryptographically secure API key generation (`crypto.randomBytes`, NOT `Math.random()`)
 - [x] Constant-time API key comparison (`timingSafeEqual`)
-- [x] XSS sanitization for all user input (`isomorphic-dompurify`)
+- [x] XSS sanitization for all user input (`escapeHtml` in the HTML body; `isomorphic-dompurify`-based `toPlainText`/`toHeaderText` for text body and subject)
 - [x] Security headers (X-Content-Type-Options, X-Frame-Options, CSP, etc.)
 - [x] Template field length limits (Zod schema validation)
-- [x] Provider API timeouts (10s timeout, AbortSignal)
+- [x] Provider API timeouts (10s, aborts the Resend request via `AbortSignal.timeout`, 502 `PROVIDER_TIMEOUT`)
 - [x] Split health endpoint (public `/health` vs authenticated `/health/detailed`)
 - [x] Error sanitization in production (hide stack traces)
 
 **RECOMMENDED for Phase 2**:
 - [ ] IP-based rate limiting (secondary protection)
 - [ ] Circuit breaker for provider APIs (prevent cascading failures)
-- [ ] API key revocation mechanism (env var or Redis)
-- [ ] Dependency scanning in CI/CD (`npm audit`)
+- [x] API key revocation mechanism (`REVOKED_KEYS` env var; Redis-based revocation not implemented)
+- [x] Dependency scanning in CI/CD (`npm audit`, OSV Scanner, Dependency Review in `.github/workflows/security.yml`)
 - [ ] Container security scanning (`trivy` or `docker scan`)
 
 ### Critical Security Patterns
 
-**API Key Validation** (middleware/auth.ts):
+**API Key Validation** (middleware/auth.ts, abridged):
 ```typescript
 import { timingSafeEqual } from 'crypto';
 
-function constantTimeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    timingSafeEqual(Buffer.from(a), Buffer.from(a));
-    return false;
+// Compare against EVERY configured key, never break early
+let isValid = false;
+for (const validKey of config.apiKeys) {
+  if (apiKey.length === validKey.length) {
+    if (timingSafeEqual(Buffer.from(apiKey), Buffer.from(validKey))) {
+      isValid = true;
+    }
   }
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 ```
 
-**XSS Sanitization** (utils/sanitize.ts):
-```typescript
-import DOMPurify from 'isomorphic-dompurify';
+**XSS Sanitization** (utils/sanitize.ts): `escapeHtml()` for values inserted into HTML, `toPlainText()` for text/plain bodies, `toHeaderText()` for header values such as the subject (strips tags and CR/LF), `sanitizeHtml()` (DOMPurify, no tags/attributes) for stripping markup.
 
-export function sanitizeHtml(dirty: string): string {
-  return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: []
-  });
-}
-```
-
-**Template Rendering** (always sanitize):
+**Template Rendering** (always escape/sanitize):
 ```typescript
-html: (data) => `<p>Name: ${sanitizeHtml(data.name)}</p>`
+html: (data) => `<p>Name: ${escapeHtml(data.name)}</p>`,
+text: (data) => `Name: ${toPlainText(data.name)}`,
+subject: (data) => `Contact Form: ${toHeaderText(data.name)}`,
 ```
 
 See [docs/security/implementation.md](docs/security/implementation.md) for complete implementation details and copy-paste ready code examples.
 
 ## Development Workflow
 
-### Project Structure (planned)
+### Project Structure
 
 ```
 src/
-├── index.ts              # Hono app entry point
+├── index.ts              # Hono app entry point, middleware order, server startup
+├── config.ts             # Environment config (Zod), strict API_KEY_* loading
 ├── routes/
-│   ├── send.ts          # POST /api/send handler
-│   ├── health.ts        # GET /health handler
-│   └── channels.ts      # GET /api/channels (Phase 2+)
+│   ├── send.ts          # POST /api/send handler (calls the LLM filter)
+│   └── health.ts        # GET /health and GET /health/detailed
 ├── middleware/
-│   ├── auth.ts          # API key validation
+│   ├── errorHandler.ts  # Global error handler
+│   ├── securityHeaders.ts # HTTPS enforcement + security headers
 │   ├── cors.ts          # CORS handling
+│   ├── logger.ts        # Request logging (masked)
+│   ├── bodyLimit.ts     # 50KB body limit
+│   ├── auth.ts          # API key validation
+│   ├── recipientValidation.ts # JSON parse + recipient whitelist
 │   ├── rateLimit.ts     # Rate limiting
-│   └── logger.ts        # Request logging
-├── channels/            # Channel implementations
-│   ├── email.ts         # Resend integration
-│   ├── sms.ts           # Twilio (Phase 2)
-│   ├── push.ts          # Firebase (Phase 2)
-│   ├── webhook.ts       # HTTP webhooks (Phase 3)
+│   └── llmFilter.ts     # LLM content filter (filterContent, not mounted as middleware)
+├── channels/
+│   ├── email.ts         # Resend integration + sender allowlist
 │   └── index.ts         # Channel registry
 ├── templates/
-│   ├── email/           # Email templates
-│   ├── sms/             # SMS templates (Phase 2)
-│   ├── push/            # Push templates (Phase 2)
+│   ├── email/contact-form.ts # Only template so far
 │   └── index.ts         # Template registry
-├── utils/
-│   ├── validation.ts    # Input validators
-│   └── errors.ts        # Custom error types
-└── config.ts            # Environment config
+├── llm/                 # LLM providers (anthropic, openai)
+├── types/               # api.ts, channels.ts, templates.ts
+└── utils/
+    ├── errors.ts        # Custom error types
+    ├── sanitize.ts      # HTML escaping / plain-text helpers
+    └── version.ts       # App version from package.json
 ```
 
-### Commands (once implemented)
+Planned, not implemented: `routes/channels.ts` (`GET /api/channels`), `channels/{sms,push,webhook}.ts`, `templates/{sms,push}/`.
+
+### Commands
 
 **Development**:
 ```bash
@@ -173,7 +175,7 @@ npm run build        # Build TypeScript to dist/
 npm start            # Run production build
 ```
 
-**Testing** (to be set up):
+**Testing**:
 ```bash
 npm test                    # Run all tests
 npm run test:watch          # Run tests in watch mode
@@ -183,8 +185,11 @@ npm run test -- <file>      # Run specific test file
 **Docker**:
 ```bash
 docker build -t conduit .                          # Build image
-docker run -p 3000:3000 --env-file .env conduit   # Run container
+docker run -p 3000:3000 --env-file .env conduit   # Run container (NODE_ENV=production: HTTPS required)
+docker run -p 3000:3000 --env-file .env -e NODE_ENV=development conduit  # Local plain HTTP
 ```
+
+`docker-compose.yml` also defaults `NODE_ENV` to `production`.
 
 **Deployment**:
 ```bash
@@ -196,23 +201,24 @@ docker run -p 3000:3000 --env-file .env conduit   # Run container
 
 ### Adding New Email Templates
 
-Templates must follow this structure:
+Templates implement `EmailTemplate<TData>` from `src/types/templates.ts` (see `src/templates/email/contact-form.ts`) and are registered in `src/templates/index.ts` as `email:<template-id>`:
 
 ```typescript
-export interface YourTemplateData {
-  field1: string;
-  field2: string;
-  optionalField?: string;
-}
+const yourSchema = z.object({
+  field1: z.string().min(1).max(100),
+  field2: z.string().min(1).max(5000),
+  optionalField: z.string().max(200).optional(),
+});
+export type YourTemplateData = z.infer<typeof yourSchema>;
 
-export const yourTemplate = {
+export const yourTemplate: EmailTemplate<YourTemplateData> = {
   id: 'template-id',
   channel: 'email',
-  subject: (data: YourTemplateData) => `Subject with ${data.field1}`,
-  html: (data: YourTemplateData) => `HTML template using ${data.field2}`,
-  validate: (data: unknown): data is YourTemplateData => {
-    // Use Zod schema for validation
-  }
+  schema: yourSchema,
+  validate: (data) => yourSchema.parse(data), // throws ZodError -> 400 VALIDATION_ERROR
+  subject: (data) => `Subject with ${toHeaderText(data.field1)}`,
+  html: (data) => `<p>${escapeHtml(data.field2)}</p>`,
+  text: (data) => toPlainText(data.field2),
 };
 ```
 
@@ -241,13 +247,19 @@ export const yourTemplate = {
 
 ### Error Handling
 
-Standard error codes (see CONDUIT_SPEC.md:660):
-- `UNAUTHORIZED` (401) - Invalid/missing API key
+Error codes are defined in `ErrorCode` (`src/types/api.ts`); the full table with HTTP statuses is in [docs/api-reference.md](docs/api-reference.md#error-codes). Main codes:
+- `UNAUTHORIZED` (401) - Missing, invalid or revoked API key
 - `INVALID_CHANNEL` (400) - Unsupported channel
 - `INVALID_TEMPLATE` (400) - Template not found
-- `VALIDATION_ERROR` (400) - Invalid input data
+- `VALIDATION_ERROR` (400) - Invalid input data, malformed JSON
+- `SENDER_NOT_ALLOWED` (400) - `from` not in the key's sender allowlist
+- `ORIGIN_NOT_ALLOWED` (403) - Origin not in `ALLOWED_ORIGINS`
+- `RECIPIENT_NOT_ALLOWED` (403) - Recipient not in the key's whitelist
+- `CONTENT_BLOCKED_*` (403) - Blocked by the LLM filter
+- `PAYLOAD_TOO_LARGE` (413) - Body over 50KB
 - `RATE_LIMIT_EXCEEDED` (429) - Too many requests
-- `PROVIDER_ERROR` (502) - Third-party provider failure
+- `PROVIDER_ERROR` / `PROVIDER_TIMEOUT` (502) - Resend failure / 10s timeout
+- `LLM_PROVIDER_ERROR` / `LLM_BUDGET_EXCEEDED` (503) - LLM failure or budget used up, in `block` fail mode
 - `INTERNAL_ERROR` (500) - Unexpected error
 
 All error responses follow this structure:
@@ -256,19 +268,23 @@ All error responses follow this structure:
   "success": false,
   "error": "Human-readable message",
   "code": "ERROR_CODE",
-  "retryAfter": 60  // Optional, for rate limits
+  "details": {},    // Optional, omitted in production
+  "retryAfter": 60  // Optional, for 429 and 503 with a retry hint (also sent as the Retry-After header)
 }
 ```
 
 ## Environment Configuration
 
-Required environment variables are documented in CONDUIT_SPEC.md:384. Key variables:
+All environment variables are documented in [docs/api-reference.md](docs/api-reference.md#environment-variables) (source of truth: `envSchema` and `API_KEY_CONFIG_SUFFIXES` in `src/config.ts`). Key variables:
 
-- `RESEND_API_KEY` - Email provider (Phase 1)
-- `API_KEY_*` - One per frontend application
-- `ALLOWED_ORIGINS` - Comma-separated list of allowed origins
+- `RESEND_API_KEY` - Email provider (required)
+- `API_KEY_*` - One per frontend application (at least one required)
+- `ALLOWED_ORIGINS` - Comma-separated list of allowed origins (required)
 - `PORT` - Server port (default: 3000)
+- `NODE_ENV` - default `development`; set `production` in production (HTTPS enforcement, HSTS, error sanitization)
+- `ENFORCE_HTTPS` - `true` also enforces HTTPS outside production; `REVOKED_KEYS` - comma-separated revoked keys
 - Rate limit overrides: `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_PER_HOUR`, `RATE_LIMIT_PER_DAY`
+- LLM filtering (optional): `LLM_PROVIDER` (`anthropic`|`openai`), `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT` (default 5000), `LLM_FALLBACK_MODE` (default `allow`), `LLM_ENDPOINT`; per key `API_KEY_*_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`. Startup fails if a key enables LLM filtering while `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL` are incomplete, and if `API_KEY_*_LLM_WHITELIST_SENDERS` (removed) is set.
 - Recipient whitelisting (v1.1.0, optional):
   - `API_KEY_*_RECIPIENTS` - Comma-separated list of allowed email addresses
   - `API_KEY_*_RECIPIENT_DOMAINS` - Comma-separated list of allowed domains
@@ -276,14 +292,15 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 
 ## Phased Development
 
-**Phase 1 (MVP)**: Email only via Resend
+**Phase 1 (MVP)**: Email only via Resend - **complete**
 - Contact form template
-- Basic authentication & rate limiting
+- Authentication (with revocation) & rate limiting
 - CORS protection
+- Recipient whitelisting, sender allowlist, optional LLM spam filtering
 
-**Phase 2**: SMS (Twilio) + Push (Firebase)
-**Phase 3**: Webhooks + integrations (Slack, Discord)
-**Phase 4**: Advanced features (analytics, scheduled sending, A/B testing)
+**Phase 2**: SMS (Twilio) + Push (Firebase) - planned, not implemented
+**Phase 3**: Webhooks + integrations (Slack, Discord) - planned, not implemented
+**Phase 4**: Advanced features (analytics, scheduled sending, A/B testing) - planned, not implemented
 
 ## Reference Documentation
 
@@ -293,7 +310,7 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 - **[docs/architecture.md](docs/architecture.md)**: System architecture diagrams, request flows, component interactions
 - **[docs/api-reference.md](docs/api-reference.md)**: Complete technical specification, API design, configuration
 - **[docs/user-guide.md](docs/user-guide.md)**: User-facing documentation, integration examples
-- **[docs/security/](docs/security/)**: Security documentation (overview, review, implementation)
+- **[docs/security/](docs/security/)**: Security documentation (overview, implementation, spam prevention; historical reviews in `archive/`)
 
 ### Quick Reference
 
@@ -308,7 +325,7 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 
 **Security** ([docs/security/](docs/security/)):
 - **[README.md](docs/security/README.md)**: Overview, checklist, philosophy
-- **[review.md](docs/security/review.md)**: 7 critical gaps, 10+ enhancements, threat model, compliance
+- **[archive/review-pre-v1.0.0.md](docs/security/archive/review-pre-v1.0.0.md)**: Archived pre-v1.0.0 review (7 critical gaps, 10+ enhancements, threat model, compliance); historical, not current status
 - **[implementation.md](docs/security/implementation.md)**: Step-by-step guide with code examples
 
 **Implementation Order**:
@@ -326,7 +343,7 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
 - **Target**: ES2022
 - **Module**: ESNext with bundler resolution
 - **Path Aliases**: `@/*` → `src/*` for cleaner imports
-- **Files**: Include src/, tests/, scripts/ in tsconfig.json
+- **Files**: `tsconfig.json` includes src/, tests/, scripts/ (typecheck with `npx tsc --noEmit`); `tsconfig.build.json` compiles only src/ to dist/ (`npm run build`)
 
 ### Code Style
 - **Format**: Prettier with these rules:
@@ -338,11 +355,11 @@ Required environment variables are documented in CONDUIT_SPEC.md:384. Key variab
   - Arrow parens: always
   - Line endings: LF
 
-- **Linting**: ESLint 9 (flat config) with TypeScript integration
+- **Linting**: ESLint 10 (flat config) with typescript-eslint (`recommendedTypeChecked`)
   - No `any` types allowed (`@typescript-eslint/no-explicit-any: error`)
   - No floating promises (`@typescript-eslint/no-floating-promises: error`)
   - No unused vars (except prefixed with `_`)
-  - Console.log allowed only: `console.warn`, `console.error`, `console.info`
+  - Console: only `console.warn`, `console.error`, `console.info` (`no-console` warns on others)
   - Always use `const` over `let`, never use `var`
 
 ### File Organization
@@ -365,21 +382,21 @@ tests/
 ```
 
 ### Naming Conventions
-- **Files**: kebab-case (e.g., `api-key-generator.ts`, `rate-limit.ts`)
+- **Files**: follow the existing directory: camelCase in `src/middleware/` (e.g., `rateLimit.ts`, `bodyLimit.ts`), kebab-case for templates and scripts (e.g., `contact-form.ts`, `generate-api-key.ts`)
 - **Functions**: camelCase (e.g., `generateApiKey`, `sanitizeHtml`)
 - **Classes/Types**: PascalCase (e.g., `Config`, `CircuitBreaker`)
 - **Constants**: UPPER_SNAKE_CASE (e.g., `TIMEOUTS`, `MAX_RETRIES`)
 - **Environment Variables**: UPPER_SNAKE_CASE with prefixes:
   - `API_KEY_*` for frontend API keys
-  - `RESEND_API_KEY`, `TWILIO_*` for provider credentials
+  - `RESEND_API_KEY`, `LLM_*` for provider credentials (`TWILIO_*` planned)
   - `ALLOWED_ORIGINS` for CORS
   - `RATE_LIMIT_*` for rate limiting config
 
 ### Testing Standards
 - **Framework**: Vitest with globals enabled
-- **Setup**: Environment variables in `tests/setup.ts` (loaded before all tests)
+- **Setup**: Environment variables in `tests/setup.ts` (loaded before all tests). It also installs a network guard: any unmocked `fetch` to a non-local host fails the test (mock with `tests/helpers/fetch.ts`)
 - **Structure**: Describe blocks for grouping, descriptive `it()` statements
-- **Coverage Target**: 80%+ (enforced in vitest.config.ts)
+- **Coverage Target**: 80%+ lines/functions/branches/statements (thresholds in vitest.config.ts, enforced in CI via `npm run test:coverage`)
 - **Test Files**: `*.test.ts` in appropriate directory
 - **Assertions**: Use Vitest's `expect()` API
 
@@ -398,7 +415,7 @@ describe('FeatureName', () => {
 ### Security Patterns (MANDATORY)
 - **API Key Generation**: ALWAYS use `crypto.randomBytes(16)`, NEVER `Math.random()`
 - **API Key Comparison**: ALWAYS use `timingSafeEqual` from Node crypto (constant-time)
-- **HTML Sanitization**: ALWAYS use `DOMPurify.sanitize()` before rendering user input
+- **HTML Sanitization**: ALWAYS escape user input before rendering it into HTML (`escapeHtml`), and use `toPlainText`/`toHeaderText` (DOMPurify-based) for plain-text bodies and headers
 - **Input Validation**: ALWAYS use Zod schemas with explicit length limits
 - **Error Handling**: ALWAYS sanitize errors in production (hide stack traces)
 
@@ -415,7 +432,8 @@ if (a.length !== b.length) return false;
 return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 // XSS sanitization (templates/email/*)
-const safe = DOMPurify.sanitize(userInput, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+const safeHtml = escapeHtml(userInput);   // HTML body
+const safeText = toPlainText(userInput);  // text/plain body (DOMPurify strips tags)
 ```
 
 ### Module Imports
@@ -435,15 +453,17 @@ const safe = DOMPurify.sanitize(userInput, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] 
 - **Validation**: Throw errors for missing required variables
 - **Defaults**: Provide sensible defaults for optional variables
 - **Types**: Export strongly-typed `Config` interface
-- **Access**: Import `config` object, never access `process.env` directly in application code
+- **Access**: Import `config` object, never access `process.env` directly in application code (existing exceptions: `NODE_ENV` checks in `index.ts`, `errorHandler.ts`, `securityHeaders.ts` and `logger.ts`)
 
-**Example Config**:
+**Example Config** (abridged from `src/config.ts`):
 ```typescript
-export const config: Config = {
-  port: parseInt(getEnvVar('PORT', '3000'), 10),
-  nodeEnv: getEnvVar('NODE_ENV', 'development') as Config['nodeEnv'],
-  resendApiKey: getEnvVar('RESEND_API_KEY'), // Required, no default
-};
+const envSchema = z.object({
+  PORT: z.string().default('3000').transform((val) => parseInt(val, 10)),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'), // Required, no default
+});
+
+export const config: Config = loadConfig(process.env);
 ```
 
 ### Error Handling
@@ -463,6 +483,10 @@ Apply middleware in this exact order (see `src/index.ts`):
 7. Recipient Validation (for /api/send route) - v1.1.0 - before rate limiting so 403'd recipients don't consume tokens
 8. Rate Limiting (for /api/* routes) - MUST run before LLM filtering so 429'd requests never reach the LLM
 9. LLM Filtering (for /api/send) - v1.2.0 - not a middleware: the send route calls `filterContent()` after validating the request schema and template data, so invalid requests never reach the LLM
+
+### CI
+- **`.github/workflows/ci.yml`** (push/PR to main): `npx tsc --noEmit`, `npm run lint`, `npm run format:check`, `npm run test:coverage` (80% thresholds), `npm run build`, check that `dist/index.js` exists, smoke test of the built server (`/health` with `NODE_ENV=production`), and a separate `docker build` job. All steps must pass.
+- **`.github/workflows/security.yml`** (push/PR to main, daily at 02:00 UTC): `npm audit --audit-level=moderate`, OSV Scanner (`fail-on-vuln: true`), Dependency Review on PRs (fails on moderate+).
 
 ### Git Workflow
 - **Commits**: Small, atomic commits with clear messages
