@@ -75,7 +75,7 @@ cd conduit
 cat > .env << EOF
 NODE_ENV=development
 RESEND_API_KEY=re_your_key_here
-API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
+API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
 ALLOWED_ORIGINS=http://localhost:8080,https://yoursite.com
 PORT=3000
 EOF
@@ -113,8 +113,8 @@ Example output: `KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1`
 
 Add to your Conduit environment variables:
 ```bash
-API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
-API_KEY_PORTFOLIO=KEY_PORTFOLIO_j9k2m5n8p4q8r2s6t9u3v7w1x5y9z3a7
+API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
+API_KEY_PORTFOLIO=<output of: npm run generate-key -- PORTFOLIO>
 ```
 
 All `API_KEY_*` variables are validated at startup. The server refuses to start if a value is not a valid key (`KEY_<NAME>_<12+ letters or digits>`), if a per-key variable has an unknown suffix, or if a per-key variable (such as `API_KEY_MYSITE_RECIPIENTS`) refers to an `API_KEY_<NAME>` that is not set.

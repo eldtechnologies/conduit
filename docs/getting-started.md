@@ -26,7 +26,7 @@ Get Conduit up and running in 5 minutes.
    NODE_ENV=production
    RESEND_API_KEY=re_your_key_here
    # Paste the output of: npm run generate-key -- MYSITE (see Step 3)
-   API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
+   API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
    API_KEY_MYSITE_FROM_ADDRESSES=noreply@mail.yourdomain.com
    ALLOWED_ORIGINS=https://yoursite.com
    ```
@@ -100,8 +100,8 @@ Keys must have the form `KEY_<NAME>_<random>` (uppercase name, at least 12 rando
 **Add to Conduit environment:**
 
 ```bash
-API_KEY_MYSITE=KEY_MYSITE_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1
-API_KEY_PORTFOLIO=KEY_PORTFOLIO_j9k2m5n8p4q8r2s6t9u3v7w1x5y9z3a7
+API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
+API_KEY_PORTFOLIO=<output of: npm run generate-key -- PORTFOLIO>
 ```
 
 **⚠️ Security Note:** Never use `Math.random()` for API keys - it's not cryptographically secure.
@@ -159,8 +159,8 @@ API_KEY_MYSITE_RECIPIENT_DOMAINS=company.com
 RESEND_API_KEY=re_your_key_here
 
 # Frontend API keys
-API_KEY_WEBSITE=KEY_WEBSITE_3ab2ff004b34692740f156d132481f83
-API_KEY_NEWSLETTER=KEY_NEWSLETTER_7c41e9a05d2b86f310ae94c2d7b5e068
+API_KEY_WEBSITE=<output of: npm run generate-key -- WEBSITE>
+API_KEY_NEWSLETTER=<output of: npm run generate-key -- NEWSLETTER>
 
 # Recipient whitelisting (optional)
 API_KEY_WEBSITE_RECIPIENTS=support@company.com,admin@company.com
