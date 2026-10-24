@@ -230,6 +230,7 @@ export const yourTemplate = {
 **API Key Format**: `KEY_<frontend-name>_<random-suffix>`
 - Example: `KEY_ELDTECH_a8f9d2c1b4e6`
 - Stored in environment variables: `API_KEY_ELDTECH=KEY_ELDTECH_...`
+- Enforced at startup (`src/config.ts`): every `API_KEY_*` var must be either a recognised per-key config var (`API_KEY_<NAME>_RECIPIENTS`, `_LLM_ENABLED`, ...) for a configured key, or a key whose value matches `KEY_<NAME>_<12+ alphanumeric chars>`. Anything else fails startup.
 
 **Rate Limits** (per API key across all channels):
 - 10 requests per minute
