@@ -5,9 +5,11 @@
  * oversized payloads and prevents DoS attacks.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import app from '../../src/index.js';
-import { readJson, type ErrorResponse } from '../helpers/response.js';
+import { readJson, type ErrorResponse, type SuccessResponse } from '../helpers/response.js';
+import { clearAllRateLimits } from '../../src/middleware/rateLimit.js';
+import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 interface HealthBody {
   status: string;
@@ -15,8 +17,23 @@ interface HealthBody {
 
 const VALID_API_KEY = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 const MAX_SIZE = 50 * 1024; // 50KB
+const MESSAGE_ID = 'msg_body_limit';
 
 describe('Body Size Limit Middleware', () => {
+  // Resend is mocked so accepted requests return 200 without any network call
+  const originalFetch = global.fetch;
+  let fetchMock: FetchMock;
+
+  beforeEach(() => {
+    clearAllRateLimits();
+    fetchMock = installFetchMock();
+    fetchMock.mockImplementation(() => Promise.resolve(resendSuccessResponse(MESSAGE_ID)));
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
   describe('Payload size validation', () => {
     it('should accept requests under 50KB', async () => {
       const smallPayload = JSON.stringify({
@@ -42,8 +59,10 @@ describe('Body Size Limit Middleware', () => {
 
       const res = await app.fetch(req);
 
-      // Should pass validation (may fail at provider, but that's ok)
-      expect([200, 502]).toContain(res.status);
+      expect(res.status).toBe(200);
+      const sent = await readJson<SuccessResponse>(res);
+      expect(sent.messageId).toBe(MESSAGE_ID);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('should reject requests over 50KB with 413 status', async () => {
@@ -142,8 +161,10 @@ describe('Body Size Limit Middleware', () => {
       const res = await app.fetch(req);
 
       // Should not be rejected by bodyLimit middleware
-      // May fail at provider, but should pass size check
-      expect([200, 502]).toContain(res.status);
+      expect(res.status).toBe(200);
+      const sent = await readJson<SuccessResponse>(res);
+      expect(sent.messageId).toBe(MESSAGE_ID);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('should reject streamed bodies over 50KB without Content-Length', async () => {
@@ -228,8 +249,8 @@ describe('Body Size Limit Middleware', () => {
 
       const res = await app.fetch(req);
 
-      // Exactly at limit should be allowed (may fail at provider or validation)
-      expect([200, 400, 502]).toContain(res.status);
+      // Exactly at limit should be allowed
+      expect(res.status).toBe(200);
     });
 
     it('should handle edge case: 50KB + 1 byte', async () => {
