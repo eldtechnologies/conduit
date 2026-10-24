@@ -4,7 +4,7 @@
  * Tests health check endpoints with full middleware stack.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import health from '../../src/routes/health.js';
 import { authenticate } from '../../src/middleware/auth.js';
@@ -163,5 +163,53 @@ describe('Health Endpoints', () => {
       expect(body.version).toBeDefined();
       expect(typeof body.version).toBe('string');
     });
+
+    describe('version and provider configuration', () => {
+      const savedVersion = process.env.npm_package_version;
+      const savedResendKey = process.env.RESEND_API_KEY;
+
+      afterEach(() => {
+        restoreEnv('npm_package_version', savedVersion);
+        restoreEnv('RESEND_API_KEY', savedResendKey);
+      });
+
+      const fetchDetailed = async () => {
+        const res = await app.fetch(
+          new Request('http://localhost:3000/health/detailed', {
+            headers: { 'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1' },
+          })
+        );
+        return readJson<DetailedHealthResponse>(res);
+      };
+
+      it('should report the package version when npm provides it', async () => {
+        process.env.npm_package_version = '9.8.7';
+        const body = await fetchDetailed();
+
+        expect(body.version).toBe('9.8.7');
+      });
+
+      it('should fall back to a default version outside npm scripts', async () => {
+        delete process.env.npm_package_version;
+        const body = await fetchDetailed();
+
+        expect(body.version).toBe('0.1.0');
+      });
+
+      it('should report email as unconfigured without a Resend API key', async () => {
+        delete process.env.RESEND_API_KEY;
+        const body = await fetchDetailed();
+
+        expect(body.channels.email.configured).toBe(false);
+      });
+    });
   });
 });
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
