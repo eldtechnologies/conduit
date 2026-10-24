@@ -13,6 +13,8 @@ import {
   RateLimitError,
   ProviderError,
   InternalError,
+  PayloadTooLargeError,
+  ServiceUnavailableError,
   sanitizeError,
   createErrorResponse,
   fromZodError,
@@ -120,6 +122,42 @@ describe('Error Classes', () => {
   });
 });
 
+describe('PayloadTooLargeError', () => {
+  it('should create 413 error with PAYLOAD_TOO_LARGE code', () => {
+    const error = new PayloadTooLargeError('Too big', { maxSize: 10 });
+
+    expect(error.statusCode).toBe(413);
+    expect(error.code).toBe(ErrorCode.PAYLOAD_TOO_LARGE);
+    expect(error.details).toEqual({ maxSize: 10 });
+    expect(error.name).toBe('PayloadTooLargeError');
+  });
+});
+
+describe('ServiceUnavailableError', () => {
+  it('should accept an explicit retryAfter', () => {
+    const error = new ServiceUnavailableError('Down', ErrorCode.LLM_PROVIDER_ERROR, undefined, 30);
+
+    expect(error.statusCode).toBe(503);
+    expect(error.retryAfter).toBe(30);
+  });
+
+  it('should pick up retryAfter from details', () => {
+    const error = new ServiceUnavailableError('Budget', ErrorCode.LLM_BUDGET_EXCEEDED, {
+      retryAfter: 120,
+    });
+
+    expect(error.retryAfter).toBe(120);
+  });
+
+  it('should leave retryAfter undefined when not provided', () => {
+    const error = new ServiceUnavailableError('Down', ErrorCode.LLM_PROVIDER_ERROR, {
+      retryAfter: 'soon',
+    });
+
+    expect(error.retryAfter).toBeUndefined();
+  });
+});
+
 describe('sanitizeError', () => {
   describe('with ConduitError', () => {
     it('should sanitize in production', () => {
@@ -153,6 +191,22 @@ describe('sanitizeError', () => {
       expect(sanitized.success).toBe(false);
       expect(sanitized.code).toBe(ErrorCode.RATE_LIMIT_EXCEEDED);
       expect(sanitized.retryAfter).toBe(60);
+    });
+
+    it('should keep retryAfter for ServiceUnavailableError in production', () => {
+      const error = new ServiceUnavailableError('Budget', ErrorCode.LLM_BUDGET_EXCEEDED, {
+        retryAfter: 120,
+      });
+      const sanitized = sanitizeError(error, 'production');
+
+      expect(sanitized.details).toBeUndefined();
+      expect(sanitized.retryAfter).toBe(120);
+    });
+
+    it('should omit retryAfter when the error has none', () => {
+      const error = new ServiceUnavailableError('Down', ErrorCode.LLM_PROVIDER_ERROR);
+
+      expect(sanitizeError(error, 'production').retryAfter).toBeUndefined();
     });
   });
 

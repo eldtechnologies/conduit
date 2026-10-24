@@ -6,12 +6,14 @@
  */
 
 import type { Context } from 'hono';
-import { ConduitError, sanitizeError } from '../utils/errors.js';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { ConduitError, getRetryAfter, sanitizeError } from '../utils/errors.js';
 
 /**
  * Global error handler
  *
  * Catches ConduitError instances and converts them to JSON responses.
+ * Errors with a retry hint (429, 503) also get a Retry-After header.
  * For unknown errors, returns 500 Internal Server Error.
  */
 export function errorHandler(err: Error, c: Context) {
@@ -19,7 +21,11 @@ export function errorHandler(err: Error, c: Context) {
   if (err instanceof ConduitError) {
     const env = process.env.NODE_ENV || 'development';
     const sanitized = sanitizeError(err, env);
-    return c.json(sanitized, err.statusCode as 400 | 401 | 429 | 500 | 502);
+    const retryAfter = getRetryAfter(err);
+    if (retryAfter !== undefined) {
+      c.header('Retry-After', String(retryAfter));
+    }
+    return c.json(sanitized, err.statusCode as ContentfulStatusCode);
   }
 
   // Handle unknown errors

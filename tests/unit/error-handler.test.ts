@@ -8,7 +8,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { errorHandler } from '@/middleware/errorHandler.js';
-import { ValidationError } from '@/utils/errors.js';
+import {
+  PayloadTooLargeError,
+  RateLimitError,
+  ServiceUnavailableError,
+  ValidationError,
+} from '@/utils/errors.js';
 import { ErrorCode } from '@/types/api.js';
 import { readJson, type ErrorResponse } from '../helpers/response.js';
 
@@ -23,7 +28,7 @@ function appThrowing(error: Error) {
 
 async function request(error: Error) {
   const res = await appThrowing(error).fetch(new Request('http://localhost/'));
-  return { status: res.status, data: await readJson<ErrorResponse>(res) };
+  return { status: res.status, headers: res.headers, data: await readJson<ErrorResponse>(res) };
 }
 
 describe('errorHandler', () => {
@@ -91,5 +96,43 @@ describe('errorHandler', () => {
       code: 'INTERNAL_ERROR',
       error: 'Internal server error',
     });
+  });
+
+  it('should set Retry-After header on 429 rate limit errors', async () => {
+    process.env.NODE_ENV = 'production';
+    const { status, headers, data } = await request(new RateLimitError('Slow down', 42));
+
+    expect(status).toBe(429);
+    expect(headers.get('retry-after')).toBe('42');
+    expect(data.retryAfter).toBe(42);
+  });
+
+  it('should set Retry-After header on 503 errors that carry retryAfter', async () => {
+    process.env.NODE_ENV = 'production';
+    const { status, headers, data } = await request(
+      new ServiceUnavailableError('Budget exceeded', ErrorCode.LLM_BUDGET_EXCEEDED, {
+        retryAfter: 3600,
+      })
+    );
+
+    expect(status).toBe(503);
+    expect(headers.get('retry-after')).toBe('3600');
+    expect(data.retryAfter).toBe(3600);
+    expect(data.details).toBeUndefined();
+  });
+
+  it('should not set Retry-After when the error has no retry hint', async () => {
+    const { headers } = await request(
+      new ServiceUnavailableError('Down', ErrorCode.LLM_PROVIDER_ERROR)
+    );
+
+    expect(headers.get('retry-after')).toBeNull();
+  });
+
+  it('should map PayloadTooLargeError to 413', async () => {
+    const { status, data } = await request(new PayloadTooLargeError('Too big'));
+
+    expect(status).toBe(413);
+    expect(data.code).toBe('PAYLOAD_TOO_LARGE');
   });
 });
