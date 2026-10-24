@@ -4,13 +4,16 @@
  * Tests channel registry, routing, and email channel handler.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   getChannelHandler,
   getRegisteredChannels,
   isChannelRegistered,
 } from '../../src/channels/index.js';
 import { emailHandler } from '../../src/channels/email.js';
+import { ProviderError, InternalError } from '../../src/utils/errors.js';
+import type { SendMessageRequest } from '../../src/types/api.js';
+import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 describe('Channel Infrastructure', () => {
   describe('getChannelHandler', () => {
@@ -78,9 +81,108 @@ describe('Email Channel Handler', () => {
       expect('send' in emailHandler).toBe(true);
       expect(typeof emailHandler.send).toBe('function');
     });
+  });
 
-    // Note: Actual send tests would require mocking Resend
-    // or using integration tests with a test API key
-    // For now, we verify the method exists and has the right signature
+  describe('send via Resend SDK', () => {
+    const originalFetch = global.fetch;
+    let fetchMock: FetchMock;
+
+    const baseRequest: SendMessageRequest = {
+      channel: 'email',
+      templateId: 'contact-form',
+      to: 'owner@example.com',
+      data: { name: 'Jane', email: 'jane@example.com', message: 'Hello' },
+    };
+
+    beforeEach(() => {
+      fetchMock = installFetchMock();
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    function sentBody(): Record<string, unknown> {
+      const body = fetchMock.mock.calls[0]?.[1]?.body;
+      if (typeof body !== 'string') throw new Error('Expected a JSON string request body');
+      return JSON.parse(body) as Record<string, unknown>;
+    }
+
+    it('should POST the email to the Resend API and return the message ID', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_abc'));
+
+      const result = await emailHandler.send(baseRequest);
+
+      expect(result.messageId).toBe('email_abc');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0]!;
+      expect(url).toBe('https://api.resend.com/emails');
+      expect(init?.method).toBe('POST');
+      const body = sentBody();
+      expect(body.from).toBe('Conduit <onboarding@resend.dev>');
+      expect(body.to).toBe('owner@example.com');
+      expect(typeof body.subject).toBe('string');
+      expect(typeof body.html).toBe('string');
+      expect(typeof body.text).toBe('string');
+    });
+
+    it('should send replyTo as reply_to and sanitize the sender name', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_reply'));
+
+      await emailHandler.send({
+        ...baseRequest,
+        from: { email: 'noreply@example.com', name: 'Evil\r\nBcc: x@y.z' },
+        replyTo: 'jane@example.com',
+      });
+
+      const body = sentBody();
+      expect(body.reply_to).toBe('jane@example.com');
+      expect(body.from).toBe('EvilBcc: x@y.z <noreply@example.com>');
+    });
+
+    it('should map a Resend API error to a ProviderError', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            statusCode: 422,
+            name: 'validation_error',
+            message: 'Invalid `to` field',
+          }),
+          { status: 422, headers: { 'content-type': 'application/json' } }
+        )
+      );
+
+      const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ProviderError);
+      expect((error as ProviderError).message).toBe('Resend API error: Invalid `to` field');
+    });
+
+    it('should add a domain verification hint for unverified domains', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            statusCode: 403,
+            name: 'validation_error',
+            message: 'The example.com domain is not verified.',
+          }),
+          { status: 403, headers: { 'content-type': 'application/json' } }
+        )
+      );
+
+      const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ProviderError);
+      expect((error as ProviderError).message).toContain('https://resend.com/domains');
+    });
+
+    it('should report a ProviderError when the Resend API is unreachable', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+      const error = await emailHandler.send(baseRequest).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ProviderError);
+      expect(error).not.toBeInstanceOf(InternalError);
+    });
   });
 });

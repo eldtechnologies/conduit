@@ -25,3 +25,21 @@ export function installFetchMock(): FetchMock {
   global.fetch = fetchMock as unknown as typeof fetch;
   return fetchMock;
 }
+
+/**
+ * Build a successful Resend `POST /emails` response.
+ *
+ * Returns a real `Response` because the Resend SDK (v5+) reads
+ * `response.headers.entries()` on success; a partial stub without headers
+ * makes the SDK report "Unable to fetch data" and the send fails with 502.
+ * A fresh `Response` is needed per call since its body can be read only once.
+ *
+ * @param id - The email ID Resend would return.
+ * @returns A 200 JSON response shaped like Resend's API.
+ */
+export function resendSuccessResponse(id: string): Response {
+  return new Response(JSON.stringify({ id }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}

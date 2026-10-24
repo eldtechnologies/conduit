@@ -8,10 +8,10 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import app from '@/index.js';
 import { readJson, type SuccessResponse, type ErrorResponse } from '../helpers/response.js';
-import { installFetchMock, type FetchMock } from '../helpers/fetch.js';
+import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
 
 describe('Recipient Validation (v1.1.0)', () => {
-  // Resend SDK invokes global `fetch` under the hood (see node_modules/resend/dist/index.js).
+  // Resend SDK invokes global `fetch` under the hood (see node_modules/resend/dist/index.mjs).
   // Mocking it here lets these tests exercise the full middleware stack end-to-end
   // through `app.fetch(...)` without ever reaching the real Resend API with a fake key.
   const originalFetch = global.fetch;
@@ -19,13 +19,7 @@ describe('Recipient Validation (v1.1.0)', () => {
 
   beforeEach(() => {
     fetchMock = installFetchMock();
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: () => Promise.resolve({ id: 'mock-msg-id' }),
-      text: () => Promise.resolve(JSON.stringify({ id: 'mock-msg-id' })),
-    });
+    fetchMock.mockImplementation(() => Promise.resolve(resendSuccessResponse('mock-msg-id')));
   });
 
   afterAll(() => {
