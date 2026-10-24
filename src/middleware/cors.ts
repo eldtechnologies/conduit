@@ -13,7 +13,7 @@
 
 import type { Context, Next } from 'hono';
 import { config } from '../config.js';
-import { AuthError } from '../utils/errors.js';
+import { ForbiddenError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 
 /**
@@ -57,7 +57,7 @@ export async function corsProtection(c: Context, next: Next) {
   const isAllowed = config.allowedOrigins.includes(origin);
 
   if (!isAllowed) {
-    throw new AuthError('Origin not allowed', ErrorCode.ORIGIN_NOT_ALLOWED);
+    throw new ForbiddenError('Origin not allowed', ErrorCode.ORIGIN_NOT_ALLOWED);
   }
 
   // Set CORS headers for allowed origin

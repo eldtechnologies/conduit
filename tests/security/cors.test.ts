@@ -66,7 +66,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
       const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('ORIGIN_NOT_ALLOWED');
     });
@@ -77,7 +77,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
 
     it('should reject request from different port', async () => {
@@ -86,7 +86,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
 
     it('should reject request with https when http is whitelisted', async () => {
@@ -95,7 +95,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
   });
 
@@ -135,7 +135,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
 
     it('should return empty body for preflight', async () => {
@@ -158,7 +158,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
 
     it('should not set wildcard in response headers', async () => {
@@ -177,7 +177,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
   });
 
@@ -227,7 +227,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
       const body = await readJson<ErrorResponse>(res);
       expect(body.code).toBe('ORIGIN_NOT_ALLOWED');
     });
@@ -238,7 +238,7 @@ describe('CORS Protection Middleware', () => {
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
 
     it('should handle OPTIONS preflight with X-Source-Origin', async () => {
