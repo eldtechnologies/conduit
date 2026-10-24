@@ -191,14 +191,10 @@ export const emailHandler: ChannelHandler = {
         }
 
         // Generic Resend error
-        throw new ProviderError(
-          `Resend API error: ${errorMsg}`,
-          ErrorCode.PROVIDER_ERROR,
-          {
-            provider: 'resend',
-            error: response.error,
-          }
-        );
+        throw new ProviderError(`Resend API error: ${errorMsg}`, ErrorCode.PROVIDER_ERROR, {
+          provider: 'resend',
+          error: response.error,
+        });
       }
 
       // Return success result
