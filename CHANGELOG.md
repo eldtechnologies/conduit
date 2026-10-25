@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An unavailable channel provider returns **503 `PROVIDER_UNAVAILABLE`** instead of 400. It cannot happen for email, since `RESEND_API_KEY` is required at startup.
 - Removed the `ErrorCode` members that were never returned: `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR` and `LLM_TIMEOUT`. Responses are unchanged (a revoked key returns `UNAUTHORIZED`, an LLM timeout `LLM_PROVIDER_ERROR`); only code that imported these enum members is affected.
 
+### Fixed
+
+- **CORS responses send `Vary: Origin, X-Source-Origin`** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). `Access-Control-Allow-Origin` echoes the request origin, but there was no `Vary` header, so a shared cache could serve one origin's CORS headers (or a response without them) to another. It is now set on every response the CORS middleware handles.
+
 ### Changed
 
 - `npm start` and `npm run dev` load `.env` when it exists (`node --env-file-if-exists=.env`, supported from Node 20.19). Variables set in the shell take precedence. The Docker image runs `node dist/index.js` directly and is unchanged.

@@ -107,7 +107,7 @@ Idempotency-Key: contact-form-7f3c9a      (optional)
 X-Source-Origin: https://yourdomain.com    (optional, see CORS)
 ```
 
-- `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the app name of the authenticated key (`<NAME>` from its `API_KEY_<NAME>` variable, shortened with a hash suffix if longer than 55 characters; no part of the key value is sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`). Each configured key has its own namespace, so two frontends can use the same `Idempotency-Key` values without colliding.
+- `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the app name of the authenticated key (`<NAME>` from its `API_KEY_<NAME>` variable, shortened with a hash suffix if longer than 55 characters; no part of the key value is sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`). Each configured key has its own namespace, so two frontends can use the same `Idempotency-Key` values without colliding. During a key rotation (old and new key configured under different `API_KEY_<NAME>` variables), a retry that switches to the new key is not deduplicated against a send made with the old key.
 - `X-Source-Origin` (optional): used by the CORS check only when there is no `Origin` header (for server-side proxies and gateways). Browsers always send `Origin`, so for them it is ignored.
 
 **Request Body (Email - Phase 1)**:
@@ -433,6 +433,7 @@ Strict origin whitelisting via `ALLOWED_ORIGINS` (comma-separated, exact match, 
 ALLOWED_ORIGINS=https://eldtechnologies.com,https://projectb.com,http://localhost:8080
 ```
 
+- Every response carries `Vary: Origin, X-Source-Origin`, so shared caches key on the origin.
 - `Origin` in the list: CORS headers are set (`Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials: true`, `Access-Control-Allow-Methods: GET, POST, OPTIONS`, `Access-Control-Allow-Headers: Content-Type, X-API-Key, X-Source-Origin, Idempotency-Key`, `Access-Control-Max-Age: 86400`). Preflight `OPTIONS` returns `204`.
 - `Origin` present but not in the list: `403 ORIGIN_NOT_ALLOWED`, even if `X-Source-Origin` holds an allowed origin.
 - `Origin` missing (or empty): `X-Source-Origin` is checked instead if present, and `403 ORIGIN_NOT_ALLOWED` if it is not in the list.

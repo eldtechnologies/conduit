@@ -36,6 +36,10 @@ import { ErrorCode } from '../types/api.js';
  *   allowed is rejected, whatever X-Source-Origin says
  */
 export async function corsProtection(c: Context, next: Next) {
+  // The response depends on these headers (Access-Control-Allow-Origin echoes them), so
+  // shared caches must key on them. Set on every response, including ones without Origin.
+  c.header('Vary', 'Origin, X-Source-Origin', { append: true });
+
   // An empty Origin header counts as absent
   const origin = c.req.header('Origin') || c.req.header('X-Source-Origin');
 

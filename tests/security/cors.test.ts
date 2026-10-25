@@ -181,6 +181,23 @@ describe('CORS Protection Middleware', () => {
     });
   });
 
+  describe('Vary header', () => {
+    it.each<[string, Record<string, string>, string]>([
+      ['an allowed origin', { Origin: 'http://localhost:8080' }, 'GET'],
+      ['no Origin header', {}, 'GET'],
+      ['a preflight', { Origin: 'http://localhost:8080' }, 'OPTIONS'],
+      ['a rejected origin', { Origin: 'https://evil.example' }, 'GET'],
+    ])('should vary on Origin and X-Source-Origin for %s', async (_label, headers, method) => {
+      const res = await app.fetch(new Request('http://localhost:3000/test', { method, headers }));
+      expect(res.status).toBe(
+        headers.Origin === 'https://evil.example' ? 403 : method === 'OPTIONS' ? 204 : 200
+      );
+
+      const vary = (res.headers.get('Vary') ?? '').split(',').map((v) => v.trim());
+      expect(vary).toEqual(expect.arrayContaining(['Origin', 'X-Source-Origin']));
+    });
+  });
+
   describe('X-Source-Origin fallback when Origin is absent (proxy/gateway scenarios)', () => {
     it('should use X-Source-Origin when Origin is missing', async () => {
       const req = new Request('http://localhost:3000/test', {
