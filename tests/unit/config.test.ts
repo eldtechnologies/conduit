@@ -370,12 +370,14 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       ['0.5', 0.5],
       [' 0.85 ', 0.85],
       ['1', 1],
+      ['1.0', 1],
+      ['.5', 0.5],
     ])('accepts THRESHOLD %j', (value, expected) => {
       const cfg = loadConfig(baseEnv({ API_KEY_MYSITE_LLM_THRESHOLD: value }));
       expect(cfg.llmFilterRules.get(MYSITE_KEY)?.threshold).toBe(expected);
     });
 
-    it.each(['70', '-0.1', '1.01', 'high', '0.7x', 'NaN', 'Infinity'])(
+    it.each(['70', '-0.1', '1.01', 'high', '0.7x', 'NaN', 'Infinity', '0x1', '1e0', '-0', '+0.5'])(
       'fails startup on THRESHOLD %j without echoing it',
       (value) => {
         const message = errorMessage({ API_KEY_MYSITE_LLM_THRESHOLD: value });
@@ -556,14 +558,21 @@ describe('loadConfig (API key and per-key config parsing)', () => {
       expect(loadConfig(baseEnv({ LOG_LEVEL: value })).logLevel).toBe(expected);
     });
 
-    it.each(['silent', 'verbose', 'trace', ''])(
-      'fails startup on invalid LOG_LEVEL %j',
-      (value) => {
-        expect(() => loadConfig(baseEnv({ LOG_LEVEL: value }))).toThrow(
-          'LOG_LEVEL must be one of: debug, info, warn, error'
-        );
-      }
-    );
+    it.each(['', '   '])('treats an empty LOG_LEVEL %j as the default', (value) => {
+      expect(loadConfig(baseEnv({ LOG_LEVEL: value })).logLevel).toBe('info');
+    });
+
+    it('reports an invalid LOG_LEVEL as a readable error, not a raw ZodError', () => {
+      expect(() => loadConfig(baseEnv({ LOG_LEVEL: 'silent' }))).toThrow(
+        /^Invalid configuration:\n {2}- LOG_LEVEL: LOG_LEVEL must be one of/
+      );
+    });
+
+    it.each(['silent', 'verbose', 'trace'])('fails startup on invalid LOG_LEVEL %j', (value) => {
+      expect(() => loadConfig(baseEnv({ LOG_LEVEL: value }))).toThrow(
+        'LOG_LEVEL must be one of: debug, info, warn, error'
+      );
+    });
   });
 
   describe('LLM_PROVIDER', () => {

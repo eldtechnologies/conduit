@@ -93,7 +93,8 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .string()
     .default('info')
-    .transform((val) => val.trim().toLowerCase())
+    // Empty means "use the default", like the per-key LLM settings (e.g. LOG_LEVEL=${LOG_LEVEL} in compose)
+    .transform((val) => val.trim().toLowerCase() || 'info')
     .pipe(z.enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of: ${LOG_LEVELS.join(', ')}` })),
 
   // Provider API keys
@@ -510,9 +511,9 @@ function loadLLMFilterRules(
 
       case '_LLM_THRESHOLD': {
         if (!value) break;
-        // Number() rejects trailing garbage such as "0.7x" that parseFloat would accept
+        // Plain decimals only: Number() alone would also accept "0x1", "1e0" or "-0"
         const threshold = Number(value);
-        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+        if (!/^(?:\d+\.?\d*|\.\d+)$/.test(value) || threshold < 0 || threshold > 1) {
           errors.push(`${envName} must be a number between 0 and 1 (e.g. 0.7)`);
           break;
         }
@@ -559,7 +560,15 @@ function loadLLMFilterRules(
  * Exported for tests; application code should import `config`.
  */
 export function loadConfig(processEnv: NodeJS.ProcessEnv): Config {
-  const env = envSchema.parse(processEnv);
+  const parsed = envSchema.safeParse(processEnv);
+  if (!parsed.success) {
+    // Same shape as the API key errors: one line per variable, names and rules only
+    const problems = parsed.error.issues.map(
+      (issue) => `${issue.path.join('.') || 'environment'}: ${issue.message}`
+    );
+    throw new Error(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);
+  }
+  const env = parsed.data;
   const apiKeyEnv = loadApiKeyEnv(processEnv);
 
   const llm = loadLLMConfig(env);
