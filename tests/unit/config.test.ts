@@ -542,6 +542,30 @@ describe('loadConfig (API key and per-key config parsing)', () => {
     });
   });
 
+  describe('LOG_LEVEL', () => {
+    it('defaults to info', () => {
+      expect(loadConfig(baseEnv()).logLevel).toBe('info');
+    });
+
+    it.each([
+      ['debug', 'debug'],
+      ['INFO', 'info'],
+      [' Warn ', 'warn'],
+      ['error', 'error'],
+    ])('accepts %j case-insensitively', (value, expected) => {
+      expect(loadConfig(baseEnv({ LOG_LEVEL: value })).logLevel).toBe(expected);
+    });
+
+    it.each(['silent', 'verbose', 'trace', ''])(
+      'fails startup on invalid LOG_LEVEL %j',
+      (value) => {
+        expect(() => loadConfig(baseEnv({ LOG_LEVEL: value }))).toThrow(
+          'LOG_LEVEL must be one of: debug, info, warn, error'
+        );
+      }
+    );
+  });
+
   describe('LLM_PROVIDER', () => {
     it.each(['gemini', 'ollama'])('fails startup for unimplemented provider %s', (provider) => {
       expect(() => loadConfig(baseEnv({ LLM_PROVIDER: provider }))).toThrow();

@@ -11,6 +11,7 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { config } from './config.js';
+import { log } from './utils/log.js';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -110,14 +111,14 @@ const port = config.port;
 // Check if this module is being run directly (not imported)
 // In tests, this module is imported so we skip server startup
 if (process.env.NODE_ENV !== 'test') {
-  console.info(`🚀 Conduit starting...`);
-  console.info(`📝 Environment: ${config.nodeEnv}`);
-  console.info(`🔑 Frontends: ${config.apps.map((app) => app.name).join(', ')}`);
-  console.info(`🛡️  Recipient Whitelists: ${config.recipientWhitelists.size} configured`);
-  console.info(
+  log.info(`🚀 Conduit starting...`);
+  log.info(`📝 Environment: ${config.nodeEnv}`);
+  log.info(`🔑 Frontends: ${config.apps.map((app) => app.name).join(', ')}`);
+  log.info(`🛡️  Recipient Whitelists: ${config.recipientWhitelists.size} configured`);
+  log.info(
     `🤖 LLM Filtering: ${config.llm ? `Enabled (${config.llm.provider}, ${config.llmFilterRules.size} API keys)` : 'Disabled'}`
   );
-  console.info(`🌐 Allowed Origins: ${config.allowedOrigins.join(', ')}`);
+  log.info(`🌐 Allowed Origins: ${config.allowedOrigins.join(', ')}`);
 
   /**
    * Start the server
@@ -127,7 +128,7 @@ if (process.env.NODE_ENV !== 'test') {
     port,
   });
 
-  console.info(`⚡ Server listening on port ${port}`);
+  log.info(`⚡ Server listening on port ${port}`);
 
   /**
    * Graceful shutdown handling
@@ -136,11 +137,11 @@ if (process.env.NODE_ENV !== 'test') {
    * Important for containerized environments (Docker, Kubernetes).
    */
   const shutdown = (signal: string) => {
-    console.info(`\n${signal} received. Shutting down gracefully...`);
+    log.info(`\n${signal} received. Shutting down gracefully...`);
 
     // Close the server
     server.close(() => {
-      console.info('✅ Shutdown complete');
+      log.info('✅ Shutdown complete');
       process.exit(0);
     });
   };

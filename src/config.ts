@@ -9,6 +9,11 @@
 import { z } from 'zod';
 import type { FilterRules } from './llm/index.js';
 
+/** Supported LOG_LEVEL values, from most to least verbose. */
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
 export interface RecipientWhitelist {
   emails: string[];
   domains: string[];
@@ -28,7 +33,7 @@ export interface Config {
   // Server
   port: number;
   nodeEnv: 'development' | 'production' | 'test';
-  logLevel: string;
+  logLevel: LogLevel;
 
   // Email provider (Phase 1)
   resendApiKey: string;
@@ -84,7 +89,12 @@ const envSchema = z.object({
 
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  LOG_LEVEL: z.string().default('info'),
+  // Case-insensitive; an unknown level fails startup instead of silently logging at the default
+  LOG_LEVEL: z
+    .string()
+    .default('info')
+    .transform((val) => val.trim().toLowerCase())
+    .pipe(z.enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of: ${LOG_LEVELS.join(', ')}` })),
 
   // Provider API keys
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
