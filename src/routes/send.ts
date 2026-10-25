@@ -5,6 +5,7 @@
  * Handles validation, routing to channels, and response formatting.
  */
 
+import { createHash } from 'crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { resolveChannel, routeToChannel } from '../channels/index.js';
@@ -51,24 +52,27 @@ const sendRequestSchema = z.object({
 
 /**
  * Client Idempotency-Key format: 1-200 characters of [A-Za-z0-9._:-].
- * Leaves room for the app-name prefix (max 50 + ':') within Resend's 256-character limit.
+ * Leaves room for the app-name scope (max 55 chars + ':') within Resend's 256-character limit.
  */
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 
+/** Longest app-name scope that fits Resend's 256-character limit next to a 200-char key */
+const MAX_IDEMPOTENCY_SCOPE_LENGTH = 55;
+
 /**
- * Validate the optional Idempotency-Key header and scope it to the API key
+ * Validate the optional Idempotency-Key header and scope it to the authenticated app
  *
  * All frontends share one Resend account, so the client key is prefixed with the
  * caller's app name to keep one app's keys from colliding with another's.
  *
  * @param header - Raw Idempotency-Key header value, if any
- * @param apiKey - The authenticated API key
+ * @param appName - The authenticated app name (from API_KEY_<NAME>)
  * @returns The provider idempotency key, or undefined when no header was sent
  * @throws ValidationError if the header is malformed
  */
 function toIdempotencyKey(
   header: string | undefined,
-  apiKey: string | undefined
+  appName: string | undefined
 ): string | undefined {
   if (header === undefined) {
     return undefined;
@@ -81,25 +85,28 @@ function toIdempotencyKey(
     );
   }
 
-  return `${apiKeyScope(apiKey)}:${header}`;
+  return `${idempotencyScope(appName)}:${header}`;
 }
 
 /**
- * Non-secret identifier for an API key: its `KEY_<NAME>` prefix
+ * Idempotency namespace for an app: its name from the `API_KEY_<NAME>` variable
  *
- * Config loading guarantees keys look like `KEY_<NAME>_<random>` with no underscore in
- * the random part, so dropping the last segment leaves only the public app name. The
- * secret part never leaves Conduit.
+ * The name is unique per configured key, unlike the `KEY_<NAME>` prefix of the key value,
+ * so two keys never share a namespace. It contains no part of the secret key. Names too
+ * long for Resend's limit are shortened with a hash suffix so they stay unique.
  *
- * @param apiKey - The authenticated API key
- * @returns The key's `KEY_<NAME>` prefix (at most 50 chars), or 'anonymous'
+ * @param appName - The authenticated app name
+ * @returns The scope (at most 55 chars), or 'anonymous' when there is no app name
  */
-function apiKeyScope(apiKey: string | undefined): string {
-  const separator = apiKey?.lastIndexOf('_') ?? -1;
-  if (!apiKey || separator <= 0) {
+function idempotencyScope(appName: string | undefined): string {
+  if (!appName) {
     return 'anonymous';
   }
-  return apiKey.slice(0, Math.min(separator, 50));
+  if (appName.length <= MAX_IDEMPOTENCY_SCOPE_LENGTH) {
+    return appName;
+  }
+  const hash = createHash('sha256').update(appName).digest('hex').slice(0, 16);
+  return `${appName.slice(0, MAX_IDEMPOTENCY_SCOPE_LENGTH - hash.length - 1)}-${hash}`;
 }
 
 /**
@@ -160,7 +167,7 @@ send.post('/send', async (c) => {
 
   const idempotencyKey = toIdempotencyKey(
     c.req.header('Idempotency-Key'),
-    getVar('apiKey') as string | undefined
+    getVar('appName') as string | undefined
   );
 
   // apiKey is set by the auth middleware, never by the client (the schema strips unknown

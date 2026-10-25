@@ -107,7 +107,7 @@ Idempotency-Key: contact-form-7f3c9a      (optional)
 X-Source-Origin: https://yourdomain.com    (optional, see CORS)
 ```
 
-- `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the public `KEY_<NAME>` part of your API key (the secret suffix is never sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`).
+- `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the app name of the authenticated key (`<NAME>` from its `API_KEY_<NAME>` variable, shortened with a hash suffix if longer than 55 characters; no part of the key value is sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`). Each configured key has its own namespace, so two frontends can use the same `Idempotency-Key` values without colliding.
 - `X-Source-Origin` (optional): used by the CORS check only when there is no `Origin` header (for server-side proxies and gateways). Browsers always send `Origin`, so for them it is ignored.
 
 **Request Body (Email - Phase 1)**:

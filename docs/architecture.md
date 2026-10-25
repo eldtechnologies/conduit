@@ -502,7 +502,7 @@ routes/send.ts:
      - replyTo (email)
      Invalid → 400 VALIDATION_ERROR
   3. Validate Idempotency-Key (1-200 of [A-Za-z0-9._:-]),
-     prefix it with the key's public KEY_<NAME> part
+     prefix it with the app name from API_KEY_<NAME> (e.g. SITEA)
   4. Check sender allowlist (API_KEY_SITEA_FROM_ADDRESSES)
      Client 'from' not allowed → 400 SENDER_NOT_ALLOWED
 

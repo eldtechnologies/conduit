@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **CORS uses `X-Source-Origin` only when `Origin` is absent.** A request whose `Origin` is present but not in `ALLOWED_ORIGINS` now gets 403 `ORIGIN_NOT_ALLOWED`, even if `X-Source-Origin` holds an allowed origin. Before, the header could override any disallowed `Origin`. Server-side proxies that send no `Origin` (or an empty one) and pass `X-Source-Origin` keep working.
+- **Idempotency keys are scoped per configured key.** The key forwarded to Resend is prefixed with the authenticated app name (`<NAME>` from `API_KEY_<NAME>`, unique per key) instead of the `KEY_<NAME>` prefix of the key value, so two keys whose values share a prefix no longer share a namespace. The prefix changes from e.g. `KEY_MYSITE:` to `MYSITE:`, so a retry that spans the upgrade is not deduplicated.
 
 ### Breaking changes
 

@@ -542,7 +542,7 @@ X-Source-Origin: https://yoursite.com
 Idempotency-Key: contact-7f3c2a91   (optional)
 ```
 
-`Idempotency-Key` is optional: 1-200 characters of `A-Z a-z 0-9 . _ : -` (anything else returns `400 VALIDATION_ERROR`). Retrying with the same key and body (for example after a `502 PROVIDER_TIMEOUT`) does not send the email twice within Resend's idempotency window. Keys are scoped per API key.
+`Idempotency-Key` is optional: 1-200 characters of `A-Z a-z 0-9 . _ : -` (anything else returns `400 VALIDATION_ERROR`). Retrying with the same key and body (for example after a `502 PROVIDER_TIMEOUT`) does not send the email twice within Resend's idempotency window. Keys are scoped per configured API key (by its `API_KEY_<NAME>` name), so different frontends never collide.
 
 `X-Source-Origin` is only used for the CORS check when the request has no `Origin` header (a server-side proxy or gateway calling Conduit). Browsers always send `Origin`, which must be in `ALLOWED_ORIGINS`; a disallowed `Origin` gets `403 ORIGIN_NOT_ALLOWED` whatever `X-Source-Origin` says.
 

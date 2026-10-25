@@ -482,7 +482,7 @@ describe('Send Endpoint', () => {
       return new Headers(init?.headers).get('Idempotency-Key');
     };
 
-    it('should forward a valid key to Resend, scoped to the API key', async () => {
+    it('should forward a valid key to Resend, scoped to the app name', async () => {
       fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_1'));
       fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_2'));
 
@@ -493,11 +493,38 @@ describe('Send Endpoint', () => {
       expect(second.status).toBe(200);
       const firstKey = sentIdempotencyKey(0);
       const secondKey = sentIdempotencyKey(1);
-      // Scoped by the public app name only; the secret part of the API key is not sent
-      expect(firstKey).toBe('KEY_TEST:order-123');
-      expect(secondKey).toBe('KEY_APP2:order-123');
+      // Scoped by the API_KEY_<NAME> app name; no part of the API key value is sent
+      expect(firstKey).toBe('TEST:order-123');
+      expect(secondKey).toBe('APP2:order-123');
       // Two apps using the same client key must not collide at Resend
       expect(firstKey).not.toBe(secondKey);
+    });
+
+    it('should not share a namespace between keys whose values have the same KEY_<NAME> prefix', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_1'));
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_2'));
+
+      // API_KEY_TEST and API_KEY_TEST_ALT both hold KEY_TEST_... values
+      await sendWithKey('KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1', 'order-123');
+      await sendWithKey('KEY_TEST_0123456789abcdef0123456789abcdef', 'order-123');
+
+      expect(sentIdempotencyKey(0)).toBe('TEST:order-123');
+      expect(sentIdempotencyKey(1)).toBe('TEST_ALT:order-123');
+    });
+
+    it('should shorten a long app name to a unique scope within the Resend limit', async () => {
+      fetchMock.mockResolvedValueOnce(resendSuccessResponse('email_1'));
+      const clientKey = 'k'.repeat(200);
+
+      const res = await sendWithKey('KEY_LONG_9f8e7d6c5b4a39281706f5e4d3c2b1a0', clientKey);
+
+      expect(res.status).toBe(200);
+      const sent = sentIdempotencyKey(0) ?? '';
+      const [scope] = sent.split(':');
+      expect(scope).toMatch(/^VERY_LONG_APPLICATION_NAME_FOR_IDEMPOT-[0-9a-f]{16}$/);
+      expect(scope).toHaveLength(55);
+      expect(sent).toBe(`${scope}:${clientKey}`);
+      expect(sent.length).toBeLessThanOrEqual(256);
     });
 
     it('should send no Idempotency-Key when the header is absent', async () => {
