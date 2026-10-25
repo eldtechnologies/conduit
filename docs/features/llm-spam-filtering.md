@@ -70,10 +70,10 @@ Global settings. Filtering is active only when `LLM_PROVIDER`, `LLM_API_KEY` and
 |----------|---------|---------|
 | `LLM_PROVIDER` | - | `anthropic` or `openai` |
 | `LLM_API_KEY` | - | Provider API key (stays on the server) |
-| `LLM_MODEL` | - | Model name sent to the provider (e.g. `claude-haiku-4-5-20251001`, `gpt-4o-mini`) |
+| `LLM_MODEL` | - | Model name sent to the provider (e.g. `anthropic/claude-haiku-5.5` via OpenRouter, `claude-haiku-4-5-20251001` direct, `gpt-4o-mini`) |
 | `LLM_TIMEOUT` | `5000` | Timeout in ms for the whole provider call, including reading the response body |
 | `LLM_FALLBACK_MODE` | `allow` | Default fail mode for every key that does not set `API_KEY_<NAME>_LLM_FAIL_MODE`. `allow` or `block`, case-insensitive (`BLOCK` works); any other value fails startup |
-| `LLM_ENDPOINT` | provider default | Custom endpoint URL (e.g. a regional or proxy endpoint) |
+| `LLM_ENDPOINT` | provider default | Custom endpoint URL (e.g. a regional or proxy endpoint, or OpenRouter: see [Using OpenRouter](#using-openrouter)) |
 
 Per-key settings (`API_KEY_<NAME>` must be a configured key, otherwise startup fails):
 
@@ -732,10 +732,34 @@ describe('LLM Performance', () => {
 The LLM call runs **synchronously inside `POST /api/send`**: the frontend waits for the verdict before the email is sent. Optimize for **speed first, cost second**:
 
 - **Latency dominates.** The model only returns a small JSON verdict (Conduit sets `max_tokens: 200`), so the time until the answer arrives matters much more than output throughput or per-token price.
-- **Use a small, fast model** such as `claude-haiku-4-5-20251001` (Anthropic) or a comparable fast OpenAI model. Larger models add latency without a meaningful gain for this classification task.
+- **Use a small, fast model. Recommended: Claude Haiku 5.5.** In the measurement below it was about 3x faster than Haiku 4.5 at roughly a seventh of the cost per call, with the same verdicts. Larger models add latency without a meaningful gain for this classification task.
 - **Keep `LLM_TIMEOUT` tight.** The default is 5000 ms. When it expires the call counts as a provider failure and the key's fail mode applies: `allow` sends without filtering, `block` returns `503 LLM_PROVIDER_ERROR`. Set it to the longest delay your frontend can tolerate.
 - **Measure in your environment.** Latency depends on model, region and provider load. Watch the `duration` field on the `/api/send` response log lines and compare keys with and without filtering.
-- **Routing services:** a first-class OpenRouter provider with latency-first routing is planned for 2.1 ([#147](https://github.com/eldtechnologies/conduit/issues/147)). Until then, `LLM_PROVIDER=openai` with `LLM_ENDPOINT` pointing at an OpenAI-compatible API may work but is not tested.
+
+**Measured** (2026-10-25, through OpenRouter, Conduit's own prompt and parser, one clean and one spam message, 3 runs each; a smoke test, not an accuracy evaluation):
+
+| Model | Median latency | Cost per call | Verdicts |
+|---|---|---|---|
+| `anthropic/claude-haiku-5.5` | ~270-340 ms | ~$0.00013 | correct (clean allowed, spam blocked) |
+| `anthropic/claude-haiku-4.5` | ~860-1070 ms | ~$0.0009 | correct |
+
+Haiku 5.5 returned no reasoning tokens, so it needs no extra "reasoning off" or effort setting. Turning reasoning off, low effort and latency-sorted routing made no measurable difference. Through a full Conduit container (Docker on macOS, block mode), a whole `/api/send` request including the Resend call took about 1.1-1.4 s.
+
+### Using OpenRouter
+
+OpenRouter is OpenAI-compatible, so it works with the existing `openai` provider and `LLM_ENDPOINT`. This setup is tested end-to-end: a clean message passed the filter and a spam message got `403 CONTENT_BLOCKED_SPAM`.
+
+```bash
+LLM_PROVIDER=openai
+LLM_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+# An OpenRouter key (sk-or-v1-...)
+LLM_API_KEY=sk-or-v1-...
+LLM_MODEL=anthropic/claude-haiku-5.5
+```
+
+OpenRouter picks the upstream provider (Anthropic, Amazon Bedrock, Google Vertex, ...) per request. A first-class `openrouter` provider with configurable routing and fallback models is planned for 2.1 ([#147](https://github.com/eldtechnologies/conduit/issues/147)).
+
+**Direct Anthropic API:** `LLM_PROVIDER=anthropic` with `LLM_MODEL=claude-haiku-4-5-20251001` is the tested direct setup. Claude Haiku 5.5 should work the same way. Use the model ID from Anthropic's model list; it has not been verified against the direct API here.
 
 Not implemented: result caching, asynchronous (send-then-review) analysis and batching.
 

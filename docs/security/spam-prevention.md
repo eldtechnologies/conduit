@@ -1148,8 +1148,9 @@ LLM filtering is an **optional Conduit feature** (✅ available in v1.2.0) that 
 ### Q: How much does LLM filtering cost?
 
 **A**:
-- **Anthropic Claude Haiku 4.5**: ~$0.0005 per message (~$15 for 30k messages/month)
-- **OpenAI GPT-4o-mini**: ~$0.15 per 1000 messages (~$4.50 for 30k messages/month)
+- **Claude Haiku 5.5** (measured through OpenRouter, 2026-10-25): ~$0.00013 per message (~$4 for 30k messages/month)
+- **Claude Haiku 4.5** (same measurement): ~$0.0009 per message (~$27 for 30k messages/month)
+- Prices change; check your provider's current pricing. See [Performance & Cost](../features/llm-spam-filtering.md#performance--cost).
 
 For 1,000 messages/day (30k/month), expect $4.50-15/month depending on provider.
 
