@@ -94,7 +94,7 @@ The image (and `docker compose`) default to `NODE_ENV=production`, which answers
 ```bash
 npm ci
 npm run build
-node --env-file=.env dist/index.js   # npm start runs dist/index.js but does not load .env
+npm start   # loads .env when present
 ```
 
 ### 3. Generate API Keys for Your Frontends
