@@ -154,6 +154,47 @@ describe('AnthropicProvider', () => {
       expect(result.categories).toContain('abuse');
     });
 
+    it('should read the verdict from the first text block when other blocks come first', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'msg_126',
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'thinking', thinking: '', signature: 'sig' },
+              {
+                type: 'text',
+                text: '{"allowed": false, "confidence": 0.9, "categories": ["spam"], "reasoning": "Ad"}',
+              },
+            ],
+            model: 'claude-haiku-5-5',
+            stop_reason: 'end_turn',
+          }),
+      });
+
+      const result = await provider.analyze(content('BUY NOW'), defaultRules);
+
+      expect(result.allowed).toBe(false);
+      expect(result.categories).toContain('spam');
+    });
+
+    it('should treat a response without a text block as a provider failure', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            content: [{ type: 'thinking', thinking: '', signature: 'sig' }],
+            stop_reason: 'max_tokens',
+          }),
+      });
+
+      await expect(provider.analyze(content('Test message'), defaultRules)).rejects.toThrow(
+        'No content in response'
+      );
+    });
+
     it('should throw a timeout error when the request exceeds the timeout', async () => {
       fetchMock.mockImplementationOnce(hangUntilAborted);
 

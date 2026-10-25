@@ -67,7 +67,10 @@ export class AnthropicProvider implements LLMProvider {
       this.timeout
     )) as AnthropicMessage | null;
 
-    const decision = parseModerationText(data?.content?.[0]?.text, this.name);
+    // Use the first text block: models that think, or future block types, can put other
+    // blocks (e.g. "thinking") before the verdict, so content[0] is not necessarily text
+    const textBlock = data?.content?.find((block) => block.type === 'text');
+    const decision = parseModerationText(textBlock?.text, this.name);
 
     return {
       ...decision,
