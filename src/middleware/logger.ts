@@ -14,6 +14,7 @@
 
 import type { Context, Next } from 'hono';
 import { randomUUID } from 'crypto';
+import { log } from '../utils/log.js';
 
 /**
  * Mask an API key for logging
@@ -192,7 +193,7 @@ export async function logger(c: Context, next: Next) {
 
   // Log request start. The API key is not known yet (authentication runs
   // after the logger); the X-API-Key header is masked in `headers`.
-  console.info(
+  log.info(
     JSON.stringify({
       type: 'request',
       requestId,
@@ -214,7 +215,7 @@ export async function logger(c: Context, next: Next) {
   const duration = Date.now() - startTime;
 
   // Log request completion
-  console.info(
+  log.info(
     JSON.stringify({
       type: 'response',
       requestId,

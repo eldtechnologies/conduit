@@ -222,7 +222,7 @@ Before deploying to production, complete these steps:
 ## Architecture
 
 ```
-Frontend Apps → [HTTPS] → [CORS] → [Security Headers] → [Logger]
+Frontend Apps → [Logger] → [HTTPS] → [CORS] → [Security Headers]
                                       ↓  (/api/* only)
               [Body Limit] → [Auth] → [Recipient Validation] → [Rate Limit]
                                       ↓

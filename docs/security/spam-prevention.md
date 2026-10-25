@@ -755,8 +755,8 @@ RATE_LIMIT_PER_DAY=10000
 # No HTTPS enforcement (localhost). Only works when NODE_ENV is not production
 ENFORCE_HTTPS=false
 
-# LOG_LEVEL is read but does not change logging output yet
-# LOG_LEVEL=debug
+# debug | info | warn | error (default: info)
+LOG_LEVEL=debug
 ```
 
 **⚠️ WARNING**: Never use this configuration in production!
@@ -806,7 +806,7 @@ rate_limit_exceeded / total_requests
 {"type":"response","requestId":"0f8c...","timestamp":"2025-10-14T12:34:56.789Z","method":"POST","path":"/api/send","status":200,"duration":245,"app":"WEBSITE"}
 ```
 
-Error codes are not logged; use the `status` of the response line (401 auth, 403 recipient or LLM block, 413 body too large, 429 rate limited, 502 email provider error, 503 LLM unavailable or over budget). CORS and HTTPS rejections (403) happen before the request logger and are not logged. Some rejections also log a plain-text warning:
+Error codes are not logged; use the `status` of the response line (401 auth, 403 recipient or LLM block, 413 body too large, 429 rate limited, 502 email provider error, 503 LLM unavailable or over budget). CORS and HTTPS rejections are logged too (403, without `app`, since authentication did not run). With `LOG_LEVEL=warn` or `error` the request/response lines are suppressed and only warnings and errors remain. Some rejections also log a plain-text warning:
 
 ```
 Content blocked by LLM filter: { categories: [ 'spam' ], confidence: 0.92, reasoning: '...' }

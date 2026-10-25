@@ -178,6 +178,7 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 - If neither is set, all recipients are allowed (backward compatible)
 - Requests to non-whitelisted recipients return HTTP 403 with error code `RECIPIENT_NOT_ALLOWED`
 - `API_KEY_WEBSITE_RECIPIENTS` etc. require `API_KEY_WEBSITE` to be set, otherwise startup fails
+- An empty list or an invalid address/domain (e.g. `@company.com` or `*.company.com`) also fails startup; to allow all recipients, remove the variables
 
 **See full guide**: **[Recipient Whitelisting Documentation](features/recipient-whitelisting.md)**
 

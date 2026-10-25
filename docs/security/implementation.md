@@ -199,6 +199,7 @@ The real script (`scripts/generate-api-key.ts`) also uppercases the name and rep
 - `API_KEY_<NAME>_<SUFFIX>` with a known suffix (`_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`) is a per-key config variable. `API_KEY_<NAME>` must be configured, otherwise startup fails
 - Any other `API_KEY_<NAME>` is an API key. Its value must match `KEY_<NAME>_<12+ alphanumeric chars>` (the generator produces 32 hex chars), otherwise startup fails
 - The removed `API_KEY_<NAME>_LLM_WHITELIST_SENDERS` fails startup with an explanation
+- Invalid per-key values fail startup: empty or invalid `_RECIPIENTS` / `_RECIPIENT_DOMAINS` / `_FROM_ADDRESSES` lists, `_LLM_THRESHOLD` outside 0-1, `_LLM_MAX_CALLS_PER_DAY` that is not a positive integer, `_LLM_FAIL_MODE` other than `allow`/`block`
 - At least one API key must be configured
 
 So a typo (`API_KEY_SITE_RECIPIENT`) or a config value (`true`, `70`, an email address) can never become an accepted API key. Error messages name the variable but not its value.
@@ -531,7 +532,7 @@ Recipient whitelisting is configured via environment variables and enforced by m
 
 **Environment Configuration**:
 
-Every `API_KEY_<NAME>_RECIPIENTS` / `_RECIPIENT_DOMAINS` variable needs `API_KEY_<NAME>` to be set to a valid key; otherwise startup fails.
+Every `API_KEY_<NAME>_RECIPIENTS` / `_RECIPIENT_DOMAINS` variable needs `API_KEY_<NAME>` to be set to a valid key, must list at least one entry and may only contain valid email addresses / domains (`example.com`, no `@` or wildcard); otherwise startup fails.
 
 ```bash
 # .env

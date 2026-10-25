@@ -10,7 +10,8 @@ import { afterEach } from 'vitest';
 // Set test environment variables BEFORE any application code loads
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3000';
-process.env.LOG_LEVEL = 'silent';
+// Request/response lines are silenced separately (logger skips them unless ENABLE_LOGGING=true)
+process.env.LOG_LEVEL = 'info';
 process.env.RESEND_API_KEY = 're_test_key_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 process.env.API_KEY_TEST = 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1';
 process.env.API_KEY_APP2 = 'KEY_APP2_f3e5d7c9b1a3e5f7d9c1b3a5e7f9d1c3';

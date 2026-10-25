@@ -117,7 +117,7 @@ API_KEY_MYSITE=<output of: npm run generate-key -- MYSITE>
 API_KEY_PORTFOLIO=<output of: npm run generate-key -- PORTFOLIO>
 ```
 
-All `API_KEY_*` variables are validated at startup. The server refuses to start if a value is not a valid key (`KEY_<NAME>_<12+ letters or digits>`), if a per-key variable has an unknown suffix, or if a per-key variable (such as `API_KEY_MYSITE_RECIPIENTS`) refers to an `API_KEY_<NAME>` that is not set.
+All `API_KEY_*` variables are validated at startup. The server refuses to start if a value is not a valid key (`KEY_<NAME>_<12+ letters or digits>`), if a per-key variable has an unknown suffix, if a per-key variable (such as `API_KEY_MYSITE_RECIPIENTS`) refers to an `API_KEY_<NAME>` that is not set, or if a per-key value is invalid (an empty recipient list, an invalid address or domain, an LLM threshold outside 0-1, a non-positive daily LLM budget).
 
 Set the sender address for each key (the first address is used when a request omits `from`):
 ```bash
@@ -407,15 +407,15 @@ Send to Slack webhooks.
 | `ALLOWED_ORIGINS` | Yes | Comma-separated list of allowed origins | `https://site1.com,https://site2.com` |
 | `NODE_ENV` | No | `development`, `production` or `test` (default: `development`). **Set `production` in production**: it enforces HTTPS/HSTS and hides error details. The Docker image sets it. | `production` |
 | `PORT` | No | Server port (default: 3000) | `3000` |
-| `LOG_LEVEL` | No | Log level (default: `info`) | `info` |
+| `LOG_LEVEL` | No | `debug`, `info`, `warn` or `error` (default: `info`). `warn` hides the per-request log lines | `info` |
 | `RATE_LIMIT_PER_MINUTE` / `_PER_HOUR` / `_PER_DAY` | No | Rate limits per API key (defaults: 10 / 100 / 500) | `20` |
 | `ENFORCE_HTTPS` | No | Also enforce HTTPS outside production (default: `false`); cannot disable it in production | `true` |
 | `REVOKED_KEYS` | No | Comma-separated API keys to reject | `KEY_OLD_...` |
 | `API_KEY_<NAME>_FROM_ADDRESSES` | No | Allowed `from` addresses for that key; first is the default sender | `noreply@mail.site1.com` |
-| `API_KEY_<NAME>_RECIPIENTS` | No | Recipient whitelist: allowed `to` addresses | `support@site1.com` |
-| `API_KEY_<NAME>_RECIPIENT_DOMAINS` | No | Recipient whitelist: allowed `to` domains | `site1.com` |
+| `API_KEY_<NAME>_RECIPIENTS` | No | Recipient whitelist: allowed `to` addresses (must not be empty) | `support@site1.com` |
+| `API_KEY_<NAME>_RECIPIENT_DOMAINS` | No | Recipient whitelist: allowed `to` domains (must not be empty) | `site1.com` |
 | `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` | No | LLM spam filtering provider (`anthropic` or `openai`); see [LLM Spam Filtering](features/llm-spam-filtering.md) | `anthropic` |
-| `API_KEY_<NAME>_LLM_*` | No | Per-key LLM settings: `_ENABLED`, `_RULES`, `_THRESHOLD` (0-1), `_FAIL_MODE` (`allow`/`block`), `_MAX_CALLS_PER_DAY` | `true` |
+| `API_KEY_<NAME>_LLM_*` | No | Per-key LLM settings: `_ENABLED`, `_RULES`, `_THRESHOLD` (0-1), `_FAIL_MODE` (`allow`/`block`), `_MAX_CALLS_PER_DAY` (positive integer); invalid values fail startup | `true` |
 
 See [`.env.example`](../.env.example) for every supported variable with comments. SMS (Twilio), push (Firebase) and webhook variables are not read by the code yet.
 

@@ -355,6 +355,142 @@ describe('loadConfig (API key and per-key config parsing)', () => {
     });
   });
 
+  describe('LLM THRESHOLD and MAX_CALLS_PER_DAY', () => {
+    function errorMessage(env: Record<string, string>): string {
+      try {
+        loadConfig(baseEnv(env));
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return '';
+    }
+
+    it.each([
+      ['0', 0],
+      ['0.5', 0.5],
+      [' 0.85 ', 0.85],
+      ['1', 1],
+      ['1.0', 1],
+      ['.5', 0.5],
+    ])('accepts THRESHOLD %j', (value, expected) => {
+      const cfg = loadConfig(baseEnv({ API_KEY_MYSITE_LLM_THRESHOLD: value }));
+      expect(cfg.llmFilterRules.get(MYSITE_KEY)?.threshold).toBe(expected);
+    });
+
+    it.each(['70', '-0.1', '1.01', 'high', '0.7x', 'NaN', 'Infinity', '0x1', '1e0', '-0', '+0.5'])(
+      'fails startup on THRESHOLD %j without echoing it',
+      (value) => {
+        const message = errorMessage({ API_KEY_MYSITE_LLM_THRESHOLD: value });
+        expect(message).toContain('API_KEY_MYSITE_LLM_THRESHOLD must be a number between 0 and 1');
+        expect(message).not.toContain(value);
+      }
+    );
+
+    it.each([
+      ['1', 1],
+      ['2500', 2500],
+      [' 10 ', 10],
+    ])('accepts MAX_CALLS_PER_DAY %j', (value, expected) => {
+      const cfg = loadConfig(baseEnv({ API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY: value }));
+      expect(cfg.llmFilterRules.get(MYSITE_KEY)?.maxCallsPerDay).toBe(expected);
+    });
+
+    it.each(['0', '-5', '1.5', '10abc', 'unlimited', '1e3', '99999999999999999999'])(
+      'fails startup on MAX_CALLS_PER_DAY %j without echoing it',
+      (value) => {
+        const message = errorMessage({ API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY: value });
+        expect(message).toContain(
+          'API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY must be a positive integer'
+        );
+        expect(message).not.toContain(value);
+      }
+    );
+
+    it('uses the defaults when the values are empty', () => {
+      const rules = loadConfig(
+        baseEnv({ API_KEY_MYSITE_LLM_THRESHOLD: '', API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY: ' ' })
+      ).llmFilterRules.get(MYSITE_KEY);
+      expect(rules?.threshold).toBe(0.7);
+      expect(rules?.maxCallsPerDay).toBe(1000);
+    });
+
+    it('reports every invalid LLM setting at once', () => {
+      expect(
+        errorMessage({
+          API_KEY_MYSITE_LLM_THRESHOLD: '70',
+          API_KEY_MYSITE_LLM_FAIL_MODE: 'blok',
+          API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY: '0',
+        })
+      ).toMatch(/_LLM_THRESHOLD[\s\S]*_LLM_FAIL_MODE[\s\S]*_LLM_MAX_CALLS_PER_DAY/);
+    });
+  });
+
+  describe('recipient whitelist (RECIPIENTS, RECIPIENT_DOMAINS)', () => {
+    function errorMessage(env: Record<string, string>): string {
+      try {
+        loadConfig(baseEnv(env));
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return '';
+    }
+
+    it('parses entries trimmed and lowercased', () => {
+      const cfg = loadConfig(
+        baseEnv({
+          API_KEY_MYSITE_RECIPIENTS: ' Owner@MySite.com , team@mysite.com,',
+          API_KEY_MYSITE_RECIPIENT_DOMAINS: 'MySite.com, sub.example.co.uk, xn--bcher-kva.example',
+        })
+      );
+      expect(cfg.recipientWhitelists.get(MYSITE_KEY)).toEqual({
+        emails: ['owner@mysite.com', 'team@mysite.com'],
+        domains: ['mysite.com', 'sub.example.co.uk', 'xn--bcher-kva.example'],
+      });
+    });
+
+    it.each([
+      ['API_KEY_MYSITE_RECIPIENTS', 'email address'],
+      ['API_KEY_MYSITE_RECIPIENT_DOMAINS', 'domain'],
+    ])('fails startup when %s is empty instead of blocking every recipient', (name, kind) => {
+      for (const value of ['', '   ', ' , ,']) {
+        expect(errorMessage({ [name]: value })).toContain(
+          `${name}: must list at least one ${kind}`
+        );
+      }
+    });
+
+    it.each(['Name <a@mysite.com>', 'not-an-email', 'a@mysite.com b@mysite.com', '@mysite.com'])(
+      'fails startup on an invalid RECIPIENTS entry %j without echoing it',
+      (entry) => {
+        const message = errorMessage({ API_KEY_MYSITE_RECIPIENTS: `ok@mysite.com,${entry}` });
+        expect(message).toContain('API_KEY_MYSITE_RECIPIENTS: invalid email address at position 2');
+        expect(message).not.toContain(entry);
+      }
+    );
+
+    it.each([
+      '@mysite.com',
+      '*.mysite.com',
+      'localhost',
+      'mysite.com.',
+      '192.168.1.1',
+      'my_site.com',
+      '-mysite.com',
+      'my site.com',
+      'owner@mysite.com',
+    ])('fails startup on an invalid RECIPIENT_DOMAINS entry %j without echoing it', (entry) => {
+      const message = errorMessage({ API_KEY_MYSITE_RECIPIENT_DOMAINS: `mysite.com,${entry}` });
+      expect(message).toContain('API_KEY_MYSITE_RECIPIENT_DOMAINS: invalid domain at position 2');
+      expect(message).not.toContain(entry);
+    });
+
+    it('reports every invalid recipient setting at once', () => {
+      expect(
+        errorMessage({ API_KEY_MYSITE_RECIPIENTS: '', API_KEY_MYSITE_RECIPIENT_DOMAINS: '@x.com' })
+      ).toMatch(/API_KEY_MYSITE_RECIPIENTS: must[\s\S]*API_KEY_MYSITE_RECIPIENT_DOMAINS: invalid/);
+    });
+  });
+
   describe('sender allowlist (FROM_ADDRESSES)', () => {
     it('parses addresses trimmed, lowercased, deduplicated and in order', () => {
       const cfg = loadConfig(
@@ -405,6 +541,37 @@ describe('loadConfig (API key and per-key config parsing)', () => {
         'noreply@example.com',
         'support@example.com',
       ]);
+    });
+  });
+
+  describe('LOG_LEVEL', () => {
+    it('defaults to info', () => {
+      expect(loadConfig(baseEnv()).logLevel).toBe('info');
+    });
+
+    it.each([
+      ['debug', 'debug'],
+      ['INFO', 'info'],
+      [' Warn ', 'warn'],
+      ['error', 'error'],
+    ])('accepts %j case-insensitively', (value, expected) => {
+      expect(loadConfig(baseEnv({ LOG_LEVEL: value })).logLevel).toBe(expected);
+    });
+
+    it.each(['', '   '])('treats an empty LOG_LEVEL %j as the default', (value) => {
+      expect(loadConfig(baseEnv({ LOG_LEVEL: value })).logLevel).toBe('info');
+    });
+
+    it('reports an invalid LOG_LEVEL as a readable error, not a raw ZodError', () => {
+      expect(() => loadConfig(baseEnv({ LOG_LEVEL: 'silent' }))).toThrow(
+        /^Invalid configuration:\n {2}- LOG_LEVEL: LOG_LEVEL must be one of/
+      );
+    });
+
+    it.each(['silent', 'verbose', 'trace'])('fails startup on invalid LOG_LEVEL %j', (value) => {
+      expect(() => loadConfig(baseEnv({ LOG_LEVEL: value }))).toThrow(
+        'LOG_LEVEL must be one of: debug, info, warn, error'
+      );
     });
   });
 

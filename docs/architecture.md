@@ -56,25 +56,26 @@ Conduit is a lightweight, multi-channel communication proxy built with security 
 │  │  │    • Sanitizes errors in production                        │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 1. HTTPS Enforcement      (middleware/securityHeaders.ts)  │ │   │
+│  │  │ 1. Request Logger         (middleware/logger.ts)           │ │   │
+│  │  │    • Structured JSON logging, filtered by LOG_LEVEL        │ │   │
+│  │  │    • Mask sensitive data (PII, keys)                       │ │   │
+│  │  │    • Response logging (status, duration), also for 403s    │ │   │
+│  │  │      from HTTPS enforcement and CORS                       │ │   │
+│  │  └────────────────────────────────────────────────────────────┘ │   │
+│  │  ┌────────────────────────────────────────────────────────────┐ │   │
+│  │  │ 2. HTTPS Enforcement      (middleware/securityHeaders.ts)  │ │   │
 │  │  │    • Production: 403 without X-Forwarded-Proto: https      │ │   │
 │  │  │    • HSTS header; exact /health path exempt                │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 2. CORS Validation        (middleware/cors.ts)             │ │   │
+│  │  │ 3. CORS Validation        (middleware/cors.ts)             │ │   │
 │  │  │    • Check Origin header against ALLOWED_ORIGINS           │ │   │
 │  │  │    • Reject if not whitelisted (403 ORIGIN_NOT_ALLOWED)    │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 3. Security Headers       (middleware/securityHeaders.ts)  │ │   │
+│  │  │ 4. Security Headers       (middleware/securityHeaders.ts)  │ │   │
 │  │  │    • X-Frame-Options, CSP, X-Content-Type-Options          │ │   │
 │  │  │    • Permissions-Policy                                    │ │   │
-│  │  └────────────────────────────────────────────────────────────┘ │   │
-│  │  ┌────────────────────────────────────────────────────────────┐ │   │
-│  │  │ 4. Request Logger         (middleware/logger.ts)           │ │   │
-│  │  │    • Structured JSON logging                               │ │   │
-│  │  │    • Mask sensitive data (PII, keys)                       │ │   │
-│  │  │    • Response logging (status, duration)                   │ │   │
 │  │  └────────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────────┐ │   │
 │  │  │ 5. Body Size Limit        (middleware/bodyLimit.ts)        │ │   │
@@ -162,10 +163,10 @@ Conduit is a lightweight, multi-channel communication proxy built with security 
 const app = new Hono();
 
 app.onError(errorHandler);                     // 0. global error handler
-app.use('*', enforceHttps);                    // 1. HTTPS enforcement
-app.use('*', corsProtection);                  // 2. CORS
-app.use('*', securityHeaders);                 // 3. security headers
-app.use('*', logger);                          // 4. request logger
+app.use('*', logger);                          // 1. request logger (logs rejected requests too)
+app.use('*', enforceHttps);                    // 2. HTTPS enforcement
+app.use('*', corsProtection);                  // 3. CORS
+app.use('*', securityHeaders);                 // 4. security headers
 app.use('/api/*', bodyLimit);                  // 5. 50KB body limit
 app.use('/api/*', authenticate);               // 6. API key auth
 app.use('/api/send', validateRecipient);       // 7. JSON parse + recipient whitelist
@@ -198,7 +199,7 @@ const envSchema = z.object({
 
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  LOG_LEVEL: z.string().default('info'),
+  LOG_LEVEL: z.string().default('info'),            // -> debug|info|warn|error, case-insensitive
 
   // Provider API keys
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
@@ -257,7 +258,7 @@ export function loadConfig(processEnv: NodeJS.ProcessEnv): Config {
 export const config: Config = loadConfig(process.env);
 ```
 
-**API key loading** (`loadApiKeyEnv`): every `API_KEY_*` variable is either a per-key config variable (`API_KEY_<NAME>` + `_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE` or `_LLM_MAX_CALLS_PER_DAY`) for a configured key, or an API key whose value matches `KEY_<NAME>_<12+ alphanumeric chars>`. Anything else fails startup. Startup also fails on `_LLM_WHITELIST_SENDERS` (removed feature), an empty or invalid `_FROM_ADDRESSES` list, an invalid `_LLM_FAIL_MODE`, and a key with `_LLM_ENABLED=true` while `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL` are incomplete. See [api-reference.md](api-reference.md#environment-variables) for the full variable reference.
+**API key loading** (`loadApiKeyEnv`): every `API_KEY_*` variable is either a per-key config variable (`API_KEY_<NAME>` + `_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE` or `_LLM_MAX_CALLS_PER_DAY`) for a configured key, or an API key whose value matches `KEY_<NAME>_<12+ alphanumeric chars>`. Anything else fails startup. Startup also fails on `_LLM_WHITELIST_SENDERS` (removed feature), an empty or invalid `_FROM_ADDRESSES`, `_RECIPIENTS` or `_RECIPIENT_DOMAINS` list, an invalid `_LLM_FAIL_MODE`, a `_LLM_THRESHOLD` outside 0-1 or not a number, a `_LLM_MAX_CALLS_PER_DAY` that is not a positive integer, an invalid `LOG_LEVEL`, and a key with `_LLM_ENABLED=true` while `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL` are incomplete. See [api-reference.md](api-reference.md#environment-variables) for the full variable reference.
 
 **Benefits of Zod Validation**:
 - Type coercion (string → number, boolean)
@@ -358,10 +359,22 @@ Client (React App):
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 2: HTTPS Enforcement (all routes except exact /health)              │
+│ Step 2: Request Logger + HTTPS Enforcement                               │
 └──────────────────────────────────────────────────────────────────────────┘
 
-middleware/securityHeaders.ts (enforceHttps):
+middleware/logger.ts (request line, all routes, first middleware):
+  {
+    "type": "request",
+    "requestId": "6f1c2c1e-...",
+    "timestamp": "2025-10-05T10:30:00.000Z",
+    "method": "POST",
+    "path": "/api/send",
+    "headers": { "x-api-key": "KEY_SITEA_****", ... }
+  }
+  The matching response line is written after the response is built, so
+  requests rejected below (HTTPS, CORS) are logged with their 403 status.
+
+middleware/securityHeaders.ts (enforceHttps, all routes except exact /health):
   Only when NODE_ENV=production or ENFORCE_HTTPS=true:
   1. Read 'X-Forwarded-Proto' (set by the trusted proxy)
   2. 'https' → set Strict-Transport-Security, continue
@@ -397,22 +410,12 @@ middleware/cors.ts:
           ▼
 
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Step 4: Security Headers + Request Logger (all routes)                   │
+│ Step 4: Security Headers (all routes)                                    │
 └──────────────────────────────────────────────────────────────────────────┘
 
 middleware/securityHeaders.ts:
   X-Content-Type-Options, X-Frame-Options, X-XSS-Protection,
   Referrer-Policy, Permissions-Policy, Content-Security-Policy
-
-middleware/logger.ts (request line):
-  {
-    "type": "request",
-    "requestId": "6f1c2c1e-...",
-    "timestamp": "2025-10-05T10:30:00.000Z",
-    "method": "POST",
-    "path": "/api/send",
-    "headers": { "x-api-key": "KEY_SITEA_****", ... }
-  }
 
           ║
           ▼
@@ -995,27 +998,30 @@ Request
   │     • Maps ConduitError to its HTTP status
   │     • Sets Retry-After on 429 and on 503 with a retry hint
   │
-  ├─→ [1] HTTPS Enforcement
+  ├─→ [1] Request Logger
+  │     • Runs on ALL routes (*), first so every request is logged
+  │     • Logs structured JSON request line (method, path, masked headers)
+  │     • Logs response line after next() (status, duration, app name from API_KEY_<NAME>)
+  │     • Rejected requests (403 HTTPS, 403 CORS, 401, ...) get a response line too;
+  │       app is absent when authentication did not run
+  │     • Lines are written at info level (suppressed with LOG_LEVEL=warn or error)
+  │
+  ├─→ [2] HTTPS Enforcement
   │     • Runs on ALL routes (*) except the exact path /health
   │     • Only when NODE_ENV=production or ENFORCE_HTTPS=true
   │     • 403 "HTTPS Required" unless X-Forwarded-Proto is https
   │     • Sets HSTS header
   │
-  ├─→ [2] CORS Validation
+  ├─→ [3] CORS Validation
   │     • Runs on ALL routes (*)
   │     • Checks Origin (or X-Source-Origin if no Origin) against ALLOWED_ORIGINS
   │     • Returns 403 ORIGIN_NOT_ALLOWED if not whitelisted
   │     • Sets CORS headers if valid, answers OPTIONS with 204
   │
-  ├─→ [3] Security Headers
+  ├─→ [4] Security Headers
   │     • Runs on ALL routes (*)
   │     • Sets X-Frame-Options, CSP, X-Content-Type-Options, etc.
   │     • Always continues (header-only)
-  │
-  ├─→ [4] Request Logger
-  │     • Runs on ALL routes (*)
-  │     • Logs structured JSON request line (method, path, masked headers)
-  │     • Logs response line after next() (status, duration, app name from API_KEY_<NAME>)
   │
   ├─→ [5] Body Size Limit
   │     • Runs on /api/* routes only
@@ -1503,11 +1509,11 @@ The actual implementation differs from the original specification in several imp
 
 #### 4. **Middleware Order**
 - **Original Spec**: CORS → Security Headers → Auth → Rate Limit → Logger
-- **Actual Implementation**: Error Handler → HTTPS → CORS → Security Headers → Logger → Body Limit → Auth → Recipient Validation → Rate Limit, then the LLM filter inside the send route after request validation
+- **Actual Implementation**: Error Handler → Logger → HTTPS → CORS → Security Headers → Body Limit → Auth → Recipient Validation → Rate Limit, then the LLM filter inside the send route after request validation
 - **Rationale**:
   - CORS before security headers for performance (reject early)
   - Body limit before auth to prevent DoS
-  - Logger early to capture all requests
+  - Logger first, so requests rejected by HTTPS enforcement or CORS are logged too
   - Recipient validation before rate limiting, so rejected recipients do not consume tokens
   - Rate limiting before the LLM filter, so a 429 never costs an LLM call
   - LLM filter after schema and template validation, so invalid requests never reach the LLM

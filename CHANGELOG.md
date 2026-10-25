@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking changes
 
+**Operators** (startup):
+
+- **More per-key settings fail startup instead of being ignored** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). `API_KEY_*_LLM_THRESHOLD` must be a plain decimal from 0 to 1, e.g. `0.7` (a value such as `70` from the old 0-100 docs was ignored and `0.7` used) and `API_KEY_*_LLM_MAX_CALLS_PER_DAY` a positive integer (`0`, negative, fractional or non-numeric values were ignored and `1000` used). An empty `API_KEY_*_RECIPIENTS` or `_RECIPIENT_DOMAINS` (which silently blocked every recipient) and invalid entries (not an email address; not a plain domain such as `example.com`, e.g. `@example.com` or `*.example.com`, which could never match) fail startup too, like `_FROM_ADDRESSES` and `_LLM_FAIL_MODE` already did. All invalid LLM settings are reported at once. Errors name the variable, never its value.
+- **`LOG_LEVEL` is validated** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). It must be `debug`, `info`, `warn` or `error` (case-insensitive; empty or unset means `info`); any other value fails startup.
+
 **API clients**:
 
 - A disallowed `Origin` with an allowed `X-Source-Origin` returns **403 `ORIGIN_NOT_ALLOWED`** (it was allowed). Proxies that rewrite `Origin` to their own address must drop or pass through `Origin` instead.
@@ -22,10 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`LOG_LEVEL` is applied** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). It was parsed but never used. Messages below the configured level are now dropped: request/response lines and startup messages log at `info`, warnings (blocked content, fail-open fallbacks, rejected recipients) at `warn`, and errors at `error`. `debug` currently logs the same as `info`.
+- **HTTPS and CORS rejections are logged** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). The request logger now runs first, before HTTPS enforcement and CORS, so 403 `HTTPS Required` and 403 `ORIGIN_NOT_ALLOWED` responses get request and response lines (without `app`, since authentication never ran).
+- Corrected the rate limiter's header comment: there is no automatic cleanup; memory is bounded by the number of configured API keys.
 - **CORS responses send `Vary: Origin, X-Source-Origin`** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). `Access-Control-Allow-Origin` echoes the request origin, but there was no `Vary` header, so a shared cache could serve one origin's CORS headers (or a response without them) to another. It is now set on every response the CORS middleware handles.
 
 ### Changed
 
+- **Readable startup errors for invalid environment variables.** Errors from the environment schema (e.g. `LOG_LEVEL`, `PORT`, `LLM_FALLBACK_MODE`) are reported as `Invalid configuration:` with one line per variable, instead of a raw validation dump.
 - `npm start` and `npm run dev` load `.env` when it exists (`node --env-file-if-exists=.env`, supported from Node 20.19). Variables set in the shell take precedence. The Docker image runs `node dist/index.js` directly and is unchanged.
 
 ## [2.0.0-rc.1] — 2026-10-24
