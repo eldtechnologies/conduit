@@ -211,7 +211,7 @@ Outside production (`NODE_ENV` other than `production`), a key with LLM filterin
 
 When the LLM call fails and the key fails open, `llmAnalysis` has `"fallback": true` and `"fallbackReason": "LLM analysis failed"`. `llmAnalysis` is **never** returned in production.
 
-**Request processing order** (first failing check wins): HTTPS → CORS → body size → authentication → JSON body parse and recipient whitelist → rate limit → channel → request schema → `Idempotency-Key` → sender allowlist → LLM filter (only if enabled for the key; validates template and template data before calling the LLM) → channel availability → template validation and send.
+**Request processing order** (first failing check wins; the request logger runs before all of them): HTTPS → CORS → body size → authentication → JSON body parse and recipient whitelist → rate limit → channel → request schema → `Idempotency-Key` → sender allowlist → LLM filter (only if enabled for the key; validates template and template data before calling the LLM) → channel availability → template validation and send.
 
 **Error Responses**:
 
@@ -529,7 +529,7 @@ All variables are read and validated once at startup in `src/config.ts`. Invalid
 | `API_KEY_<NAME>` | Yes (at least one) | - | Frontend API key, see [API Key Management](#api-key-management) |
 | `PORT` | No | `3000` | Server port (1-65535) |
 | `NODE_ENV` | No | `development` | `development`, `production` or `test`. **Set `production` in production**: it enables HTTPS enforcement, HSTS and error sanitization. The Docker image and `docker-compose.yml` default to `production`. |
-| `LOG_LEVEL` | No | `info` | Parsed but not currently used by the logger |
+| `LOG_LEVEL` | No | `info` | `debug`, `info`, `warn` or `error` (case-insensitive). Messages below the level are dropped: request/response lines and startup messages are `info`, warnings `warn`, errors `error`. `debug` currently logs the same as `info`. Invalid values fail startup. |
 | `RATE_LIMIT_PER_MINUTE` | No | `10` | Positive integer |
 | `RATE_LIMIT_PER_HOUR` | No | `100` | Positive integer |
 | `RATE_LIMIT_PER_DAY` | No | `500` | Positive integer |
@@ -550,14 +550,14 @@ LLM filtering is configured only when `LLM_PROVIDER`, `LLM_API_KEY` and `LLM_MOD
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `API_KEY_<NAME>_RECIPIENTS` | (none) | Comma-separated allowed recipient addresses (case-insensitive) |
-| `API_KEY_<NAME>_RECIPIENT_DOMAINS` | (none) | Comma-separated allowed recipient domains (exact domain match) |
+| `API_KEY_<NAME>_RECIPIENTS` | (none) | Comma-separated allowed recipient addresses (case-insensitive). An empty list or invalid address fails startup. |
+| `API_KEY_<NAME>_RECIPIENT_DOMAINS` | (none) | Comma-separated allowed recipient domains (exact domain match, e.g. `example.com`; no `@`, wildcard or IP). An empty list or invalid domain fails startup. |
 | `API_KEY_<NAME>_FROM_ADDRESSES` | (none) | Comma-separated allowed `from` addresses. The first is the default sender. An empty list or invalid address fails startup. Without it, any client `from` is rejected with `400 SENDER_NOT_ALLOWED`. |
 | `API_KEY_<NAME>_LLM_ENABLED` | `false` | `true` enables LLM filtering for this key |
 | `API_KEY_<NAME>_LLM_RULES` | `spam,abuse,promptInjection,phishing,scam` | Comma-separated categories to check (case-insensitive): `spam`, `abuse`, `profanity`, `promptInjection`, `phishing`, `scam`. Unknown names are ignored. |
-| `API_KEY_<NAME>_LLM_THRESHOLD` | `0.7` | Block when the model rejects with confidence >= threshold (0-1; out-of-range values are ignored) |
+| `API_KEY_<NAME>_LLM_THRESHOLD` | `0.7` | Block when the model rejects with confidence >= threshold (a number from 0 to 1; other values fail startup) |
 | `API_KEY_<NAME>_LLM_FAIL_MODE` | `LLM_FALLBACK_MODE` | `allow` (send unfiltered) or `block` (`503`) when the LLM fails or the daily budget is used up. Invalid values fail startup. |
-| `API_KEY_<NAME>_LLM_MAX_CALLS_PER_DAY` | `1000` | Daily LLM call budget (every attempt counts, resets at midnight UTC) |
+| `API_KEY_<NAME>_LLM_MAX_CALLS_PER_DAY` | `1000` | Daily LLM call budget (positive integer, other values fail startup; every attempt counts, resets at midnight UTC) |
 
 If neither recipient variable is set for a key, all recipients are allowed.
 
@@ -751,7 +751,7 @@ export async function sendPushNotification(
 ## Monitoring & Logging
 
 ### Logging Format
-`src/middleware/logger.ts` writes two structured JSON lines per request (skipped when `NODE_ENV=test` unless `ENABLE_LOGGING=true`):
+`src/middleware/logger.ts` is the first middleware and writes two structured JSON lines per request, including requests rejected by HTTPS enforcement or CORS (`app` is absent when authentication did not run). The lines are logged at `info` level, so `LOG_LEVEL=warn` or `error` suppresses them; they are also skipped when `NODE_ENV=test` unless `ENABLE_LOGGING=true`:
 
 ```json
 {

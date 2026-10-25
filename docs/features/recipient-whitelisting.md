@@ -249,7 +249,7 @@ These keys are examples. Generate your own with `npm run generate-key -- <name>`
 ```
 POST /api/send
    ↓
-[1] HTTPS, CORS, security headers, logger, body limit
+[1] Logger, HTTPS, CORS, security headers, body limit
    ↓
 [2] Authentication
    ↓ sets c.set('apiKey', key)
@@ -275,7 +275,8 @@ export interface RecipientWhitelist {
 ```
 
 - Only `API_KEY_<NAME>_RECIPIENTS` and `API_KEY_<NAME>_RECIPIENT_DOMAINS` are read. Both refer to the key `API_KEY_<NAME>`, which must be configured or startup fails
-- A key gets a whitelist entry as soon as either variable is set, even to an empty value. An entry with no emails and no domains blocks every recipient
+- A key gets a whitelist entry as soon as either variable is set
+- Startup fails when a variable is empty (or only commas/whitespace), when a `_RECIPIENTS` entry is not a valid email address, or when a `_RECIPIENT_DOMAINS` entry is not a plain domain such as `example.com` (no `@`, `*.`, trailing dot, IP address or single-label name like `localhost`). The error names the variable and the entry position, not the value
 
 ### 2. Error Code (`src/types/api.ts`)
 
@@ -501,13 +502,13 @@ API_KEY_MYKEY_RECIPIENTS=existing@company.com,user@example.com
 API_KEY_MYKEY_RECIPIENT_DOMAINS=example.com
 ```
 
-### Error: All recipients are blocked
+### Startup fails: `must list at least one email address` / `must list at least one domain`
 
-**Cause:** Whitelist is empty (configured but with no values).
+**Cause:** A whitelist variable is set but empty. Before this check, an empty whitelist silently blocked every recipient.
 
 **Solution:**
 ```bash
-# BAD: Empty whitelist blocks everything
+# BAD: Empty whitelist fails startup
 API_KEY_MYKEY_RECIPIENTS=
 API_KEY_MYKEY_RECIPIENT_DOMAINS=
 

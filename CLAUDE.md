@@ -39,7 +39,7 @@ Conduit uses a unified API endpoint (`POST /api/send`) for all communication cha
 ### System Architecture Overview
 
 ```
-Client Apps → [HTTPS] → [CORS] → [Security Headers] → [Logger] → [Body Limit]
+Client Apps → [Logger] → [HTTPS] → [CORS] → [Security Headers] → [Body Limit]
             → [Auth] → [Recipient Validation] → [Rate Limit]
                          ↓
    Send Route: channel → schema → sender allowlist → [LLM Filter, optional]
@@ -159,6 +159,7 @@ src/
 ├── types/               # api.ts, channels.ts, templates.ts
 └── utils/
     ├── errors.ts        # Custom error types
+    ├── log.ts           # Leveled console logging (LOG_LEVEL)
     ├── sanitize.ts      # HTML escaping / plain-text helpers
     └── version.ts       # App version from package.json
 ```
@@ -281,13 +282,15 @@ All environment variables are documented in [docs/api-reference.md](docs/api-ref
 - `API_KEY_*` - One per frontend application (at least one required)
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed origins (required)
 - `PORT` - Server port (default: 3000)
+- `LOG_LEVEL` - `debug`|`info`|`warn`|`error` (case-insensitive, default `info`; invalid values fail startup)
 - `NODE_ENV` - default `development`; set `production` in production (HTTPS enforcement, HSTS, error sanitization)
 - `ENFORCE_HTTPS` - `true` also enforces HTTPS outside production; `REVOKED_KEYS` - comma-separated revoked keys
 - Rate limit overrides: `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_PER_HOUR`, `RATE_LIMIT_PER_DAY`
-- LLM filtering (optional): `LLM_PROVIDER` (`anthropic`|`openai`), `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT` (default 5000), `LLM_FALLBACK_MODE` (default `allow`), `LLM_ENDPOINT`; per key `API_KEY_*_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`. Startup fails if a key enables LLM filtering while `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL` are incomplete, and if `API_KEY_*_LLM_WHITELIST_SENDERS` (removed) is set.
+- LLM filtering (optional): `LLM_PROVIDER` (`anthropic`|`openai`), `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT` (default 5000), `LLM_FALLBACK_MODE` (default `allow`), `LLM_ENDPOINT`; per key `API_KEY_*_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`. Startup fails if a key enables LLM filtering while `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL` are incomplete, if `_LLM_THRESHOLD` is not a number in 0-1, `_LLM_MAX_CALLS_PER_DAY` is not a positive integer or `_LLM_FAIL_MODE` is not `allow`/`block`, and if `API_KEY_*_LLM_WHITELIST_SENDERS` (removed) is set.
 - Recipient whitelisting (v1.1.0, optional):
   - `API_KEY_*_RECIPIENTS` - Comma-separated list of allowed email addresses
   - `API_KEY_*_RECIPIENT_DOMAINS` - Comma-separated list of allowed domains
+  - An empty list or an invalid entry fails startup
 - Sender allowlist (optional): `API_KEY_*_FROM_ADDRESSES` - Comma-separated allowed `from` addresses (validated at startup; first is the default sender). Without it, any client `from` is rejected with 400 `SENDER_NOT_ALLOWED`.
 
 ## Phased Development
@@ -359,7 +362,7 @@ All environment variables are documented in [docs/api-reference.md](docs/api-ref
   - No `any` types allowed (`@typescript-eslint/no-explicit-any: error`)
   - No floating promises (`@typescript-eslint/no-floating-promises: error`)
   - No unused vars (except prefixed with `_`)
-  - Console: only `console.warn`, `console.error`, `console.info` (`no-console` warns on others)
+  - Console: only `console.warn`, `console.error`, `console.info` (`no-console` warns on others). Application code logs through `log.info`/`log.warn`/`log.error` from `src/utils/log.ts`, which applies `LOG_LEVEL`
   - Always use `const` over `let`, never use `var`
 
 ### File Organization
@@ -474,10 +477,10 @@ export const config: Config = loadConfig(process.env);
 
 ### Middleware Order (CRITICAL)
 Apply middleware in this exact order (see `src/index.ts`):
-1. HTTPS enforcement (`enforceHttps`)
-2. CORS (validate origin, 403 on disallowed origins)
-3. Security Headers (`securityHeaders`)
-4. Request Logger (structured JSON logging)
+1. Request Logger (structured JSON logging) - first, so requests rejected by HTTPS enforcement or CORS (403) are logged too
+2. HTTPS enforcement (`enforceHttps`)
+3. CORS (validate origin, 403 on disallowed origins)
+4. Security Headers (`securityHeaders`)
 5. Body Limit (for /api/* routes, 413 on oversized bodies)
 6. Authentication (for /api/* routes)
 7. Recipient Validation (for /api/send route) - v1.1.0 - before rate limiting so 403'd recipients don't consume tokens
