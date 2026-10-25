@@ -72,10 +72,10 @@ const response = await fetch('https://conduit.yourdomain.com/api/send', {
 ### Today: Email ✅
 - **Email delivery** via [Resend.com](https://resend.com) with a comprehensive domain setup guide
 - **🤖 AI-powered spam filtering** (optional) — block spam, abuse, phishing, and prompt-injection attacks
-  - Anthropic Claude and OpenAI GPT support
+  - Anthropic Claude and OpenAI GPT support, and OpenRouter through `LLM_ENDPOINT` (tested; recommended model: Claude Haiku 5.5, ~300 ms per check)
   - Configurable per API key with category rules and a 0-1 confidence threshold
   - Fail-open (`allow`) / fail-closed (`block`) modes for reliability
-  - Daily call limits to control LLM costs (~$0.0005 per message)
+  - Daily call limits per key to cap LLM spend
   - Runs only after request validation, so invalid requests never cost an LLM call
   - See the [LLM Spam Filtering Guide](docs/features/llm-spam-filtering.md)
 - **Contact form template** with XSS sanitization and header-injection prevention

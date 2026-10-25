@@ -186,23 +186,27 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 
 **What it does**: Uses AI to analyze message content and block spam, phishing, abuse, and prompt injection attacks before they reach your inbox.
 
-**Providers**: Anthropic Claude Haiku 4.5 (recommended) or OpenAI GPT
-**Cost**: ~$0.0005 per message (~$0.50 per 1,000 messages)
+**Providers**: Claude Haiku 5.5 via OpenRouter (recommended, tested), Claude Haiku 4.5 (direct Anthropic, tested), or OpenAI GPT
+**Latency and cost**: one LLM call per filtered message, made while the request waits. Choose a fast model and keep `LLM_TIMEOUT` tight; cost depends on your model's pricing. See [Performance & Cost](features/llm-spam-filtering.md#performance--cost).
 
 ### Quick Setup
 
 **1. Get an LLM API key:**
-- **Anthropic (Recommended)**: [console.anthropic.com](https://console.anthropic.com) - Claude Haiku 4.5 is fastest and cheapest
-- **OpenAI (Alternative)**: [platform.openai.com](https://platform.openai.com)
+- **OpenRouter (Recommended, tested with Claude Haiku 5.5)**: [openrouter.ai](https://openrouter.ai) - one key for many providers
+- **Anthropic**: [console.anthropic.com](https://console.anthropic.com)
+- **OpenAI**: [platform.openai.com](https://platform.openai.com)
 
 **2. Add to Conduit environment:**
 
 ```bash
 # Global provider settings (all three are required to turn filtering on)
-LLM_PROVIDER=anthropic
-LLM_API_KEY=sk-ant-...
-LLM_MODEL=claude-haiku-4-5-20251001
-# or: LLM_PROVIDER=openai, LLM_API_KEY=sk-..., LLM_MODEL=<an OpenAI model>
+# Recommended: Claude Haiku 5.5 through OpenRouter (OpenAI-compatible)
+LLM_PROVIDER=openai
+LLM_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+LLM_API_KEY=sk-or-v1-...
+LLM_MODEL=anthropic/claude-haiku-5.5
+# or direct Anthropic: LLM_PROVIDER=anthropic, LLM_API_KEY=sk-ant-..., LLM_MODEL=claude-haiku-4-5-20251001
+# or OpenAI: LLM_PROVIDER=openai, LLM_API_KEY=sk-..., LLM_MODEL=<an OpenAI model>
 
 # Enable per API key
 API_KEY_MYSITE_LLM_ENABLED=true

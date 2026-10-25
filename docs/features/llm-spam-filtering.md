@@ -58,7 +58,7 @@ This section describes the implementation in `src/config.ts`, `src/routes/send.t
 | `LLM_PROVIDER` | Provider | Default endpoint |
 |----------------|----------|------------------|
 | `anthropic` | Anthropic Messages API | `https://api.anthropic.com/v1/messages` |
-| `openai` | OpenAI Chat Completions API | `https://api.openai.com/v1/chat/completions` |
+| `openai` | OpenAI Chat Completions API (also any OpenAI-compatible API via `LLM_ENDPOINT`, e.g. [OpenRouter](#using-openrouter)) | `https://api.openai.com/v1/chat/completions` |
 
 Any other value (for example `gemini` or `ollama`) fails startup. Google Gemini and local models (Ollama) are **not implemented**.
 
@@ -70,10 +70,10 @@ Global settings. Filtering is active only when `LLM_PROVIDER`, `LLM_API_KEY` and
 |----------|---------|---------|
 | `LLM_PROVIDER` | - | `anthropic` or `openai` |
 | `LLM_API_KEY` | - | Provider API key (stays on the server) |
-| `LLM_MODEL` | - | Model name sent to the provider (e.g. `claude-haiku-4-5-20251001`, `gpt-4o-mini`) |
+| `LLM_MODEL` | - | Model name sent to the provider (e.g. `anthropic/claude-haiku-5.5` via OpenRouter, `claude-haiku-4-5-20251001` direct, `gpt-4o-mini`) |
 | `LLM_TIMEOUT` | `5000` | Timeout in ms for the whole provider call, including reading the response body |
 | `LLM_FALLBACK_MODE` | `allow` | Default fail mode for every key that does not set `API_KEY_<NAME>_LLM_FAIL_MODE`. `allow` or `block`, case-insensitive (`BLOCK` works); any other value fails startup |
-| `LLM_ENDPOINT` | provider default | Custom endpoint URL (e.g. a regional or proxy endpoint) |
+| `LLM_ENDPOINT` | provider default | Custom endpoint URL (e.g. a regional or proxy endpoint, or OpenRouter: see [Using OpenRouter](#using-openrouter)) |
 
 Per-key settings (`API_KEY_<NAME>` must be a configured key, otherwise startup fails):
 
@@ -237,7 +237,7 @@ interface FilterResult {
 LLM_PROVIDER=anthropic
 # Provider API key (Conduit keeps this secure)
 LLM_API_KEY=sk-ant-api...
-# Fast, cheap model recommended
+# Pick a fast model: the call is in the request path, so latency matters more than cost
 LLM_MODEL=claude-haiku-4-5-20251001
 # Max LLM request time (ms), default 5000
 LLM_TIMEOUT=5000
@@ -562,7 +562,7 @@ Analyze this content and respond ONLY with JSON:
 - Per-key rate limiting runs before the LLM, so rate-limited requests never cause LLM calls
 - Invalid requests are rejected before the LLM is called
 - Planned, not implemented: global LLM rate limiting, a cost circuit breaker, and a cache for identical content
-- Use cheapest models (Haiku, GPT-3.5-turbo) for basic detection
+- Use small, fast models: they keep per-call cost low and also minimise the latency added to every send
 
 ### 5. LLM Availability
 
@@ -729,35 +729,46 @@ describe('LLM Performance', () => {
 
 ### Latency Impact
 
-**Expected Latency**:
-- **Anthropic Claude Haiku**: 200-800ms (fast model)
-- **OpenAI GPT-3.5-turbo**: 300-1000ms
-- **OpenAI GPT-4**: 1000-3000ms (slower, more accurate)
-- **Local Ollama**: 100-2000ms (depends on hardware; Ollama is not supported yet)
+The LLM call runs **synchronously inside `POST /api/send`**: the frontend waits for the verdict before the email is sent. Optimize for **speed first, cost second**:
 
-**Optimization Strategies**:
-1. **Use fastest models**: Claude Haiku, GPT-3.5-turbo (not GPT-4)
-2. **Parallel processing**: not used; template validation deliberately runs before the LLM call so invalid requests never cost an LLM call
-3. **Caching**: Store results for identical content (24h TTL) (planned, not implemented)
-4. **Async analysis**: Analyze after sending (Phase 3, review mode) (planned, not implemented)
-5. **Batch requests**: Analyze multiple messages in one LLM call (Phase 3) (planned, not implemented)
+- **Latency dominates.** The model only returns a small JSON verdict (Conduit sets `max_tokens: 200`), so the time until the answer arrives matters much more than output throughput or per-token price.
+- **Use a small, fast model. Recommended: Claude Haiku 5.5.** In the smoke test below it was about 3x faster than Haiku 4.5 at roughly a seventh of the cost per call, with the same verdicts. A larger model is unlikely to be worth the extra latency for a short classification like this, but measure on your own traffic if accuracy matters more than speed.
+- **Keep `LLM_TIMEOUT` tight.** The default is 5000 ms. When it expires the call counts as a provider failure and the key's fail mode applies: `allow` sends without filtering, `block` returns `503 LLM_PROVIDER_ERROR`. Set it to the longest delay your frontend can tolerate.
+- **Measure in your environment.** Latency depends on model, region and provider load. Watch the `duration` field on the `/api/send` response log lines and compare keys with and without filtering.
+
+**Measured** (2026-10-25, through OpenRouter, Conduit's own prompt and parser, one clean and one spam message, 3 runs each; a smoke test, not an accuracy evaluation):
+
+| Model | Median latency | Cost per call (OpenRouter `usage.cost`) | Verdicts |
+|---|---|---|---|
+| `anthropic/claude-haiku-5.5` | ~270-340 ms | ~$0.00013 | correct (clean allowed, spam blocked) |
+| `anthropic/claude-haiku-4.5` | ~860-1070 ms | ~$0.0009 | correct |
+
+Haiku 5.5 returned no reasoning tokens, so it needs no extra "reasoning off" or effort setting. Turning reasoning off, low effort and latency-sorted routing made no measurable difference. Through a full Conduit container (Docker on macOS, block mode), a whole `/api/send` request including the Resend call took about 1.1-1.4 s.
+
+### Using OpenRouter
+
+OpenRouter is OpenAI-compatible, so it works with the existing `openai` provider and `LLM_ENDPOINT`. This setup is tested end-to-end: a clean message passed the filter and a spam message got `403 CONTENT_BLOCKED_SPAM`.
+
+```bash
+LLM_PROVIDER=openai
+LLM_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+# An OpenRouter key (sk-or-v1-...)
+LLM_API_KEY=sk-or-v1-...
+LLM_MODEL=anthropic/claude-haiku-5.5
+```
+
+OpenRouter picks the upstream provider (Anthropic, Amazon Bedrock, Google Vertex, ...) per request. Conduit's `openai` provider always sends `temperature: 0`. OpenRouter accepts the request and drops the parameter for models that don't support it (Haiku 5.5 doesn't list `temperature`), but another OpenAI-compatible proxy that forwards it unchanged could reject the request. Test a new endpoint before relying on it. A first-class `openrouter` provider with configurable routing and fallback models is planned for 2.1 ([#147](https://github.com/eldtechnologies/conduit/issues/147)).
+
+**Direct Anthropic API:** `LLM_PROVIDER=anthropic` with `LLM_MODEL=claude-haiku-4-5-20251001` is the tested direct setup. Claude Haiku 5.5 is expected to work the same way (the provider reads the first `text` block of the response, so a leading `thinking` block would not break it), but neither its direct-API model ID nor the call itself has been verified here. Use the ID from Anthropic's model list and test it before production.
+
+Not implemented: result caching, asynchronous (send-then-review) analysis and batching.
 
 ### Cost Estimate
 
-**Anthropic Claude Haiku Pricing** (as of 2025):
-- Input: $0.25 / million tokens (~$0.0003 per message)
-- Output: $1.25 / million tokens (~$0.0002 per message)
-- **Total: ~$0.0005 per message** (half a cent)
+Each filtered message makes one LLM call: the system prompt plus the validated template fields in, a short JSON verdict out. Cost scales with message length and your model's price. Check your provider's current pricing rather than relying on numbers here.
 
-**Cost Per Volume**:
-- 1,000 messages/month: **$0.50/month**
-- 10,000 messages/month: **$5/month**
-- 100,000 messages/month: **$50/month**
-
-**Cost vs. Spam Savings**:
-- Resend email cost: $0.001 per email
-- Twilio SMS cost: $0.0079 per SMS
-- **Blocking 100 spam emails saves more than analyzing 200 legitimate ones**
+- **Cap spend per key** with `API_KEY_<NAME>_LLM_MAX_CALLS_PER_DAY` (default 1000). Every attempt counts, including failed ones. When the cap is reached, the fail mode applies.
+- **Requests rejected earlier cost nothing:** rate-limited, invalid or disallowed requests are rejected before the LLM is called.
 
 ### Caching Efficiency
 
