@@ -2,7 +2,8 @@
  * Security Headers Middleware
  *
  * CRITICAL: Enforces HTTPS in production and sets comprehensive security headers.
- * This middleware MUST be applied first in the middleware chain.
+ * enforceHttps MUST run before CORS and every other check (only the request logger
+ * runs before it, so rejected requests are logged).
  */
 
 import type { Context, Next } from 'hono';

@@ -34,10 +34,11 @@ const app = new Hono();
  *
  * Order is critical for security and functionality:
  * 0. Error handler - catches all errors
- * 1. HTTPS enforcement - redirects HTTP to HTTPS in production
- * 2. CORS validation - reject unauthorized origins early (performance)
- * 3. Security headers - set security headers on all responses
- * 4. Request logger - structured logging for all requests
+ * 1. Request logger - structured logging for all requests. First, so requests
+ *    rejected by HTTPS enforcement or CORS (403) still get a response line.
+ * 2. HTTPS enforcement - rejects plain HTTP with 403 in production
+ * 3. CORS validation - reject unauthorized origins early (performance)
+ * 4. Security headers - set security headers on all responses
  * 5. Body size limit - prevent DoS attacks via large payloads (/api/* only)
  * 6. Authentication - validate API keys (/api/* only)
  * 7. Recipient validation - check whitelist (/api/send only) - v1.1.0
@@ -54,17 +55,17 @@ const app = new Hono();
 // 0. Global error handler
 app.onError(errorHandler);
 
-// 1. HTTPS enforcement - applies to ALL routes
+// 1. Request logging - applies to ALL routes, including rejected ones
+app.use('*', logger);
+
+// 2. HTTPS enforcement - applies to ALL routes
 app.use('*', enforceHttps);
 
-// 2. CORS protection - applies to ALL routes (reject unauthorized origins early)
+// 3. CORS protection - applies to ALL routes (reject unauthorized origins early)
 app.use('*', corsProtection);
 
-// 3. Security headers - applies to ALL routes
+// 4. Security headers - applies to ALL routes
 app.use('*', securityHeaders);
-
-// 4. Request logging - applies to ALL routes
-app.use('*', logger);
 
 /**
  * Route-specific middleware
