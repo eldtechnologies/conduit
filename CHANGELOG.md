@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Anthropic provider reads the first `text` block** of the response instead of assuming `content[0]` is text. If a model ever puts another block (e.g. `thinking`) first, the verdict is still found. Before, such a response would have counted as a provider failure on every call: unfiltered sends in `allow` mode, refused sends in `block` mode.
 - **`LOG_LEVEL` is applied** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). It was parsed but never used. Messages below the configured level are now dropped: request/response lines and startup messages log at `info`, warnings (blocked content, fail-open fallbacks, rejected recipients) at `warn`, and errors at `error`. `debug` currently logs the same as `info`.
 - **HTTPS and CORS rejections are logged** ([#140](https://github.com/eldtechnologies/conduit/issues/140)). The request logger now runs first, before HTTPS enforcement and CORS, so 403 `HTTPS Required` and 403 `ORIGIN_NOT_ALLOWED` responses get request and response lines (without `app`, since authentication never ran).
 - Corrected the rate limiter's header comment: there is no automatic cleanup; memory is bounded by the number of configured API keys.
