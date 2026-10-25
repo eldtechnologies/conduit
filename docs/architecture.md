@@ -377,7 +377,8 @@ middleware/securityHeaders.ts (enforceHttps):
 
 middleware/cors.ts:
   1. Extract 'Origin' header: 'https://sitea.com'
-     (falls back to 'X-Source-Origin' if Origin is missing or not allowed)
+     (uses 'X-Source-Origin' only if Origin is missing; a disallowed Origin is
+      rejected whatever X-Source-Origin says)
   2. Check against ALLOWED_ORIGINS: ['https://sitea.com', 'https://siteb.com']
   3. Match found → Continue
   4. Set CORS headers:
@@ -1002,7 +1003,7 @@ Request
   │
   ├─→ [2] CORS Validation
   │     • Runs on ALL routes (*)
-  │     • Checks Origin (or X-Source-Origin) against ALLOWED_ORIGINS
+  │     • Checks Origin (or X-Source-Origin if no Origin) against ALLOWED_ORIGINS
   │     • Returns 403 ORIGIN_NOT_ALLOWED if not whitelisted
   │     • Sets CORS headers if valid, answers OPTIONS with 204
   │

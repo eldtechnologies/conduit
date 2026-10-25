@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **CORS uses `X-Source-Origin` only when `Origin` is absent.** A request whose `Origin` is present but not in `ALLOWED_ORIGINS` now gets 403 `ORIGIN_NOT_ALLOWED`, even if `X-Source-Origin` holds an allowed origin. Before, the header could override any disallowed `Origin`. Server-side proxies that send no `Origin` (or an empty one) and pass `X-Source-Origin` keep working.
+
 ### Breaking changes
 
 **API clients**:
 
+- A disallowed `Origin` with an allowed `X-Source-Origin` returns **403 `ORIGIN_NOT_ALLOWED`** (it was allowed). Proxies that rewrite `Origin` to their own address must drop or pass through `Origin` instead.
 - An unavailable channel provider returns **503 `PROVIDER_UNAVAILABLE`** instead of 400. It cannot happen for email, since `RESEND_API_KEY` is required at startup.
 - Removed the `ErrorCode` members that were never returned: `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR` and `LLM_TIMEOUT`. Responses are unchanged (a revoked key returns `UNAUTHORIZED`, an LLM timeout `LLM_PROVIDER_ERROR`); only code that imported these enum members is affected.
 

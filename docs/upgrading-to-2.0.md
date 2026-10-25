@@ -14,6 +14,7 @@ Since 2.0, Conduit **fails at startup** when its configuration is unsafe or inva
 - [ ] **Fail modes:** `API_KEY_*_LLM_FAIL_MODE` and `LLM_FALLBACK_MODE` must be `allow` or `block`. `LLM_FALLBACK_MODE` is now the default for keys without their own fail mode, so `LLM_FALLBACK_MODE=block` makes those keys fail closed.
 - [ ] **Sender addresses:** if a frontend sends a `from` address, add it to `API_KEY_<NAME>_FROM_ADDRESSES` (comma-separated). Otherwise those requests get 400 `SENDER_NOT_ALLOWED`. Without `from`, mail goes out from the first allowlisted address (or `onboarding@resend.dev` when there is no list).
 - [ ] **Log queries / alerts:** response log lines now carry `"app": "<NAME>"` (from `API_KEY_<NAME>`) instead of `"apiKey": "KEY_<NAME>_****"`. Update any log filters or dashboards that use `apiKey`.
+- [ ] **Proxies and gateways:** `X-Source-Origin` is only used when a request has no `Origin` header. If a proxy in front of Conduit rewrites `Origin` to its own address and passes the browser origin in `X-Source-Origin`, make it drop or pass through `Origin` instead, or those requests get 403 `ORIGIN_NOT_ALLOWED`.
 - [ ] **`NODE_ENV=production`** is set in production (the code default is `development`). The Docker image and `docker-compose.yml` default to production.
 
 To check a config before deploying, start the new image with your env file and watch it boot:
@@ -34,6 +35,7 @@ docker run --rm --env-file .env.production conduit:2.0.0-rc.1
 | `from.name` with `<`, `>`, `"`, `@` or over 100 chars | sent | **400 `VALIDATION_ERROR`** |
 | Body over 50KB | 400 | **413 `PAYLOAD_TOO_LARGE`** |
 | Origin not allowed | 401 | **403 `ORIGIN_NOT_ALLOWED`** |
+| `Origin` not allowed but `X-Source-Origin` allowed | allowed | **403 `ORIGIN_NOT_ALLOWED`** (`X-Source-Origin` is only used when there is no `Origin`) |
 | Unknown or unimplemented `channel` | `VALIDATION_ERROR` | **400 `INVALID_CHANNEL`** |
 | Malformed or non-object JSON | 500 | **400 `VALIDATION_ERROR`** |
 | Invalid template `data` | 500 | **400 `VALIDATION_ERROR`** with per-field messages |

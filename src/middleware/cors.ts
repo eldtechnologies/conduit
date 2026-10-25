@@ -23,29 +23,21 @@ import { ErrorCode } from '../types/api.js';
  * Only whitelisted origins in ALLOWED_ORIGINS can access the API.
  *
  * The middleware:
- * 1. Extracts Origin header from request (or X-Source-Origin for proxied requests)
+ * 1. Extracts Origin header from request (or X-Source-Origin when Origin is absent)
  * 2. Checks if origin is in allowed list
  * 3. Sets CORS headers for allowed origins
  * 4. Handles preflight (OPTIONS) requests
  * 5. Rejects unauthorized origins with 403
  *
  * Note on X-Source-Origin:
- * - When behind a proxy/gateway, the Origin header may be modified to the proxy's address
- * - X-Source-Origin preserves the actual client origin through the proxy chain
- * - We check both headers with fallback logic for maximum compatibility
+ * - A server-side proxy/gateway that calls Conduit without an Origin header can pass the
+ *   client's origin in X-Source-Origin
+ * - It is only used when Origin is absent: a request whose Origin is present but not
+ *   allowed is rejected, whatever X-Source-Origin says
  */
 export async function corsProtection(c: Context, next: Next) {
-  // Try standard Origin header first (direct connection)
-  let origin = c.req.header('Origin');
-
-  // If Origin is missing or not in allowed list, try X-Source-Origin
-  // This handles proxy/gateway scenarios where Origin header is modified
-  if (!origin || !config.allowedOrigins.includes(origin)) {
-    const xSourceOrigin = c.req.header('X-Source-Origin');
-    if (xSourceOrigin) {
-      origin = xSourceOrigin;
-    }
-  }
+  // An empty Origin header counts as absent
+  const origin = c.req.header('Origin') || c.req.header('X-Source-Origin');
 
   // If no origin header at all, continue (same-origin request or non-browser client)
   if (!origin) {

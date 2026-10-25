@@ -108,7 +108,7 @@ X-Source-Origin: https://yourdomain.com    (optional, see CORS)
 ```
 
 - `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the public `KEY_<NAME>` part of your API key (the secret suffix is never sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`).
-- `X-Source-Origin` (optional): used by the CORS check when `Origin` is missing or not in `ALLOWED_ORIGINS` (for proxied requests).
+- `X-Source-Origin` (optional): used by the CORS check only when there is no `Origin` header (for server-side proxies and gateways). Browsers always send `Origin`, so for them it is ignored.
 
 **Request Body (Email - Phase 1)**:
 ```json
@@ -434,8 +434,8 @@ ALLOWED_ORIGINS=https://eldtechnologies.com,https://projectb.com,http://localhos
 ```
 
 - `Origin` in the list: CORS headers are set (`Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials: true`, `Access-Control-Allow-Methods: GET, POST, OPTIONS`, `Access-Control-Allow-Headers: Content-Type, X-API-Key, X-Source-Origin, Idempotency-Key`, `Access-Control-Max-Age: 86400`). Preflight `OPTIONS` returns `204`.
-- `Origin` missing or not in the list: `X-Source-Origin` is used instead if present.
-- Resulting origin not in the list: `403 ORIGIN_NOT_ALLOWED`.
+- `Origin` present but not in the list: `403 ORIGIN_NOT_ALLOWED`, even if `X-Source-Origin` holds an allowed origin.
+- `Origin` missing (or empty): `X-Source-Origin` is checked instead if present, and `403 ORIGIN_NOT_ALLOWED` if it is not in the list.
 - No `Origin` and no `X-Source-Origin` (server-to-server, curl): the request continues.
 
 ### Rate Limiting
