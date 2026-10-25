@@ -107,8 +107,8 @@ Idempotency-Key: contact-form-7f3c9a      (optional)
 X-Source-Origin: https://yourdomain.com    (optional, see CORS)
 ```
 
-- `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the public `KEY_<NAME>` part of your API key (the secret suffix is never sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`).
-- `X-Source-Origin` (optional): used by the CORS check when `Origin` is missing or not in `ALLOWED_ORIGINS` (for proxied requests).
+- `Idempotency-Key` (optional): 1-200 characters of `A-Z a-z 0-9 . _ : -`. A malformed value returns `400 VALIDATION_ERROR`. Conduit prefixes it with the app name of the authenticated key (`<NAME>` from its `API_KEY_<NAME>` variable, shortened with a hash suffix if longer than 55 characters; no part of the key value is sent) and passes it to Resend as its idempotency key, so a retry with the same key and body (for example after a `PROVIDER_TIMEOUT`) is not delivered twice. Reusing a key with a different body gets a Resend error (`502 PROVIDER_ERROR`). Each configured key has its own namespace, so two frontends can use the same `Idempotency-Key` values without colliding. During a key rotation (old and new key configured under different `API_KEY_<NAME>` variables), a retry that switches to the new key is not deduplicated against a send made with the old key.
+- `X-Source-Origin` (optional): used by the CORS check only when there is no `Origin` header (for server-side proxies and gateways). Browsers always send `Origin`, so for them it is ignored.
 
 **Request Body (Email - Phase 1)**:
 ```json
@@ -133,7 +133,7 @@ X-Source-Origin: https://yourdomain.com    (optional, see CORS)
 | `channel` | Yes | String. Must be a registered channel (currently only `email`), otherwise `400 INVALID_CHANNEL`. Missing or non-string: `400 VALIDATION_ERROR`. |
 | `templateId` | Yes | Non-empty string. Unknown template: `400 INVALID_TEMPLATE`. |
 | `to` | Yes | Valid email address, max 320 characters. Checked against the key's recipient whitelist if one is configured (`403 RECIPIENT_NOT_ALLOWED`). |
-| `data` | Yes | Object. Validated by the template's Zod schema (`400 VALIDATION_ERROR` on failure; fields not in the schema are dropped). |
+| `data` | Yes | Object. Validated by the template's Zod schema (`400 VALIDATION_ERROR` on failure). Fields not in the schema are silently dropped, not rejected (see the template). |
 | `from` | No | `{ "email": string, "name"?: string }`. `email` must be a valid address **and** in the key's `API_KEY_<NAME>_FROM_ADDRESSES` list (case-insensitive), otherwise `400 SENDER_NOT_ALLOWED`. A key with no sender allowlist rejects any `from`. `name`: max 100 characters, must not contain CR/LF or any of `<`, `>`, `"`, `@` (`400 VALIDATION_ERROR`). |
 | `replyTo` | No | Valid email address. Sent as the email's Reply-To. |
 
@@ -337,7 +337,7 @@ Contact form submissions. This is the only implemented template.
 - `message` (string, required) - Message content, 1-5000 characters
 - `subject` (string, optional) - Subject line, max 200 characters
 
-Other fields in `data` are dropped by the schema.
+**Unknown fields**: any other field in `data` (for example `phone`, or a honeypot field such as `website`) is silently dropped: the request is not rejected, and the field is not in the email or sent to the LLM filter. This is deliberate, so forms can send extra fields without breaking. Conduit does not act on honeypot fields; check them in your frontend before sending.
 
 **Subject**: `subject` if given, otherwise `Contact Form: {name}`. The subject is plain text: tags are stripped, entities decoded and CR/LF removed.
 
@@ -433,9 +433,10 @@ Strict origin whitelisting via `ALLOWED_ORIGINS` (comma-separated, exact match, 
 ALLOWED_ORIGINS=https://eldtechnologies.com,https://projectb.com,http://localhost:8080
 ```
 
+- Every response carries `Vary: Origin, X-Source-Origin`, so shared caches key on the origin.
 - `Origin` in the list: CORS headers are set (`Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials: true`, `Access-Control-Allow-Methods: GET, POST, OPTIONS`, `Access-Control-Allow-Headers: Content-Type, X-API-Key, X-Source-Origin, Idempotency-Key`, `Access-Control-Max-Age: 86400`). Preflight `OPTIONS` returns `204`.
-- `Origin` missing or not in the list: `X-Source-Origin` is used instead if present.
-- Resulting origin not in the list: `403 ORIGIN_NOT_ALLOWED`.
+- `Origin` present but not in the list: `403 ORIGIN_NOT_ALLOWED`, even if `X-Source-Origin` holds an allowed origin.
+- `Origin` missing (or empty): `X-Source-Origin` is checked instead if present, and `403 ORIGIN_NOT_ALLOWED` if it is not in the list.
 - No `Origin` and no `X-Source-Origin` (server-to-server, curl): the request continues.
 
 ### Rate Limiting
@@ -799,7 +800,6 @@ Generated from `ErrorCode` in `src/types/api.ts`, with the HTTP status the code 
 | `INVALID_TEMPLATE` | 400 | Template ID not found for the channel |
 | `VALIDATION_ERROR` | 400 | Malformed/non-object JSON, invalid request fields or template data, malformed `Content-Length` or `Idempotency-Key`, missing `to` for a key with a recipient whitelist |
 | `SENDER_NOT_ALLOWED` | 400 | `from.email` not in the key's sender allowlist, or `from` sent for a key without one |
-| `PROVIDER_UNAVAILABLE` | 400 | Email channel not available (no Resend API key) |
 | `ORIGIN_NOT_ALLOWED` | 403 | Origin not in `ALLOWED_ORIGINS` |
 | `RECIPIENT_NOT_ALLOWED` | 403 | Recipient not in the key's recipient whitelist |
 | `CONTENT_BLOCKED_SPAM` | 403 | LLM filter blocked the content (spam, or no more specific category) |
@@ -813,12 +813,13 @@ Generated from `ErrorCode` in `src/types/api.ts`, with the HTTP status the code 
 | `INTERNAL_ERROR` | 500 | Unexpected server error (generic message in production) |
 | `PROVIDER_ERROR` | 502 | Resend returned an error |
 | `PROVIDER_TIMEOUT` | 502 | Resend did not answer within 10s (request aborted) |
+| `PROVIDER_UNAVAILABLE` | 503 | Channel provider not configured (cannot happen for email today: `RESEND_API_KEY` is required at startup) |
 | `LLM_PROVIDER_ERROR` | 503 | LLM call failed (timeout, HTTP/network error, malformed output) for a key in `block` fail mode |
 | `LLM_BUDGET_EXCEEDED` | 503 | Daily LLM budget used up for a key in `block` fail mode; `retryAfter` (seconds until midnight UTC) + `Retry-After` header |
 
 The LLM block message is always `Content blocked by content filter`; categories, confidence and reasoning are only in `details` (non-production).
 
-Defined in `ErrorCode` but not currently returned: `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR`, `LLM_TIMEOUT` (LLM timeouts are reported as `LLM_PROVIDER_ERROR`).
+A revoked key returns `UNAUTHORIZED`, and an LLM timeout returns `LLM_PROVIDER_ERROR`. 2.0 removed the never-returned codes `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR` and `LLM_TIMEOUT` from `ErrorCode`.
 
 The HTTPS check returns `403` with a plain-text `HTTPS Required` body and no error code.
 

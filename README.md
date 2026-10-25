@@ -137,7 +137,7 @@ The image (and `docker compose`) default to `NODE_ENV=production`, which rejects
 ```bash
 npm ci
 npm run build
-node --env-file=.env dist/index.js   # npm start runs dist/index.js but does not load .env
+npm start   # runs dist/index.js, loading .env when present
 ```
 
 `NODE_ENV` defaults to `development`. **Production must run with `NODE_ENV=production`** (HTTPS enforcement with HSTS, sanitized error responses).
@@ -323,18 +323,18 @@ cd conduit
 # Install dependencies
 npm install
 
-# Configure (npm scripts do not load .env themselves)
+# Configure (npm run dev and npm start load .env when present; shell variables win)
 cp .env.example .env
 
-# Run development server with .env loaded
-npx tsx watch --env-file=.env src/index.ts
+# Run development server with hot reload
+npm run dev
 
 # Run tests (they set their own environment in tests/setup.ts)
 npm test
 
 # Build for production and run the build
 npm run build
-node --env-file=.env dist/index.js   # or: npm start, with the variables exported
+npm start
 ```
 
 See **[CLAUDE.md](CLAUDE.md)** for detailed development guidance.

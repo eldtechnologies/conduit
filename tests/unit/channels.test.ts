@@ -4,15 +4,21 @@
  * Tests channel registry, routing, and email channel handler.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   getChannelHandler,
   getRegisteredChannels,
   isChannelRegistered,
   resolveChannel,
+  routeToChannel,
 } from '../../src/channels/index.js';
 import { emailHandler, resolveSender } from '../../src/channels/email.js';
-import { ProviderError, InternalError, ValidationError } from '../../src/utils/errors.js';
+import {
+  ProviderError,
+  InternalError,
+  ServiceUnavailableError,
+  ValidationError,
+} from '../../src/utils/errors.js';
 import { ErrorCode, type SendMessageRequest } from '../../src/types/api.js';
 import { TIMEOUTS } from '../../src/config.js';
 import { installFetchMock, resendSuccessResponse, type FetchMock } from '../helpers/fetch.js';
@@ -53,6 +59,29 @@ describe('Channel Infrastructure', () => {
       expect(error).toBeInstanceOf(ValidationError);
       expect((error as ValidationError).code).toBe('INVALID_CHANNEL');
       expect((error as ValidationError).statusCode).toBe(400);
+    });
+  });
+
+  describe('routeToChannel', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should throw a 503 PROVIDER_UNAVAILABLE error when the provider is not configured', async () => {
+      vi.spyOn(emailHandler, 'isAvailable').mockResolvedValue(false);
+      const sendSpy = vi.spyOn(emailHandler, 'send');
+
+      const error: unknown = await routeToChannel({
+        channel: 'email',
+        templateId: 'contact-form',
+        to: 'test@example.com',
+        data: {},
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ServiceUnavailableError);
+      expect((error as ServiceUnavailableError).code).toBe(ErrorCode.PROVIDER_UNAVAILABLE);
+      expect((error as ServiceUnavailableError).statusCode).toBe(503);
+      expect(sendSpy).not.toHaveBeenCalled();
     });
   });
 

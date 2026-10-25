@@ -181,7 +181,24 @@ describe('CORS Protection Middleware', () => {
     });
   });
 
-  describe('X-Source-Origin fallback (proxy/gateway scenarios)', () => {
+  describe('Vary header', () => {
+    it.each<[string, Record<string, string>, string]>([
+      ['an allowed origin', { Origin: 'http://localhost:8080' }, 'GET'],
+      ['no Origin header', {}, 'GET'],
+      ['a preflight', { Origin: 'http://localhost:8080' }, 'OPTIONS'],
+      ['a rejected origin', { Origin: 'https://evil.example' }, 'GET'],
+    ])('should vary on Origin and X-Source-Origin for %s', async (_label, headers, method) => {
+      const res = await app.fetch(new Request('http://localhost:3000/test', { method, headers }));
+      expect(res.status).toBe(
+        headers.Origin === 'https://evil.example' ? 403 : method === 'OPTIONS' ? 204 : 200
+      );
+
+      const vary = (res.headers.get('Vary') ?? '').split(',').map((v) => v.trim());
+      expect(vary).toEqual(expect.arrayContaining(['Origin', 'X-Source-Origin']));
+    });
+  });
+
+  describe('X-Source-Origin fallback when Origin is absent (proxy/gateway scenarios)', () => {
     it('should use X-Source-Origin when Origin is missing', async () => {
       const req = new Request('http://localhost:3000/test', {
         headers: { 'X-Source-Origin': 'http://localhost:8080' },
@@ -192,17 +209,48 @@ describe('CORS Protection Middleware', () => {
       expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:8080');
     });
 
-    it('should use X-Source-Origin when Origin is not whitelisted (proxy modified it)', async () => {
+    it('should reject a disallowed Origin even when X-Source-Origin is whitelisted', async () => {
       const req = new Request('http://localhost:3000/test', {
         headers: {
-          Origin: 'http://api-gateway.internal', // Proxy address (not whitelisted)
-          'X-Source-Origin': 'http://localhost:8080', // Real client origin (whitelisted)
+          Origin: 'http://evil.com',
+          'X-Source-Origin': 'http://localhost:8080', // Whitelisted, but Origin takes precedence
         },
       });
       const res = await app.fetch(req);
 
-      expect(res.status).toBe(200);
-      expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:8080');
+      expect(res.status).toBe(403);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('ORIGIN_NOT_ALLOWED');
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    });
+
+    it('should reject a disallowed Origin preflight even when X-Source-Origin is whitelisted', async () => {
+      const req = new Request('http://localhost:3000/test', {
+        method: 'OPTIONS',
+        headers: { Origin: 'null', 'X-Source-Origin': 'http://localhost:8080' },
+      });
+      const res = await app.fetch(req);
+
+      expect(res.status).toBe(403);
+      const body = await readJson<ErrorResponse>(res);
+      expect(body.code).toBe('ORIGIN_NOT_ALLOWED');
+    });
+
+    it('should treat an empty Origin as absent and use X-Source-Origin', async () => {
+      const allowed = await app.fetch(
+        new Request('http://localhost:3000/test', {
+          headers: { Origin: '', 'X-Source-Origin': 'http://localhost:8080' },
+        })
+      );
+      const rejected = await app.fetch(
+        new Request('http://localhost:3000/test', {
+          headers: { Origin: '', 'X-Source-Origin': 'http://evil.com' },
+        })
+      );
+
+      expect(allowed.status).toBe(200);
+      expect(allowed.headers.get('access-control-allow-origin')).toBe('http://localhost:8080');
+      expect(rejected.status).toBe(403);
     });
 
     it('should prefer Origin when it is whitelisted', async () => {

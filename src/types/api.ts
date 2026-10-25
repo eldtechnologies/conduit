@@ -8,17 +8,13 @@
  * Error codes returned by the API
  */
 export enum ErrorCode {
-  // Authentication errors (401)
+  // Authentication errors (401): missing, invalid or revoked API key
   UNAUTHORIZED = 'UNAUTHORIZED',
-  INVALID_API_KEY = 'INVALID_API_KEY',
-  REVOKED_API_KEY = 'REVOKED_API_KEY',
 
   // Validation errors (400)
-  INVALID_REQUEST = 'INVALID_REQUEST',
   INVALID_CHANNEL = 'INVALID_CHANNEL',
   INVALID_TEMPLATE = 'INVALID_TEMPLATE',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
-  MISSING_REQUIRED_FIELD = 'MISSING_REQUIRED_FIELD',
 
   // Rate limiting (429)
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
@@ -26,8 +22,7 @@ export enum ErrorCode {
   // Payload errors (413)
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
 
-  // CORS errors (403)
-  CORS_ERROR = 'CORS_ERROR',
+  // Origin not in ALLOWED_ORIGINS (403)
   ORIGIN_NOT_ALLOWED = 'ORIGIN_NOT_ALLOWED',
 
   // Recipient validation (403) - v1.1.0
@@ -44,14 +39,15 @@ export enum ErrorCode {
   CONTENT_BLOCKED_SCAM = 'CONTENT_BLOCKED_SCAM',
   CONTENT_BLOCKED_PROMPT_INJECTION = 'CONTENT_BLOCKED_PROMPT_INJECTION',
 
-  // LLM provider errors (503) - v1.2.0
+  // LLM provider errors (503) - v1.2.0; timeouts are reported as LLM_PROVIDER_ERROR
   LLM_PROVIDER_ERROR = 'LLM_PROVIDER_ERROR',
-  LLM_TIMEOUT = 'LLM_TIMEOUT',
   LLM_BUDGET_EXCEEDED = 'LLM_BUDGET_EXCEEDED',
 
   // Provider errors (502)
   PROVIDER_ERROR = 'PROVIDER_ERROR',
   PROVIDER_TIMEOUT = 'PROVIDER_TIMEOUT',
+
+  // Channel provider not configured (503)
   PROVIDER_UNAVAILABLE = 'PROVIDER_UNAVAILABLE',
 
   // Internal errors (500)

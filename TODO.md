@@ -26,13 +26,8 @@ Completed work (project setup, security layer, email channel, templates, send en
 - [ ] Pre-commit hooks (optional)
 
 ### Documentation & Release
-- [ ] Add CI status and coverage badges to the root README
+- [ ] Add a coverage badge to the root README (CI badge added in v2.0.0-rc.1)
 - [ ] Publish to npm (optional)
-
-### Code Follow-ups (found while updating the docs)
-- [ ] `PROVIDER_UNAVAILABLE` is thrown as a `ValidationError` and returns 400; a 5xx status would fit a missing provider better
-- [ ] `ErrorCode` values that are never returned: `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR`, `LLM_TIMEOUT` (use or remove)
-- [ ] `LOG_LEVEL` is parsed in `src/config.ts` but not used by the logger
 
 ---
 

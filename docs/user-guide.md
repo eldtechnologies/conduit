@@ -94,7 +94,7 @@ The image (and `docker compose`) default to `NODE_ENV=production`, which answers
 ```bash
 npm ci
 npm run build
-node --env-file=.env dist/index.js   # npm start runs dist/index.js but does not load .env
+npm start   # loads .env when present
 ```
 
 ### 3. Generate API Keys for Your Frontends
@@ -340,6 +340,8 @@ Perfect for contact forms.
 
 Template fields: `name` (1-100 chars), `email` (valid email), `message` (1-5000 chars), `subject` (optional, max 200 chars). Invalid template data returns `400 VALIDATION_ERROR`.
 
+Other fields in `data` (for example `phone`, or a honeypot field) are silently dropped: the request still succeeds, but those fields do not appear in the email. If you need a field in the email, it has to be part of the template. Conduit does not check honeypot fields for you; reject filled-in honeypots in your frontend.
+
 ### Phase 2: SMS (Planned, not implemented) 📱
 
 #### verification-code
@@ -542,7 +544,9 @@ X-Source-Origin: https://yoursite.com
 Idempotency-Key: contact-7f3c2a91   (optional)
 ```
 
-`Idempotency-Key` is optional: 1-200 characters of `A-Z a-z 0-9 . _ : -` (anything else returns `400 VALIDATION_ERROR`). Retrying with the same key and body (for example after a `502 PROVIDER_TIMEOUT`) does not send the email twice within Resend's idempotency window. Keys are scoped per API key.
+`Idempotency-Key` is optional: 1-200 characters of `A-Z a-z 0-9 . _ : -` (anything else returns `400 VALIDATION_ERROR`). Retrying with the same key and body (for example after a `502 PROVIDER_TIMEOUT`) does not send the email twice within Resend's idempotency window. Keys are scoped per configured API key (by its `API_KEY_<NAME>` name), so different frontends never collide. During a key rotation (old and new key configured under different `API_KEY_<NAME>` variables), a retry that switches to the new key is not deduplicated against a send made with the old key.
+
+`X-Source-Origin` is only used for the CORS check when the request has no `Origin` header (a server-side proxy or gateway calling Conduit). Browsers always send `Origin`, which must be in `ALLOWED_ORIGINS`; a disallowed `Origin` gets `403 ORIGIN_NOT_ALLOWED` whatever `X-Source-Origin` says.
 
 **Request Body**:
 ```json

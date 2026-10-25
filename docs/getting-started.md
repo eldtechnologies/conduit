@@ -68,10 +68,10 @@ The server validates every `API_KEY_*` variable at startup and refuses to start 
 ```bash
 npm ci
 npm run build                      # compiles to dist/
-node --env-file=.env dist/index.js # same as npm start, plus loading .env
+npm start                          # runs dist/index.js, loading .env when present
 ```
 
-`npm start` (`node dist/index.js`) and `npm run dev` do not read `.env` themselves. Either export the variables in your shell or pass the file to Node as above (for development: `npx tsx watch --env-file=.env src/index.ts`). Set `NODE_ENV=production` when running this way in production.
+`npm start` and `npm run dev` (hot reload) load `.env` from the current directory when it exists (Node's `--env-file-if-exists`); variables already set in the shell take precedence. Without a `.env` file Node prints `.env not found. Continuing without it.` and uses the shell environment. Set `NODE_ENV=production` when running this way in production.
 
 Expected response:
 ```json

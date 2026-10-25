@@ -171,9 +171,9 @@ Planned, not implemented: `routes/channels.ts` (`GET /api/channels`), `channels/
 **Development**:
 ```bash
 npm install          # Install dependencies
-npm run dev          # Start dev server with hot reload
+npm run dev          # Start dev server with hot reload (loads .env when present)
 npm run build        # Build TypeScript to dist/
-npm start            # Run production build
+npm start            # Run production build (loads .env when present)
 ```
 
 **Testing**:
@@ -261,6 +261,7 @@ Error codes are defined in `ErrorCode` (`src/types/api.ts`); the full table with
 - `RATE_LIMIT_EXCEEDED` (429) - Too many requests
 - `PROVIDER_ERROR` / `PROVIDER_TIMEOUT` (502) - Resend failure / 10s timeout
 - `LLM_PROVIDER_ERROR` / `LLM_BUDGET_EXCEEDED` (503) - LLM failure or budget used up, in `block` fail mode
+- `PROVIDER_UNAVAILABLE` (503) - Channel provider not configured
 - `INTERNAL_ERROR` (500) - Unexpected error
 
 All error responses follow this structure:
@@ -499,9 +500,9 @@ Apply middleware in this exact order (see `src/index.ts`):
 
 ### Scripts Available
 ```bash
-npm run dev           # Development server with hot reload (tsx watch)
+npm run dev           # Development server with hot reload (tsx watch, loads .env if present)
 npm run build         # Compile TypeScript to dist/
-npm start             # Run production build from dist/
+npm start             # Run production build from dist/ (loads .env if present)
 npm test              # Run all tests once
 npm run test:watch    # Run tests in watch mode
 npm run test:coverage # Generate coverage report (80% required)
