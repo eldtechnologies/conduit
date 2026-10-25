@@ -178,3 +178,6 @@ docs/.DS_Store
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# macOS Finder metadata (after the !src/** style negations above, so it always wins)
+**/.DS_Store
