@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+**API clients**:
+
+- An unavailable channel provider returns **503 `PROVIDER_UNAVAILABLE`** instead of 400. It cannot happen for email, since `RESEND_API_KEY` is required at startup.
+- Removed the `ErrorCode` members that were never returned: `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR` and `LLM_TIMEOUT`. Responses are unchanged (a revoked key returns `UNAUTHORIZED`, an LLM timeout `LLM_PROVIDER_ERROR`); only code that imported these enum members is affected.
+
 ## [2.0.0-rc.1] — 2026-10-24
 
 **Security hardening release.** A full security review of Conduit found ways to send mail as any configured frontend, or with spoofed senders, and to bypass content filtering. This release closes them:
