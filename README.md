@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Release Candidate](https://img.shields.io/badge/Status-Release%20Candidate-orange.svg)](CHANGELOG.md)
-[![Version: 2.0.0-rc.1](https://img.shields.io/badge/Version-2.0.0--rc.1-orange.svg)](CHANGELOG.md)
+[![Version: 2.0.0-rc.2](https://img.shields.io/badge/Version-2.0.0--rc.2-orange.svg)](CHANGELOG.md)
 [![CI](https://github.com/eldtechnologies/conduit/actions/workflows/ci.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/ci.yml)
 [![Security Scan](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml/badge.svg)](https://github.com/eldtechnologies/conduit/actions/workflows/security.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
@@ -271,7 +271,7 @@ See **[Architecture Documentation](docs/architecture.md)** for detailed diagrams
 
 ## Project Status
 
-**Current version**: v2.0.0-rc.1 — security hardening release candidate. Upgrading from 1.x? Read [docs/upgrading-to-2.0.md](docs/upgrading-to-2.0.md) first; 2.0 refuses to start on unsafe configuration that 1.x accepted.
+**Current version**: v2.0.0-rc.2 — security hardening release candidate. Upgrading from 1.x? Read [docs/upgrading-to-2.0.md](docs/upgrading-to-2.0.md) first; 2.0 refuses to start on unsafe configuration that 1.x accepted.
 
 ### What's in the box
 - **Email pipeline**: POST `/api/send`, Resend integration, contact-form template, Zod-validated request bodies, header-injection prevention.

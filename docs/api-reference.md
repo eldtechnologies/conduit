@@ -280,7 +280,7 @@ Authenticated diagnostics (`X-API-Key` required; HTTPS required in production).
 {
   "status": "healthy",
   "timestamp": "2025-10-05T10:30:00.000Z",
-  "version": "2.0.0-rc.1",
+  "version": "2.0.0-rc.2",
   "channels": {
     "email": {
       "status": "active",
@@ -899,7 +899,7 @@ Open source under MIT License. Free to use, modify, and distribute.
 
 ---
 
-**Version**: 2.0.0-rc.1
+**Version**: 2.0.0-rc.2
 **Last Updated**: 2026-10-24
 **Maintainer**: ELD Technologies
 
