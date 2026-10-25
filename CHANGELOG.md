@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- LLM filtering docs recommend choosing models for **latency, not cost**: the call runs inside `POST /api/send` while the client waits. Stale price and latency figures (Claude 3 Haiku pricing, GPT-3.5/GPT-4, Ollama) were removed. A first-class OpenRouter provider is planned for 2.1 ([#147](https://github.com/eldtechnologies/conduit/issues/147)).
 - **Readable startup errors for invalid environment variables.** Errors from the environment schema (e.g. `LOG_LEVEL`, `PORT`, `LLM_FALLBACK_MODE`) are reported as `Invalid configuration:` with one line per variable, instead of a raw validation dump.
 - `npm start` and `npm run dev` load `.env` when it exists (`node --env-file-if-exists=.env`, supported from Node 20.19). Variables set in the shell take precedence. The Docker image runs `node dist/index.js` directly and is unchanged.
 

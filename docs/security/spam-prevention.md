@@ -431,7 +431,7 @@ Non-whitelisted recipients get 403 `RECIPIENT_NOT_ALLOWED` before rate limiting,
 # .env - Conduit server configuration (v1.2.0)
 LLM_PROVIDER=anthropic
 LLM_API_KEY=sk-ant-api...  # Kept secure on Conduit server
-# Fast, cheap, accurate
+# Fast model: the call runs while the request waits
 LLM_MODEL=claude-haiku-4-5-20251001
 LLM_TIMEOUT=5000
 # allow | block (case-insensitive) - default for keys without _LLM_FAIL_MODE

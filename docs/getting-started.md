@@ -187,12 +187,12 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 **What it does**: Uses AI to analyze message content and block spam, phishing, abuse, and prompt injection attacks before they reach your inbox.
 
 **Providers**: Anthropic Claude Haiku 4.5 (recommended) or OpenAI GPT
-**Cost**: ~$0.0005 per message (~$0.50 per 1,000 messages)
+**Latency and cost**: one LLM call per filtered message, made while the request waits. Choose a fast model and keep `LLM_TIMEOUT` tight; cost depends on your model's pricing. See [Performance & Cost](features/llm-spam-filtering.md#performance--cost).
 
 ### Quick Setup
 
 **1. Get an LLM API key:**
-- **Anthropic (Recommended)**: [console.anthropic.com](https://console.anthropic.com) - Claude Haiku 4.5 is fastest and cheapest
+- **Anthropic (Recommended)**: [console.anthropic.com](https://console.anthropic.com) - Claude Haiku 4.5 is a good fast default
 - **OpenAI (Alternative)**: [platform.openai.com](https://platform.openai.com)
 
 **2. Add to Conduit environment:**
