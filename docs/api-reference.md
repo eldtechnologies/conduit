@@ -133,7 +133,7 @@ X-Source-Origin: https://yourdomain.com    (optional, see CORS)
 | `channel` | Yes | String. Must be a registered channel (currently only `email`), otherwise `400 INVALID_CHANNEL`. Missing or non-string: `400 VALIDATION_ERROR`. |
 | `templateId` | Yes | Non-empty string. Unknown template: `400 INVALID_TEMPLATE`. |
 | `to` | Yes | Valid email address, max 320 characters. Checked against the key's recipient whitelist if one is configured (`403 RECIPIENT_NOT_ALLOWED`). |
-| `data` | Yes | Object. Validated by the template's Zod schema (`400 VALIDATION_ERROR` on failure; fields not in the schema are dropped). |
+| `data` | Yes | Object. Validated by the template's Zod schema (`400 VALIDATION_ERROR` on failure). Fields not in the schema are silently dropped, not rejected (see the template). |
 | `from` | No | `{ "email": string, "name"?: string }`. `email` must be a valid address **and** in the key's `API_KEY_<NAME>_FROM_ADDRESSES` list (case-insensitive), otherwise `400 SENDER_NOT_ALLOWED`. A key with no sender allowlist rejects any `from`. `name`: max 100 characters, must not contain CR/LF or any of `<`, `>`, `"`, `@` (`400 VALIDATION_ERROR`). |
 | `replyTo` | No | Valid email address. Sent as the email's Reply-To. |
 
@@ -337,7 +337,7 @@ Contact form submissions. This is the only implemented template.
 - `message` (string, required) - Message content, 1-5000 characters
 - `subject` (string, optional) - Subject line, max 200 characters
 
-Other fields in `data` are dropped by the schema.
+**Unknown fields**: any other field in `data` (for example `phone`, or a honeypot field such as `website`) is silently dropped: the request is not rejected, and the field is not in the email or sent to the LLM filter. This is deliberate, so forms can send extra fields without breaking. Conduit does not act on honeypot fields; check them in your frontend before sending.
 
 **Subject**: `subject` if given, otherwise `Contact Form: {name}`. The subject is plain text: tags are stripped, entities decoded and CR/LF removed.
 

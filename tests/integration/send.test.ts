@@ -568,6 +568,37 @@ describe('Send Endpoint', () => {
       expect(url).toBe('https://api.resend.com/emails');
       expect(init?.method).toBe('POST');
     });
+
+    it('should accept unknown template data fields and leave them out of the email', async () => {
+      const res = await app.fetch(
+        new Request('http://localhost:3000/api/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': 'KEY_TEST_a8f9d2c1b4e6f7a9b8c7d6e5f4a3b2c1',
+          },
+          body: JSON.stringify({
+            channel: 'email',
+            templateId: 'contact-form',
+            to: 'test@example.com',
+            data: {
+              name: 'Test',
+              email: 'test@example.com',
+              message: 'Hello',
+              phone: 'phone-5550100',
+              website: 'honeypot-value',
+            },
+          }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+      const sentBody = fetchMock.mock.calls[0]?.[1]?.body;
+      if (typeof sentBody !== 'string') throw new Error('Expected a JSON string request body');
+      expect(sentBody).toContain('Hello');
+      expect(sentBody).not.toContain('phone-5550100');
+      expect(sentBody).not.toContain('honeypot-value');
+    });
   });
 });
 

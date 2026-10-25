@@ -340,6 +340,8 @@ Perfect for contact forms.
 
 Template fields: `name` (1-100 chars), `email` (valid email), `message` (1-5000 chars), `subject` (optional, max 200 chars). Invalid template data returns `400 VALIDATION_ERROR`.
 
+Other fields in `data` (for example `phone`, or a honeypot field) are silently dropped: the request still succeeds, but those fields do not appear in the email. If you need a field in the email, it has to be part of the template. Conduit does not check honeypot fields for you; reject filled-in honeypots in your frontend.
+
 ### Phase 2: SMS (Planned, not implemented) 📱
 
 #### verification-code
