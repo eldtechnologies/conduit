@@ -260,6 +260,7 @@ Error codes are defined in `ErrorCode` (`src/types/api.ts`); the full table with
 - `RATE_LIMIT_EXCEEDED` (429) - Too many requests
 - `PROVIDER_ERROR` / `PROVIDER_TIMEOUT` (502) - Resend failure / 10s timeout
 - `LLM_PROVIDER_ERROR` / `LLM_BUDGET_EXCEEDED` (503) - LLM failure or budget used up, in `block` fail mode
+- `PROVIDER_UNAVAILABLE` (503) - Channel provider not configured
 - `INTERNAL_ERROR` (500) - Unexpected error
 
 All error responses follow this structure:
