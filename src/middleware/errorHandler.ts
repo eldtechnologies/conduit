@@ -8,6 +8,7 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ConduitError, getRetryAfter, sanitizeError } from '../utils/errors.js';
+import { log } from '../utils/log.js';
 
 /**
  * Global error handler
@@ -29,7 +30,7 @@ export function errorHandler(err: Error, c: Context) {
   }
 
   // Handle unknown errors
-  console.error('Unexpected error:', err);
+  log.error('Unexpected error:', err);
   return c.json(
     {
       success: false,

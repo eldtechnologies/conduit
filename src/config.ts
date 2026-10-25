@@ -9,6 +9,11 @@
 import { z } from 'zod';
 import type { FilterRules } from './llm/index.js';
 
+/** Supported LOG_LEVEL values, from most to least verbose. */
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
 export interface RecipientWhitelist {
   emails: string[];
   domains: string[];
@@ -28,7 +33,7 @@ export interface Config {
   // Server
   port: number;
   nodeEnv: 'development' | 'production' | 'test';
-  logLevel: string;
+  logLevel: LogLevel;
 
   // Email provider (Phase 1)
   resendApiKey: string;
@@ -84,7 +89,13 @@ const envSchema = z.object({
 
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  LOG_LEVEL: z.string().default('info'),
+  // Case-insensitive; an unknown level fails startup instead of silently logging at the default
+  LOG_LEVEL: z
+    .string()
+    .default('info')
+    // Empty means "use the default", like the per-key LLM settings (e.g. LOG_LEVEL=${LOG_LEVEL} in compose)
+    .transform((val) => val.trim().toLowerCase() || 'info')
+    .pipe(z.enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of: ${LOG_LEVELS.join(', ')}` })),
 
   // Provider API keys
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
@@ -287,15 +298,55 @@ function parseList(value: string): string[] {
     .filter((item) => item.length > 0);
 }
 
+const emailSchema = z.string().email();
+
 /**
- * Build recipient whitelists from API_KEY_<NAME>_RECIPIENTS and API_KEY_<NAME>_RECIPIENT_DOMAINS.
+ * Recipient domains: two or more DNS labels (letters, digits, inner hyphens), no wildcard,
+ * no leading `@` and no trailing dot. The last label must start with a letter, so IP
+ * addresses are rejected. Values are already lowercased by parseList.
+ */
+const DOMAIN_PATTERN =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** 1-based positions of the entries that fail `isValid`. */
+function invalidPositions(entries: string[], isValid: (entry: string) => boolean): number[] {
+  return entries
+    .map((entry, index) => (isValid(entry) ? -1 : index + 1))
+    .filter((position) => position > 0);
+}
+
+/**
+ * Build recipient whitelists from API_KEY_<NAME>_RECIPIENTS (email addresses) and
+ * API_KEY_<NAME>_RECIPIENT_DOMAINS (domains), both comma-separated.
  * Returns a Map keyed by API key value.
+ *
+ * Fails startup (throws) when a list is empty or contains an invalid entry: an empty list
+ * would silently block every recipient, and an invalid entry can never match. Errors name
+ * the variable and entry position but not the value.
  */
 function loadRecipientWhitelists(apiKeyEnv: ApiKeyEnv): Map<string, RecipientWhitelist> {
   const whitelists = new Map<string, RecipientWhitelist>();
+  const errors: string[] = [];
 
-  for (const { keyName, suffix, value } of apiKeyEnv.configVars) {
+  for (const { envName, keyName, suffix, value } of apiKeyEnv.configVars) {
     if (suffix !== '_RECIPIENTS' && suffix !== '_RECIPIENT_DOMAINS') continue;
+
+    const entries = parseList(value);
+    const kind = suffix === '_RECIPIENTS' ? 'email address' : 'domain';
+    if (entries.length === 0) {
+      errors.push(`${envName}: must list at least one ${kind}`);
+      continue;
+    }
+
+    const invalid =
+      suffix === '_RECIPIENTS'
+        ? invalidPositions(entries, (entry) => emailSchema.safeParse(entry).success)
+        : invalidPositions(entries, (entry) => DOMAIN_PATTERN.test(entry));
+    if (invalid.length > 0) {
+      const hint = suffix === '_RECIPIENT_DOMAINS' ? ' (use example.com, without @ or *.)' : '';
+      errors.push(`${envName}: invalid ${kind} at position ${invalid.join(', ')}${hint}`);
+      continue;
+    }
 
     // loadApiKeyEnv guarantees every config var refers to a configured key
     const apiKeyValue = apiKeyEnv.keys.get(keyName)!;
@@ -306,16 +357,18 @@ function loadRecipientWhitelists(apiKeyEnv: ApiKeyEnv): Map<string, RecipientWhi
     }
 
     if (suffix === '_RECIPIENTS') {
-      whitelist.emails = parseList(value);
+      whitelist.emails = entries;
     } else {
-      whitelist.domains = parseList(value);
+      whitelist.domains = entries;
     }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid recipient whitelist configuration:\n  - ${errors.join('\n  - ')}`);
   }
 
   return whitelists;
 }
-
-const senderEmailSchema = z.string().email();
 
 /**
  * Build sender allowlists from API_KEY_<NAME>_FROM_ADDRESSES (comma-separated email addresses).
@@ -338,9 +391,10 @@ function loadSenderAllowlists(apiKeyEnv: ApiKeyEnv): Map<string, string[]> {
       continue;
     }
 
-    const invalid = addresses
-      .map((address, index) => (senderEmailSchema.safeParse(address).success ? -1 : index + 1))
-      .filter((position) => position > 0);
+    const invalid = invalidPositions(
+      addresses,
+      (address) => emailSchema.safeParse(address).success
+    );
     if (invalid.length > 0) {
       errors.push(`${envName}: invalid email address at position ${invalid.join(', ')}`);
       continue;
@@ -388,12 +442,18 @@ function loadLLMConfig(env: z.infer<typeof envSchema>): LLMConfig | undefined {
  * API_KEY_MYSITE_LLM_THRESHOLD=0.7
  * API_KEY_MYSITE_LLM_FAIL_MODE=allow   (defaults to LLM_FALLBACK_MODE)
  * API_KEY_MYSITE_LLM_MAX_CALLS_PER_DAY=1000
+ *
+ * Fails startup (throws) when FAIL_MODE is not allow/block, THRESHOLD is not a number in
+ * [0, 1] or MAX_CALLS_PER_DAY is not a positive integer: silently falling back to the default
+ * would hide a typo (e.g. a threshold of 70 from the old 0-100 scale). Empty values use the
+ * default. Errors name the variable but not the value.
  */
 function loadLLMFilterRules(
   apiKeyEnv: ApiKeyEnv,
   defaultFailMode: FilterRules['failMode']
 ): Map<string, FilterRules> {
   const filterRulesMap = new Map<string, FilterRules>();
+  const errors: string[] = [];
 
   for (const { envName, keyName, suffix, value } of apiKeyEnv.configVars) {
     if (!suffix.startsWith('_LLM_')) continue;
@@ -449,35 +509,46 @@ function loadLLMFilterRules(
         }
         break;
 
-      case '_LLM_THRESHOLD':
-        if (value) {
-          const threshold = parseFloat(value);
-          if (!isNaN(threshold) && threshold >= 0 && threshold <= 1) {
-            rules.threshold = threshold;
-          }
+      case '_LLM_THRESHOLD': {
+        if (!value) break;
+        // Plain decimals only: Number() alone would also accept "0x1", "1e0" or "-0"
+        const threshold = Number(value);
+        if (!/^(?:\d+\.?\d*|\.\d+)$/.test(value) || threshold < 0 || threshold > 1) {
+          errors.push(`${envName} must be a number between 0 and 1 (e.g. 0.7)`);
+          break;
         }
+        rules.threshold = threshold;
         break;
+      }
 
       case '_LLM_FAIL_MODE': {
         if (!value) break;
         const failMode = value.toLowerCase();
         if (failMode !== 'allow' && failMode !== 'block') {
           // Fail fast: silently ignoring a typo like "blok" would leave the key fail-open
-          throw new Error(`${envName} must be "allow" or "block"`);
+          errors.push(`${envName} must be "allow" or "block"`);
+          break;
         }
         rules.failMode = failMode;
         break;
       }
 
-      case '_LLM_MAX_CALLS_PER_DAY':
-        if (value) {
-          const maxCalls = parseInt(value, 10);
-          if (!isNaN(maxCalls) && maxCalls > 0) {
-            rules.maxCallsPerDay = maxCalls;
-          }
+      case '_LLM_MAX_CALLS_PER_DAY': {
+        if (!value) break;
+        // 0 is rejected: it would skip every LLM check (or block every send in block mode).
+        // Use _LLM_ENABLED=false to turn filtering off.
+        if (!/^[0-9]+$/.test(value) || Number(value) < 1 || !Number.isSafeInteger(Number(value))) {
+          errors.push(`${envName} must be a positive integer`);
+          break;
         }
+        rules.maxCallsPerDay = Number(value);
         break;
+      }
     }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid LLM filter configuration:\n  - ${errors.join('\n  - ')}`);
   }
 
   return filterRulesMap;
@@ -489,7 +560,15 @@ function loadLLMFilterRules(
  * Exported for tests; application code should import `config`.
  */
 export function loadConfig(processEnv: NodeJS.ProcessEnv): Config {
-  const env = envSchema.parse(processEnv);
+  const parsed = envSchema.safeParse(processEnv);
+  if (!parsed.success) {
+    // Same shape as the API key errors: one line per variable, names and rules only
+    const problems = parsed.error.issues.map(
+      (issue) => `${issue.path.join('.') || 'environment'}: ${issue.message}`
+    );
+    throw new Error(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);
+  }
+  const env = parsed.data;
   const apiKeyEnv = loadApiKeyEnv(processEnv);
 
   const llm = loadLLMConfig(env);

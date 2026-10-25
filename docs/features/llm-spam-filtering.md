@@ -81,9 +81,9 @@ Per-key settings (`API_KEY_<NAME>` must be a configured key, otherwise startup f
 |----------|---------|---------|
 | `API_KEY_<NAME>_LLM_ENABLED` | `false` | `true` (case-insensitive) enables filtering for this key |
 | `API_KEY_<NAME>_LLM_RULES` | `spam,abuse,promptInjection,phishing,scam` | Comma-separated categories to check: `spam`, `abuse`, `profanity`, `promptInjection`, `phishing`, `scam` (case-insensitive). A non-empty value replaces the default set; unknown names are ignored |
-| `API_KEY_<NAME>_LLM_THRESHOLD` | `0.7` | Confidence threshold between `0` and `1` (see [Decision](#decision)). Values outside 0-1 or non-numbers are ignored and the default stays |
+| `API_KEY_<NAME>_LLM_THRESHOLD` | `0.7` | Confidence threshold between `0` and `1` (see [Decision](#decision)). Values outside 0-1 or non-numbers fail startup |
 | `API_KEY_<NAME>_LLM_FAIL_MODE` | `LLM_FALLBACK_MODE` | `allow` or `block`, case-insensitive; any other value fails startup |
-| `API_KEY_<NAME>_LLM_MAX_CALLS_PER_DAY` | `1000` | Daily LLM call budget for this key (positive integer; invalid values are ignored) |
+| `API_KEY_<NAME>_LLM_MAX_CALLS_PER_DAY` | `1000` | Daily LLM call budget for this key (positive integer; any other value, including `0`, fails startup) |
 
 Startup fails (the server does not start) when:
 
@@ -95,7 +95,7 @@ Startup fails (the server does not start) when:
 
 LLM filtering is not a middleware. For `POST /api/send` the order is:
 
-1. HTTPS enforcement, CORS, security headers, request logger
+1. Request logger, HTTPS enforcement, CORS, security headers
 2. Body limit, authentication, recipient validation, rate limiting
 3. Send route: unknown-channel check, request schema validation, `Idempotency-Key` validation, sender allowlist check
 4. `filterContent()`: validates the template data with the template's schema (400 `VALIDATION_ERROR` if invalid), checks the daily budget, then calls the LLM

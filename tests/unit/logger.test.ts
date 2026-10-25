@@ -16,6 +16,7 @@ import {
   maskHeaders,
 } from '../../src/middleware/logger.js';
 import type { AppVariables } from '../helpers/response.js';
+import { config } from '../../src/config.js';
 
 describe('Logger Middleware', () => {
   describe('maskApiKey', () => {
@@ -374,6 +375,24 @@ describe('Logger Middleware', () => {
       expect(request?.headers).toMatchObject({ 'x-api-key': 'KEY_TEST_****', cookie: '****' });
       expect(JSON.stringify(lines)).not.toContain('a8f9d2c1');
       expect(JSON.stringify(lines)).not.toContain('abc123');
+    });
+
+    it('should suppress request and response lines when LOG_LEVEL is above info', async () => {
+      const lines = captureLogs();
+      const originalLevel = config.logLevel;
+      config.logLevel = 'warn';
+      try {
+        const app = new Hono();
+        app.use('*', logger);
+        app.get('/test', (c) => c.text('OK'));
+
+        const res = await app.fetch(new Request('http://localhost/test'));
+
+        expect(res.status).toBe(200);
+        expect(lines).toHaveLength(0);
+      } finally {
+        config.logLevel = originalLevel;
+      }
     });
 
     it('should omit the app when no key was authenticated', async () => {

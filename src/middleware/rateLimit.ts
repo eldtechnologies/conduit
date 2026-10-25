@@ -8,7 +8,8 @@
  * - Token bucket algorithm for smooth rate limiting
  * - Per-API-key tracking
  * - Multiple time windows (minute/hour/day)
- * - In-memory storage with automatic cleanup
+ * - In-memory storage without expiry or cleanup: it runs after authentication, so it
+ *   holds one entry per configured API key and memory is bounded by the number of keys
  * - Returns 429 with Retry-After header
  */
 
@@ -37,7 +38,8 @@ interface RateLimitState {
 
 /**
  * In-memory rate limit storage
- * Maps API key to its rate limit state
+ * Maps API key to its rate limit state. Only authenticated (configured) keys are stored,
+ * so the map never grows beyond the number of API_KEY_* keys and needs no cleanup.
  */
 const rateLimitStore = new Map<string, RateLimitState>();
 

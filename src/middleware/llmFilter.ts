@@ -19,6 +19,7 @@ import { getChannelHandler } from '../channels/index.js';
 import { getTemplate } from '../templates/index.js';
 import { ForbiddenError, ServiceUnavailableError, fromZodError } from '../utils/errors.js';
 import { ErrorCode, type LLMAnalysis, type SendMessageRequest } from '../types/api.js';
+import { log } from '../utils/log.js';
 
 /**
  * In-memory budget tracker for LLM API calls per API key
@@ -175,7 +176,7 @@ async function analyzeWithFailMode(
   } catch (error) {
     // Full provider error (may include upstream response text) is logged only.
     // The request logger's response line (same request) carries the masked API key.
-    console.error('LLM filter error:', {
+    log.error('LLM filter error:', {
       failMode: rules.failMode,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -190,7 +191,7 @@ async function analyzeWithFailMode(
       );
     }
 
-    console.warn('LLM filter failed, allowing message (fail-open mode)');
+    log.warn('LLM filter failed, allowing message (fail-open mode)');
 
     return {
       analysis: {
@@ -263,7 +264,7 @@ export async function filterContent(
 
     // Fail-open: Allow without LLM check.
     // The request logger's response line (same request) carries the masked API key.
-    console.warn('LLM budget exceeded, allowing without check:', {
+    log.warn('LLM budget exceeded, allowing without check:', {
       budget: rules.maxCallsPerDay,
     });
     return undefined;
@@ -276,7 +277,7 @@ export async function filterContent(
     const errorCode = getErrorCodeForCategories(analysis.categories);
 
     // The request logger's response line (same request) carries the masked API key
-    console.warn('Content blocked by LLM filter:', {
+    log.warn('Content blocked by LLM filter:', {
       categories: analysis.categories,
       confidence: analysis.confidence,
       reasoning,

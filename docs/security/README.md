@@ -77,6 +77,7 @@ Conduit's core security principles:
 - ✅ **Startup Validation of API Key Variables** (`src/config.ts`)
   - Every `API_KEY_*` variable must be either a known per-key config variable (`_RECIPIENTS`, `_RECIPIENT_DOMAINS`, `_FROM_ADDRESSES`, `_LLM_ENABLED`, `_LLM_RULES`, `_LLM_THRESHOLD`, `_LLM_FAIL_MODE`, `_LLM_MAX_CALLS_PER_DAY`) for a configured key, or an API key whose value matches `KEY_<NAME>_<12+ alphanumeric chars>`
   - Anything else (typos, unknown suffixes, the removed `_LLM_WHITELIST_SENDERS`, config values such as `true`) fails startup, so it can never become an accepted API key
+  - Invalid per-key values fail startup too: an empty or invalid `_RECIPIENTS`, `_RECIPIENT_DOMAINS` or `_FROM_ADDRESSES` list, a `_LLM_THRESHOLD` outside 0-1, a `_LLM_MAX_CALLS_PER_DAY` that is not a positive integer, a `_LLM_FAIL_MODE` other than `allow`/`block`
   - Error messages name the variable but never print its value
 
 - ✅ **Constant-Time API Key Comparison**
