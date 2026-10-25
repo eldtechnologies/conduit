@@ -1936,7 +1936,7 @@ setImmediate(() => {
 | Behavioral Analysis | $0 | $0 | In-memory tracking |
 | Content Filter | $0 | $0 | Keyword matching |
 | **Local LLM (Ollama)** | $0 | $0 | Requires 4GB RAM (not supported yet) |
-| **OpenAI GPT-4o-mini** | $0 | ~$4.50 | $0.15/1000 input tokens |
+| **Conduit LLM filter (Claude Haiku 5.5)** | $0 | ~$4 | 30k messages/month at the measured ~$0.00013 per call |
 | **Hybrid (recommended)** | $0 | ~$0.60 | 90% handled by free tiers (planned; needs Ollama and keyword filtering) |
 
 **Total Recommended Cost**: **$0-1/month** (hybrid approach, once implemented)

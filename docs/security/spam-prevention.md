@@ -1090,7 +1090,7 @@ Applies only if you have implemented CAPTCHA yourself; Conduit has no CAPTCHA su
 **Tier 3** (Low Cost):
 - Everything in Tier 2: $0
 - Local LLM (Ollama): $0 (requires 4GB RAM; not supported by Conduit yet)
-- **OR** OpenAI API: ~$4.50/month (30k messages)
+- **OR** Conduit LLM filtering with Claude Haiku 5.5: ~$4/month (30k messages, measured rate)
 - Domain rate limiting: $0
 - Reputation throttling: $0
 - **Total**: $0-5/month
@@ -1152,7 +1152,7 @@ LLM filtering is an **optional Conduit feature** (✅ available in v1.2.0) that 
 - **Claude Haiku 4.5** (same measurement): ~$0.0009 per message (~$27 for 30k messages/month)
 - Prices change; check your provider's current pricing. See [Performance & Cost](../features/llm-spam-filtering.md#performance--cost).
 
-For 1,000 messages/day (30k/month), expect $4.50-15/month depending on provider.
+For 1,000 messages/day (30k/month), that is roughly $4 (Haiku 5.5) to $27 (Haiku 4.5) per month at the measured rates.
 
 **Key advantage**: LLM API keys stay secure on your Conduit server. Frontend apps get spam detection without exposing credentials.
 

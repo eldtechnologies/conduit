@@ -186,7 +186,7 @@ ALLOWED_ORIGINS=https://yoursite.com,https://www.yoursite.com
 
 **What it does**: Uses AI to analyze message content and block spam, phishing, abuse, and prompt injection attacks before they reach your inbox.
 
-**Providers**: Claude Haiku 5.5 (recommended, via OpenRouter or Anthropic), Claude Haiku 4.5, or OpenAI GPT
+**Providers**: Claude Haiku 5.5 via OpenRouter (recommended, tested), Claude Haiku 4.5 (direct Anthropic, tested), or OpenAI GPT
 **Latency and cost**: one LLM call per filtered message, made while the request waits. Choose a fast model and keep `LLM_TIMEOUT` tight; cost depends on your model's pricing. See [Performance & Cost](features/llm-spam-filtering.md#performance--cost).
 
 ### Quick Setup

@@ -58,7 +58,7 @@ This section describes the implementation in `src/config.ts`, `src/routes/send.t
 | `LLM_PROVIDER` | Provider | Default endpoint |
 |----------------|----------|------------------|
 | `anthropic` | Anthropic Messages API | `https://api.anthropic.com/v1/messages` |
-| `openai` | OpenAI Chat Completions API | `https://api.openai.com/v1/chat/completions` |
+| `openai` | OpenAI Chat Completions API (also any OpenAI-compatible API via `LLM_ENDPOINT`, e.g. [OpenRouter](#using-openrouter)) | `https://api.openai.com/v1/chat/completions` |
 
 Any other value (for example `gemini` or `ollama`) fails startup. Google Gemini and local models (Ollama) are **not implemented**.
 
@@ -732,13 +732,13 @@ describe('LLM Performance', () => {
 The LLM call runs **synchronously inside `POST /api/send`**: the frontend waits for the verdict before the email is sent. Optimize for **speed first, cost second**:
 
 - **Latency dominates.** The model only returns a small JSON verdict (Conduit sets `max_tokens: 200`), so the time until the answer arrives matters much more than output throughput or per-token price.
-- **Use a small, fast model. Recommended: Claude Haiku 5.5.** In the measurement below it was about 3x faster than Haiku 4.5 at roughly a seventh of the cost per call, with the same verdicts. Larger models add latency without a meaningful gain for this classification task.
+- **Use a small, fast model. Recommended: Claude Haiku 5.5.** In the smoke test below it was about 3x faster than Haiku 4.5 at roughly a seventh of the cost per call, with the same verdicts. A larger model is unlikely to be worth the extra latency for a short classification like this, but measure on your own traffic if accuracy matters more than speed.
 - **Keep `LLM_TIMEOUT` tight.** The default is 5000 ms. When it expires the call counts as a provider failure and the key's fail mode applies: `allow` sends without filtering, `block` returns `503 LLM_PROVIDER_ERROR`. Set it to the longest delay your frontend can tolerate.
 - **Measure in your environment.** Latency depends on model, region and provider load. Watch the `duration` field on the `/api/send` response log lines and compare keys with and without filtering.
 
 **Measured** (2026-10-25, through OpenRouter, Conduit's own prompt and parser, one clean and one spam message, 3 runs each; a smoke test, not an accuracy evaluation):
 
-| Model | Median latency | Cost per call | Verdicts |
+| Model | Median latency | Cost per call (OpenRouter `usage.cost`) | Verdicts |
 |---|---|---|---|
 | `anthropic/claude-haiku-5.5` | ~270-340 ms | ~$0.00013 | correct (clean allowed, spam blocked) |
 | `anthropic/claude-haiku-4.5` | ~860-1070 ms | ~$0.0009 | correct |
@@ -757,9 +757,9 @@ LLM_API_KEY=sk-or-v1-...
 LLM_MODEL=anthropic/claude-haiku-5.5
 ```
 
-OpenRouter picks the upstream provider (Anthropic, Amazon Bedrock, Google Vertex, ...) per request. A first-class `openrouter` provider with configurable routing and fallback models is planned for 2.1 ([#147](https://github.com/eldtechnologies/conduit/issues/147)).
+OpenRouter picks the upstream provider (Anthropic, Amazon Bedrock, Google Vertex, ...) per request. Conduit's `openai` provider always sends `temperature: 0`. OpenRouter accepts the request and drops the parameter for models that don't support it (Haiku 5.5 doesn't list `temperature`), but another OpenAI-compatible proxy that forwards it unchanged could reject the request. Test a new endpoint before relying on it. A first-class `openrouter` provider with configurable routing and fallback models is planned for 2.1 ([#147](https://github.com/eldtechnologies/conduit/issues/147)).
 
-**Direct Anthropic API:** `LLM_PROVIDER=anthropic` with `LLM_MODEL=claude-haiku-4-5-20251001` is the tested direct setup. Claude Haiku 5.5 should work the same way. Use the model ID from Anthropic's model list; it has not been verified against the direct API here.
+**Direct Anthropic API:** `LLM_PROVIDER=anthropic` with `LLM_MODEL=claude-haiku-4-5-20251001` is the tested direct setup. Claude Haiku 5.5 is expected to work the same way (the provider reads the first `text` block of the response, so a leading `thinking` block would not break it), but neither its direct-API model ID nor the call itself has been verified here. Use the ID from Anthropic's model list and test it before production.
 
 Not implemented: result caching, asynchronous (send-then-review) analysis and batching.
 
