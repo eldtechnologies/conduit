@@ -7,7 +7,7 @@
 
 import type { Channel, SendMessageRequest } from '../types/api.js';
 import type { ChannelHandler, ChannelSendResult } from '../types/channels.js';
-import { ValidationError } from '../utils/errors.js';
+import { ServiceUnavailableError, ValidationError } from '../utils/errors.js';
 import { ErrorCode } from '../types/api.js';
 
 // Channel handlers
@@ -65,6 +65,7 @@ export function resolveChannel(channel: string): Channel {
  * @param request - The send message request
  * @returns The send result from the channel handler
  * @throws ValidationError if channel is invalid
+ * @throws ServiceUnavailableError (PROVIDER_UNAVAILABLE) if the channel's provider is not configured
  * @throws ProviderError if the provider fails
  */
 export async function routeToChannel(request: SendMessageRequest): Promise<ChannelSendResult> {
@@ -74,7 +75,8 @@ export async function routeToChannel(request: SendMessageRequest): Promise<Chann
   // Check if the channel is available
   const isAvailable = await handler.isAvailable();
   if (!isAvailable) {
-    throw new ValidationError(
+    // A server-side configuration problem, not a bad request: 503 like other unavailable services
+    throw new ServiceUnavailableError(
       `Channel ${request.channel} is not available. Provider: ${handler.getProviderName()}`,
       ErrorCode.PROVIDER_UNAVAILABLE
     );

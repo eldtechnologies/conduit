@@ -534,7 +534,7 @@ middleware/llmFilter.ts (filterContent, called by routes/send.ts):
 
 channels/index.ts + channels/email.ts:
   1. Check availability: emailHandler.isAvailable() → true
-     (false → 400 PROVIDER_UNAVAILABLE)
+     (false → 503 PROVIDER_UNAVAILABLE)
   2. Resolve sender: 'Conduit <noreply@company.com>'
   3. Load template: getTemplate('email', 'contact-form')
   4. Validate data with template.validate(data)
@@ -839,23 +839,18 @@ export interface ErrorResponse {
 }
 
 export enum ErrorCode {
-  // 401
+  // 401 (missing, invalid or revoked key)
   UNAUTHORIZED = 'UNAUTHORIZED',
-  INVALID_API_KEY = 'INVALID_API_KEY',           // defined, not currently returned
-  REVOKED_API_KEY = 'REVOKED_API_KEY',           // defined, not currently returned
   // 400
-  INVALID_REQUEST = 'INVALID_REQUEST',           // defined, not currently returned
   INVALID_CHANNEL = 'INVALID_CHANNEL',
   INVALID_TEMPLATE = 'INVALID_TEMPLATE',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
-  MISSING_REQUIRED_FIELD = 'MISSING_REQUIRED_FIELD', // defined, not currently returned
   SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
   // 429
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   // 413
   PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
   // 403
-  CORS_ERROR = 'CORS_ERROR',                     // defined, not currently returned
   ORIGIN_NOT_ALLOWED = 'ORIGIN_NOT_ALLOWED',
   RECIPIENT_NOT_ALLOWED = 'RECIPIENT_NOT_ALLOWED',  // v1.1.0
   CONTENT_BLOCKED_SPAM = 'CONTENT_BLOCKED_SPAM',    // v1.2.0
@@ -864,13 +859,13 @@ export enum ErrorCode {
   CONTENT_BLOCKED_PHISHING = 'CONTENT_BLOCKED_PHISHING',
   CONTENT_BLOCKED_SCAM = 'CONTENT_BLOCKED_SCAM',
   CONTENT_BLOCKED_PROMPT_INJECTION = 'CONTENT_BLOCKED_PROMPT_INJECTION',
-  // 503
+  // 503 (LLM timeouts surface as LLM_PROVIDER_ERROR)
   LLM_PROVIDER_ERROR = 'LLM_PROVIDER_ERROR',
-  LLM_TIMEOUT = 'LLM_TIMEOUT',                   // defined; timeouts surface as LLM_PROVIDER_ERROR
   LLM_BUDGET_EXCEEDED = 'LLM_BUDGET_EXCEEDED',
-  // 502 (PROVIDER_UNAVAILABLE is currently returned with 400)
+  // 502
   PROVIDER_ERROR = 'PROVIDER_ERROR',
   PROVIDER_TIMEOUT = 'PROVIDER_TIMEOUT',
+  // 503 (channel provider not configured)
   PROVIDER_UNAVAILABLE = 'PROVIDER_UNAVAILABLE',
   // 500
   INTERNAL_ERROR = 'INTERNAL_ERROR',
@@ -1137,7 +1132,7 @@ export async function routeToChannel(request: SendMessageRequest): Promise<Chann
   const handler = getChannelHandler(request.channel);
 
   if (!(await handler.isAvailable())) {
-    throw new ValidationError(
+    throw new ServiceUnavailableError(
       `Channel ${request.channel} is not available. Provider: ${handler.getProviderName()}`,
       ErrorCode.PROVIDER_UNAVAILABLE
     );

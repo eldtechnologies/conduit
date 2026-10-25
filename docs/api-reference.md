@@ -799,7 +799,6 @@ Generated from `ErrorCode` in `src/types/api.ts`, with the HTTP status the code 
 | `INVALID_TEMPLATE` | 400 | Template ID not found for the channel |
 | `VALIDATION_ERROR` | 400 | Malformed/non-object JSON, invalid request fields or template data, malformed `Content-Length` or `Idempotency-Key`, missing `to` for a key with a recipient whitelist |
 | `SENDER_NOT_ALLOWED` | 400 | `from.email` not in the key's sender allowlist, or `from` sent for a key without one |
-| `PROVIDER_UNAVAILABLE` | 400 | Email channel not available (no Resend API key) |
 | `ORIGIN_NOT_ALLOWED` | 403 | Origin not in `ALLOWED_ORIGINS` |
 | `RECIPIENT_NOT_ALLOWED` | 403 | Recipient not in the key's recipient whitelist |
 | `CONTENT_BLOCKED_SPAM` | 403 | LLM filter blocked the content (spam, or no more specific category) |
@@ -813,12 +812,13 @@ Generated from `ErrorCode` in `src/types/api.ts`, with the HTTP status the code 
 | `INTERNAL_ERROR` | 500 | Unexpected server error (generic message in production) |
 | `PROVIDER_ERROR` | 502 | Resend returned an error |
 | `PROVIDER_TIMEOUT` | 502 | Resend did not answer within 10s (request aborted) |
+| `PROVIDER_UNAVAILABLE` | 503 | Channel provider not configured (cannot happen for email today: `RESEND_API_KEY` is required at startup) |
 | `LLM_PROVIDER_ERROR` | 503 | LLM call failed (timeout, HTTP/network error, malformed output) for a key in `block` fail mode |
 | `LLM_BUDGET_EXCEEDED` | 503 | Daily LLM budget used up for a key in `block` fail mode; `retryAfter` (seconds until midnight UTC) + `Retry-After` header |
 
 The LLM block message is always `Content blocked by content filter`; categories, confidence and reasoning are only in `details` (non-production).
 
-Defined in `ErrorCode` but not currently returned: `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR`, `LLM_TIMEOUT` (LLM timeouts are reported as `LLM_PROVIDER_ERROR`).
+A revoked key returns `UNAUTHORIZED`, and an LLM timeout returns `LLM_PROVIDER_ERROR`. 2.0 removed the never-returned codes `INVALID_API_KEY`, `REVOKED_API_KEY`, `INVALID_REQUEST`, `MISSING_REQUIRED_FIELD`, `CORS_ERROR` and `LLM_TIMEOUT` from `ErrorCode`.
 
 The HTTPS check returns `403` with a plain-text `HTTPS Required` body and no error code.
 
