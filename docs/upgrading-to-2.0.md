@@ -2,6 +2,15 @@
 
 Conduit 2.0 is a security hardening release. Most changes reject configuration or requests that 1.x accepted, so plan the upgrade instead of just bumping the image. The full list is in the [CHANGELOG](../CHANGELOG.md).
 
+## Already testing 2.0.0-rc.1?
+
+rc.2 adds more checks on top of rc.1. Before moving a staging setup from rc.1 to rc.2:
+
+- [ ] **More settings fail startup:** `API_KEY_*_LLM_THRESHOLD` must be a plain decimal from 0 to 1, `_LLM_MAX_CALLS_PER_DAY` a positive integer, `_RECIPIENTS` / `_RECIPIENT_DOMAINS` non-empty with valid entries, and `LOG_LEVEL` one of `debug`, `info`, `warn`, `error` (empty means `info`).
+- [ ] **Proxies:** `X-Source-Origin` is now only used when there is no `Origin` header (see the proxies item below).
+- [ ] **`LOG_LEVEL=warn` or `error`** now hides the per-request log lines. It used to be ignored.
+- [ ] **Recommended LLM model:** Claude Haiku 5.5, tested through OpenRouter. See [Using OpenRouter](features/llm-spam-filtering.md#using-openrouter).
+
 ## 1. Check your environment (operators)
 
 Since 2.0, Conduit **fails at startup** when its configuration is unsafe or invalid. The error names the variable, never its value. Go through your production env:
@@ -22,8 +31,8 @@ Since 2.0, Conduit **fails at startup** when its configuration is unsafe or inva
 To check a config before deploying, start the new image with your env file and watch it boot:
 
 ```bash
-docker build -t conduit:2.0.0-rc.1 .
-docker run --rm --env-file .env.production conduit:2.0.0-rc.1
+docker build -t conduit:2.0.0-rc.2 .
+docker run --rm --env-file .env.production conduit:2.0.0-rc.2
 # Startup errors look like: "Invalid API key configuration: - API_KEY_MYSITE_SPAM_FILTER_ENABLED ..."
 ```
 
@@ -48,7 +57,7 @@ New and optional: an `Idempotency-Key` header (1-200 chars of `[A-Za-z0-9._:-]`)
 
 ## 3. Roll out
 
-1. Deploy `2.0.0-rc.1` to staging with the production env vars.
+1. Deploy `2.0.0-rc.2` to staging with the production env vars.
 2. Confirm it starts. If it doesn't, fix each variable it names.
 3. Send a real email through each frontend, with the LLM filter enabled where you use it.
 4. Promote to production.

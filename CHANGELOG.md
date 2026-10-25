@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0-rc.2] — 2026-10-25
+
+**Second release candidate of the 2.0 security hardening release.** It closes the remaining gaps from the follow-up review of rc.1 and makes more configuration mistakes fail fast:
+
+- `X-Source-Origin` could override a disallowed `Origin`, and CORS responses had no `Vary` header.
+- Several per-key settings and `LOG_LEVEL` were silently ignored when invalid, leaving keys with defaults the operator didn't choose.
+- Requests rejected by HTTPS enforcement or CORS were never logged.
+- The Anthropic provider assumed the verdict is always the first content block.
+
+It also adds **Claude Haiku 5.5 as the recommended LLM model**, tested through OpenRouter. In a small smoke test it was about 3x faster than Haiku 4.5 at roughly a seventh of the cost per call.
+
+**Testing rc.1 already?** rc.2 can refuse to start on settings rc.1 accepted. See "Already testing 2.0.0-rc.1?" in [docs/upgrading-to-2.0.md](docs/upgrading-to-2.0.md). Like rc.1, this release is verified with the test suite (627 tests), CI and Docker smoke tests, and the OpenRouter path also with live LLM calls. The direct Anthropic and Resend paths have not been tested against live services yet. Deploy it to staging before 2.0.0.
+
 ### Security
 
 - **CORS uses `X-Source-Origin` only when `Origin` is absent.** A request whose `Origin` is present but not in `ALLOWED_ORIGINS` now gets 403 `ORIGIN_NOT_ALLOWED`, even if `X-Source-Origin` holds an allowed origin. Before, the header could override any disallowed `Origin`. Server-side proxies that send no `Origin` (or an empty one) and pass `X-Source-Origin` keep working.
@@ -297,7 +310,8 @@ Updated Hono 4.10.3 → 4.12.2, resolving 6 known CVEs (JWT/JWK algorithm confus
 
 Initial release. (No release notes published; superseded by v1.0.1.)
 
-[Unreleased]: https://github.com/eldtechnologies/conduit/compare/v2.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/eldtechnologies/conduit/compare/v2.0.0-rc.2...HEAD
+[2.0.0-rc.2]: https://github.com/eldtechnologies/conduit/compare/v2.0.0-rc.1...v2.0.0-rc.2
 [2.0.0-rc.1]: https://github.com/eldtechnologies/conduit/compare/v1.3.1...v2.0.0-rc.1
 [1.3.1]: https://github.com/eldtechnologies/conduit/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/eldtechnologies/conduit/compare/v1.2.2...v1.3.0

@@ -285,5 +285,5 @@ Found an issue or want to improve the docs?
 ---
 
 **Last Updated**: 2026-10-24
-**Documentation Version**: 2.0.0-rc.1
-**Project Status**: Release candidate (v2.0.0-rc.1); see [upgrading-to-2.0.md](upgrading-to-2.0.md)
+**Documentation Version**: 2.0.0-rc.2
+**Project Status**: Release candidate (v2.0.0-rc.2); see [upgrading-to-2.0.md](upgrading-to-2.0.md)
