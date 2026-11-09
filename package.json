@@ -40,17 +40,17 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.7.5",
-    "@typescript-eslint/eslint-plugin": "^8.71.2",
-    "@typescript-eslint/parser": "^8.71.2",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "@vitest/coverage-v8": "^4.1.12",
     "@vitest/ui": "^4.1.12",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "glob": "^10.5.0",
     "js-yaml": "^4.1.1",
     "prettier": "^3.3.3",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.71.2",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^4.1.12"
   },
   "engines": {
